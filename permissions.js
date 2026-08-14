@@ -1,0 +1,1489 @@
+function isMonthlyRenewalForecastAdmin(user) {
+  const role = String(
+    user?.role ||
+    user?.role_key ||
+    user?.profile?.role ||
+    user?.profile?.role_key ||
+    ''
+  ).trim().toLowerCase();
+
+  return role === 'admin';
+}
+
+const HR_FULL_ACCESS_ROLES = Object.freeze([
+  'admin',
+  'gm',
+  'general_manager',
+  'generalmanager',
+  'sfc',
+  'senior_fc',
+  'financial_controller',
+  'senior_financial_controller',
+  'senior_finanical_controller',
+  'senior_financial_controler',
+  'senior_financial_cotroleer'
+]);
+
+const BASE_PERMISSION_MATRIX = Object.freeze({
+  tickets: Object.freeze({
+    list: ['admin', 'dev', 'viewer', 'hoo'],
+    get: ['admin', 'dev', 'viewer', 'hoo'],
+    create: ['admin', 'dev', 'viewer', 'hoo'],
+    update: ['admin', 'dev'],
+    delete: ['admin', 'dev'],
+    internal_filters: ['admin', 'dev']
+  }),
+  events: Object.freeze({
+    list: ['admin', 'dev', 'viewer', 'hoo'],
+    get: ['admin', 'dev', 'viewer', 'hoo'],
+    create: ['admin', 'dev'],
+    update: ['admin', 'dev'],
+    delete: ['admin', 'dev']
+  }),
+  csm: Object.freeze({
+    list: ['admin', 'viewer', 'hoo', 'head_of_operations', 'head_operations', 'operations_head', 'csm', 'customer_success', 'customer_success_manager'],
+    get: ['admin', 'viewer', 'hoo', 'head_of_operations', 'head_operations', 'operations_head', 'csm', 'customer_success', 'customer_success_manager'],
+    create: ['admin', 'hoo', 'head_of_operations', 'head_operations', 'operations_head', 'csm', 'customer_success', 'customer_success_manager'],
+    update: ['admin', 'hoo'],
+    delete: ['admin', 'hoo']
+  }),
+  leads: Object.freeze({
+    list: ['admin', 'dev', 'viewer', 'hoo'],
+    get: ['admin', 'dev', 'viewer', 'hoo'],
+    create: ['admin', 'dev', 'viewer', 'hoo'],
+    update: ['admin', 'dev'],
+    delete: ['admin', 'dev'],
+    convert: ['admin', 'dev'],
+    convert_to_deal: ['admin', 'dev']
+  }),
+  companies: Object.freeze({
+    list: ['admin', 'dev', 'viewer', 'hoo', 'csm', 'customer_success', 'customer_success_manager'],
+    get: ['admin', 'dev', 'viewer', 'hoo', 'csm', 'customer_success', 'customer_success_manager'],
+    view: ['admin', 'dev', 'viewer', 'hoo', 'csm', 'customer_success', 'customer_success_manager'],
+    create: ['admin', 'dev'],
+    update: ['admin', 'dev', 'accountant', 'accounting'],
+    verify: ['admin', 'accountant', 'accounting'],
+    verify_company: ['admin', 'accountant', 'accounting'],
+    delete: ['admin', 'dev'],
+    export: ['admin', 'dev']
+  }),
+  company_documents: Object.freeze({
+    list: ['admin', 'dev', 'viewer', 'hoo'],
+    get: ['admin', 'dev', 'viewer', 'hoo'],
+    create: ['admin', 'dev'],
+    update: ['admin', 'dev', 'accountant', 'accounting'],
+    verify: ['admin', 'accountant', 'accounting'],
+    delete: ['admin', 'dev']
+  }),
+  contacts: Object.freeze({
+    list: ['admin', 'dev', 'viewer', 'hoo', 'csm', 'customer_success', 'customer_success_manager', 'sales_executive', 'head_of_sales'],
+    get: ['admin', 'dev', 'viewer', 'hoo', 'csm', 'customer_success', 'customer_success_manager', 'sales_executive', 'head_of_sales'],
+    create: ['admin', 'dev', 'csm', 'customer_success', 'customer_success_manager', 'sales_executive', 'head_of_sales', 'hoo'],
+    update: ['admin', 'dev'],
+    delete: ['admin', 'dev'],
+    export: ['admin', 'dev']
+  }),
+  deals: Object.freeze({
+    list: ['admin', 'dev', 'viewer', 'hoo'],
+    get: ['admin', 'dev', 'viewer', 'hoo'],
+    create: ['admin', 'dev'],
+    update: ['admin', 'dev'],
+    delete: ['admin', 'dev']
+  }),
+  sales_commissions: Object.freeze({
+    manage_all: ['admin','dev','developer','head_of_sales','sales_manager','general_manager','gm','senior_financial_controller','senior_fc','sfc','financial_controller','accounting','accountant'],
+    view_all: ['viewer'],
+    view_related: ['sales_executive']
+  }),
+  sales_commission_installments: Object.freeze({
+    manage_all: ['admin','dev','developer','head_of_sales','sales_manager','general_manager','gm','senior_financial_controller','senior_fc','sfc','financial_controller','accounting','accountant'],
+    view_all: ['viewer'],
+    view_related: ['sales_executive']
+  }),
+  proposal_catalog: Object.freeze({
+    list: ['admin', 'dev', 'viewer', 'hoo'],
+    get: ['admin', 'dev', 'viewer', 'hoo'],
+    create: ['admin', 'dev'],
+    update: ['admin', 'dev'],
+    delete: ['admin', 'dev']
+  }),
+  proposals: Object.freeze({
+    list: ['admin', 'dev', 'viewer', 'hoo'],
+    get: ['admin', 'dev', 'viewer', 'hoo'],
+    create: ['admin', 'dev'],
+    update: ['admin', 'dev'],
+    delete: ['admin', 'dev'],
+    create_from_deal: ['admin', 'dev'],
+    generate_proposal_html: ['admin', 'dev', 'viewer', 'hoo']
+  }),
+  agreements: Object.freeze({
+    list: ['admin', 'dev', 'viewer', 'hoo'],
+    get: ['admin', 'dev', 'viewer', 'hoo'],
+    create: ['admin', 'dev'],
+    update: ['admin', 'dev'],
+    delete: ['admin', 'dev'],
+    create_from_proposal: ['admin', 'dev'],
+    generate_agreement_html: ['admin', 'dev', 'viewer', 'hoo'],
+    send_to_operations: ['admin', 'hoo'],
+    request_incheck_lite: ['admin', 'hoo'],
+    request_incheck_full: ['admin', 'hoo'],
+    assign_csm: ['admin', 'hoo'],
+    update_onboarding_status: ['admin', 'hoo']
+  }),
+  operations_onboarding: Object.freeze({
+    list: ['admin', 'dev', 'viewer', 'hoo', 'head_of_operations', 'operations_manager'],
+    get: ['admin', 'dev', 'viewer', 'hoo', 'head_of_operations', 'operations_manager'],
+    create: ['admin', 'hoo', 'head_of_operations', 'operations_manager'],
+    update: ['admin', 'hoo', 'head_of_operations', 'operations_manager'],
+    assign_csm: ['admin', 'hoo', 'head_of_operations', 'operations_manager'],
+    delete: ['admin']
+  }),
+  invoices: Object.freeze({
+    list: ['admin', 'dev', 'viewer', 'hoo'],
+    get: ['admin', 'dev', 'viewer', 'hoo'],
+    create: ['admin', 'dev'],
+    update: ['admin', 'dev'],
+    delete: ['admin', 'dev'],
+    create_from_agreement: ['admin', 'dev'],
+    generate_invoice_html: ['admin', 'dev', 'viewer', 'hoo']
+  }),
+  receipts: Object.freeze({
+    list: ['admin', 'dev', 'viewer', 'hoo'],
+    get: ['admin', 'dev', 'viewer', 'hoo'],
+    create: ['admin', 'dev'],
+    update: ['admin', 'dev'],
+    delete: ['admin', 'dev'],
+    create_from_invoice: ['admin', 'dev'],
+    generate_receipt_html: ['admin', 'dev', 'viewer', 'hoo']
+  }),
+  credit_notes: Object.freeze({
+    view: ['admin', 'accounting', 'accountant', 'senior_financial_controller', 'financial_controller', 'senior_fc', 'sfc', 'general_manager', 'gm'],
+    list: ['admin', 'accounting', 'accountant', 'senior_financial_controller', 'financial_controller', 'senior_fc', 'sfc', 'general_manager', 'gm'],
+    get: ['admin', 'accounting', 'accountant', 'senior_financial_controller', 'financial_controller', 'senior_fc', 'sfc', 'general_manager', 'gm'],
+    create: ['admin', 'accounting', 'accountant', 'senior_financial_controller', 'financial_controller', 'senior_fc', 'sfc', 'general_manager', 'gm'],
+    cancel: ['admin', 'accounting', 'accountant', 'senior_financial_controller', 'financial_controller', 'senior_fc', 'sfc', 'general_manager', 'gm'],
+    print: ['admin', 'accounting', 'accountant', 'senior_financial_controller', 'financial_controller', 'senior_fc', 'sfc', 'general_manager', 'gm'],
+    export: ['admin', 'accounting', 'accountant', 'senior_financial_controller', 'financial_controller', 'senior_fc', 'sfc', 'general_manager', 'gm']
+  }),
+  payment_forecast: Object.freeze({
+    view: ['admin', 'accounting', 'accountant', 'senior_financial_controller', 'senior_fc', 'sfc', 'general_manager', 'gm'],
+    list: ['admin', 'accounting', 'accountant', 'senior_financial_controller', 'senior_fc', 'sfc', 'general_manager', 'gm'],
+    get: ['admin', 'accounting', 'accountant', 'senior_financial_controller', 'senior_fc', 'sfc', 'general_manager', 'gm'],
+    export: ['admin', 'accounting', 'accountant', 'senior_financial_controller', 'senior_fc', 'sfc', 'general_manager', 'gm'],
+    create_receipt: ['admin', 'accounting', 'accountant', 'senior_financial_controller', 'senior_fc', 'sfc', 'general_manager', 'gm'],
+    manage: ['admin', 'accounting', 'accountant', 'senior_financial_controller', 'senior_fc', 'sfc', 'general_manager', 'gm']
+  }),
+  monthly_renewal_forecast: Object.freeze({
+    view: ['admin', 'senior_financial_controller', 'senior_fc', 'sfc', 'general_manager', 'gm', 'accounting', 'accountant'],
+    export: ['admin', 'senior_financial_controller', 'senior_fc', 'sfc', 'general_manager', 'gm', 'accounting', 'accountant'],
+    view_details: ['admin', 'senior_financial_controller', 'senior_fc', 'sfc', 'general_manager', 'gm', 'accounting', 'accountant'],
+    mark_renewed: ['admin', 'senior_financial_controller', 'senior_fc', 'sfc', 'general_manager', 'gm', 'accounting', 'accountant'],
+    mark_no_renewal_needed: ['admin', 'senior_financial_controller', 'senior_fc', 'sfc', 'general_manager', 'gm', 'accounting', 'accountant'],
+    undo_override: ['admin', 'senior_financial_controller', 'senior_fc', 'sfc', 'general_manager', 'gm', 'accounting', 'accountant'],
+    create_renewal_invoice: ['admin', 'senior_financial_controller', 'senior_fc', 'sfc', 'general_manager', 'gm', 'accounting', 'accountant']
+  }),
+  biners: Object.freeze({
+    view: ['admin', 'dev', 'developer', 'general_manager', 'gm', 'senior_financial_controller', 'senior_fc', 'sfc', 'accountant', 'accounting', 'hod', 'head_of_department'],
+    list: ['admin', 'dev', 'developer', 'general_manager', 'gm', 'senior_financial_controller', 'senior_fc', 'sfc', 'accountant', 'accounting', 'hod', 'head_of_department'],
+    get: ['admin', 'dev', 'developer', 'general_manager', 'gm', 'senior_financial_controller', 'senior_fc', 'sfc', 'accountant', 'accounting', 'hod', 'head_of_department'],
+    create: ['admin', 'dev', 'developer', 'general_manager', 'gm', 'senior_financial_controller', 'senior_fc', 'sfc', 'accountant', 'accounting', 'hod', 'head_of_department'],
+    edit: ['admin', 'dev', 'developer', 'general_manager', 'gm', 'senior_financial_controller', 'senior_fc', 'sfc', 'accountant', 'accounting', 'hod', 'head_of_department'],
+    update: ['admin', 'dev', 'developer', 'general_manager', 'gm', 'senior_financial_controller', 'senior_fc', 'sfc', 'accountant', 'accounting', 'hod', 'head_of_department'],
+    delete: ['admin', 'general_manager', 'gm'],
+    schedule_payment: ['admin', 'dev', 'developer', 'general_manager', 'gm', 'senior_financial_controller', 'senior_fc', 'sfc', 'accountant', 'accounting', 'hod', 'head_of_department'],
+    record_payment: ['admin', 'dev', 'developer', 'general_manager', 'gm', 'senior_financial_controller', 'senior_fc', 'sfc', 'accountant', 'accounting', 'hod', 'head_of_department'],
+    forecast: ['admin', 'dev', 'developer', 'general_manager', 'gm', 'senior_financial_controller', 'senior_fc', 'sfc', 'accountant', 'accounting', 'hod', 'head_of_department'],
+    export: ['admin', 'dev', 'developer', 'general_manager', 'gm', 'senior_financial_controller', 'senior_fc', 'sfc', 'accountant', 'accounting', 'hod', 'head_of_department'],
+    manage: ['admin', 'dev', 'developer', 'general_manager', 'gm', 'senior_financial_controller', 'senior_fc', 'sfc', 'accountant', 'accounting', 'hod', 'head_of_department']
+  }),
+  hr: Object.freeze({
+    view: HR_FULL_ACCESS_ROLES,
+    list: HR_FULL_ACCESS_ROLES,
+    get: HR_FULL_ACCESS_ROLES,
+    create: HR_FULL_ACCESS_ROLES,
+    update: HR_FULL_ACCESS_ROLES,
+    delete: HR_FULL_ACCESS_ROLES,
+    manage: HR_FULL_ACCESS_ROLES,
+    export: HR_FULL_ACCESS_ROLES,
+    print: HR_FULL_ACCESS_ROLES,
+    manage_attendance: HR_FULL_ACCESS_ROLES
+  }),
+  hr_attendance: Object.freeze({
+    view: HR_FULL_ACCESS_ROLES,
+    list: HR_FULL_ACCESS_ROLES,
+    get: HR_FULL_ACCESS_ROLES,
+    create: HR_FULL_ACCESS_ROLES,
+    update: HR_FULL_ACCESS_ROLES,
+    delete: HR_FULL_ACCESS_ROLES,
+    export: HR_FULL_ACCESS_ROLES,
+    manage: HR_FULL_ACCESS_ROLES
+  }),
+  hr_leave: Object.freeze({
+    view: HR_FULL_ACCESS_ROLES,
+    list: HR_FULL_ACCESS_ROLES,
+    get: HR_FULL_ACCESS_ROLES,
+    create: HR_FULL_ACCESS_ROLES,
+    update: HR_FULL_ACCESS_ROLES,
+    approve: HR_FULL_ACCESS_ROLES,
+    reject: HR_FULL_ACCESS_ROLES,
+    delete: HR_FULL_ACCESS_ROLES,
+    export: HR_FULL_ACCESS_ROLES,
+    manage: HR_FULL_ACCESS_ROLES
+  }),
+  hr_leave_balance: Object.freeze({
+    view: HR_FULL_ACCESS_ROLES,
+    list: HR_FULL_ACCESS_ROLES,
+    get: HR_FULL_ACCESS_ROLES,
+    create: HR_FULL_ACCESS_ROLES,
+    update: HR_FULL_ACCESS_ROLES,
+    delete: HR_FULL_ACCESS_ROLES,
+    export: HR_FULL_ACCESS_ROLES,
+    manage: HR_FULL_ACCESS_ROLES
+  }),
+  hr_holidays: Object.freeze({
+    view: HR_FULL_ACCESS_ROLES,
+    list: HR_FULL_ACCESS_ROLES,
+    get: HR_FULL_ACCESS_ROLES,
+    create: HR_FULL_ACCESS_ROLES,
+    update: HR_FULL_ACCESS_ROLES,
+    delete: HR_FULL_ACCESS_ROLES,
+    export: HR_FULL_ACCESS_ROLES,
+    manage: HR_FULL_ACCESS_ROLES
+  }),
+  hr_payroll: Object.freeze({
+    view: HR_FULL_ACCESS_ROLES,
+    list: HR_FULL_ACCESS_ROLES,
+    get: HR_FULL_ACCESS_ROLES,
+    create: HR_FULL_ACCESS_ROLES,
+    update: HR_FULL_ACCESS_ROLES,
+    delete: HR_FULL_ACCESS_ROLES,
+    generate: HR_FULL_ACCESS_ROLES,
+    review: HR_FULL_ACCESS_ROLES,
+    approve: HR_FULL_ACCESS_ROLES,
+    pay: HR_FULL_ACCESS_ROLES,
+    print: HR_FULL_ACCESS_ROLES,
+    export: HR_FULL_ACCESS_ROLES,
+    manage: HR_FULL_ACCESS_ROLES
+  }),
+  hr_salary_receipts: Object.freeze({
+    view: HR_FULL_ACCESS_ROLES,
+    list: HR_FULL_ACCESS_ROLES,
+    get: HR_FULL_ACCESS_ROLES,
+    create: HR_FULL_ACCESS_ROLES,
+    update: HR_FULL_ACCESS_ROLES,
+    delete: HR_FULL_ACCESS_ROLES,
+    print: HR_FULL_ACCESS_ROLES,
+    export: HR_FULL_ACCESS_ROLES,
+    manage: HR_FULL_ACCESS_ROLES
+  }),
+  hr_documents: Object.freeze({
+    view: HR_FULL_ACCESS_ROLES,
+    list: HR_FULL_ACCESS_ROLES,
+    get: HR_FULL_ACCESS_ROLES,
+    create: HR_FULL_ACCESS_ROLES,
+    update: HR_FULL_ACCESS_ROLES,
+    delete: HR_FULL_ACCESS_ROLES,
+    upload: HR_FULL_ACCESS_ROLES,
+    download: HR_FULL_ACCESS_ROLES,
+    export: HR_FULL_ACCESS_ROLES,
+    manage: HR_FULL_ACCESS_ROLES
+  }),
+  hr_settings: Object.freeze({
+    view: HR_FULL_ACCESS_ROLES,
+    list: HR_FULL_ACCESS_ROLES,
+    get: HR_FULL_ACCESS_ROLES,
+    create: HR_FULL_ACCESS_ROLES,
+    update: HR_FULL_ACCESS_ROLES,
+    delete: HR_FULL_ACCESS_ROLES,
+    manage: HR_FULL_ACCESS_ROLES
+  }),
+  hr_notifications: Object.freeze({
+    view: HR_FULL_ACCESS_ROLES,
+    list: HR_FULL_ACCESS_ROLES,
+    get: HR_FULL_ACCESS_ROLES,
+    create: HR_FULL_ACCESS_ROLES,
+    update: HR_FULL_ACCESS_ROLES,
+    delete: HR_FULL_ACCESS_ROLES,
+    manage: HR_FULL_ACCESS_ROLES
+  }),
+  hr_self_service: Object.freeze({
+    view: HR_FULL_ACCESS_ROLES,
+    list: HR_FULL_ACCESS_ROLES,
+    get: HR_FULL_ACCESS_ROLES,
+    create: HR_FULL_ACCESS_ROLES,
+    update: HR_FULL_ACCESS_ROLES,
+    delete: HR_FULL_ACCESS_ROLES,
+    manage: HR_FULL_ACCESS_ROLES
+  }),
+  hr_team: Object.freeze({
+    view: HR_FULL_ACCESS_ROLES,
+    list: HR_FULL_ACCESS_ROLES,
+    get: HR_FULL_ACCESS_ROLES,
+    create: HR_FULL_ACCESS_ROLES,
+    update: HR_FULL_ACCESS_ROLES,
+    delete: HR_FULL_ACCESS_ROLES,
+    manage: HR_FULL_ACCESS_ROLES
+  }),
+  hr_attendance_correction: Object.freeze({
+    view: HR_FULL_ACCESS_ROLES,
+    list: HR_FULL_ACCESS_ROLES,
+    get: HR_FULL_ACCESS_ROLES,
+    create: HR_FULL_ACCESS_ROLES,
+    update: HR_FULL_ACCESS_ROLES,
+    approve: HR_FULL_ACCESS_ROLES,
+    reject: HR_FULL_ACCESS_ROLES,
+    delete: HR_FULL_ACCESS_ROLES,
+    manage: HR_FULL_ACCESS_ROLES
+  }),
+  hr_overtime: Object.freeze({
+    view: HR_FULL_ACCESS_ROLES,
+    list: HR_FULL_ACCESS_ROLES,
+    get: HR_FULL_ACCESS_ROLES,
+    create: HR_FULL_ACCESS_ROLES,
+    update: HR_FULL_ACCESS_ROLES,
+    approve: HR_FULL_ACCESS_ROLES,
+    reject: HR_FULL_ACCESS_ROLES,
+    delete: HR_FULL_ACCESS_ROLES,
+    manage: HR_FULL_ACCESS_ROLES
+  }),
+  hr_employee_statement: Object.freeze({
+    view: HR_FULL_ACCESS_ROLES,
+    list: HR_FULL_ACCESS_ROLES,
+    get: HR_FULL_ACCESS_ROLES,
+    print: HR_FULL_ACCESS_ROLES,
+    export: HR_FULL_ACCESS_ROLES,
+    manage: HR_FULL_ACCESS_ROLES
+  }),
+  hr_statement_of_account: Object.freeze({
+    view: HR_FULL_ACCESS_ROLES,
+    list: HR_FULL_ACCESS_ROLES,
+    get: HR_FULL_ACCESS_ROLES,
+    print: HR_FULL_ACCESS_ROLES,
+    export: HR_FULL_ACCESS_ROLES,
+    manage: HR_FULL_ACCESS_ROLES
+  }),
+  accounting: Object.freeze({
+    view: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'],
+    list: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'],
+    get: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'],
+    create: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'],
+    update: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'],
+    delete: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'],
+    manage: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'],
+    export: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller']
+  }),
+  accounting_accounts: Object.freeze({
+    view: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], list: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], create: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], update: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], delete: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], manage: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller']
+  }),
+  accounting_journals: Object.freeze({
+    view: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], list: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], create: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], update: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], delete: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], post: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], approve: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], manage: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller']
+  }),
+  accounting_ledger: Object.freeze({
+    view: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], list: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], export: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], manage: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller']
+  }),
+  accounting_bank: Object.freeze({
+    view: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], list: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], create: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], update: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], delete: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], manage: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller']
+  }),
+  accounting_reports: Object.freeze({
+    view: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], list: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], export: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], manage: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller']
+  }),
+  accounting_expenses: Object.freeze({
+    view: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], list: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], get: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], create: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], update: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], delete: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], export: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], manage: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller']
+  }),
+  accounting_vendors: Object.freeze({
+    view: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], list: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], get: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], create: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], update: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], delete: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], export: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller'], manage: ['admin','accounting','accountant','sfc','senior_financial_controller','senior_finanical_controller']
+  }),
+  backup_center: Object.freeze({
+    view: ['admin'],
+    list: ['admin'],
+    create: ['admin'],
+    update: ['admin'],
+    delete: ['admin'],
+    export: ['admin'],
+    print: ['admin'],
+    settings: ['admin'],
+    manage: ['admin']
+  }),
+  clients: Object.freeze({
+    list: ['admin', 'dev', 'viewer', 'hoo'],
+    get: ['admin', 'dev', 'viewer', 'hoo'],
+    view_renewals: ['admin', 'dev', 'viewer', 'hoo'],
+    view_statement: ['admin', 'dev', 'viewer', 'hoo'],
+    statement_view: ['admin', 'dev', 'viewer', 'hoo'],
+    statement_export: ['admin', 'dev', 'viewer', 'hoo'],
+    create: ['admin', 'dev', 'hoo'],
+    update: ['admin', 'dev', 'hoo'],
+    delete: ['admin', 'dev']
+  }),
+  analytics: Object.freeze({ list: ['admin', 'dev', 'viewer', 'hoo'] }),
+  notifications: Object.freeze({
+    list: ['admin', 'dev', 'viewer', 'hoo'],
+    get_unread_count: ['admin', 'dev', 'viewer', 'hoo'],
+    mark_read: ['admin', 'dev', 'viewer', 'hoo'],
+    mark_all_read: ['admin', 'dev', 'viewer', 'hoo']
+  }),
+  notification_settings: Object.freeze({
+    list: ['admin'],
+    upsert: ['admin'],
+    bulk_upsert: ['admin'],
+    reset_defaults: ['admin'],
+    test_notification: ['admin']
+  }),
+  users: Object.freeze({ list: ['admin'], get: ['admin'], create: ['admin'], update: ['admin'], delete: ['admin'], activate: ['admin'], deactivate: ['admin'] }),
+  roles: Object.freeze({ list: ['admin'], get: ['admin'], create: ['admin'], update: ['admin'], delete: ['admin'] }),
+  role_permissions: Object.freeze({ list: ['admin', 'dev'], get: ['admin', 'dev'], create: ['admin'], update: ['admin'], delete: ['admin'] }),
+  workflow: Object.freeze({
+    list: ['admin', 'dev'],
+    get: ['admin', 'dev'],
+    save: ['admin', 'dev'],
+    delete: ['admin'],
+    request_approval: ['admin', 'dev', 'hoo'],
+    approve: ['admin', 'hoo'],
+    reject: ['admin', 'hoo'],
+    list_pending_approvals: ['admin', 'dev', 'hoo'],
+    list_audit: ['admin', 'dev']
+  }),
+  planner: Object.freeze({ manage: ['admin', 'dev'] }),
+  freeze_windows: Object.freeze({ manage: ['admin', 'dev'] }),
+  communication_centre: Object.freeze({
+    view: ['admin','dev','csm','hoo','viewer'],
+    list: ['admin','dev','csm','hoo','viewer'],
+    get: ['admin','dev','csm','hoo','viewer'],
+    create: ['admin','dev','csm','hoo','viewer'],
+    reply: ['admin','dev','csm','hoo','viewer'],
+    update: ['admin','dev','csm','hoo','viewer'],
+    close: ['admin','dev','csm','hoo','viewer'],
+    reopen: ['admin','dev','csm','hoo','viewer'],
+    manage: ['admin','dev','csm','hoo','viewer'],
+    delete: []
+  })
+});
+
+const Permissions = {
+  baseMatrix: BASE_PERMISSION_MATRIX,
+  tabPermissionRequirements: Object.freeze({
+    issues: [{ resource: 'tickets', action: 'list' }],
+    calendar: [{ resource: 'events', action: 'list' }],
+    csm: [{ resource: 'csm', action: 'list' }],
+    company: [{ resource: 'companies', action: 'list' }],
+    contacts: [{ resource: 'contacts', action: 'list' }],
+    leads: [{ resource: 'leads', action: 'list' }],
+    deals: [{ resource: 'deals', action: 'list' }],
+    proposals: [{ resource: 'proposals', action: 'list' }],
+    agreements: [{ resource: 'agreements', action: 'list' }],
+    commissionTracker: [{ resource: 'sales_commissions', action: 'view' }],
+    operationsOnboarding: [{ resource: 'operations_onboarding', action: 'list' }],
+    invoices: [{ resource: 'invoices', action: 'list' }],
+    receipts: [{ resource: 'receipts', action: 'list' }],
+    creditNotes: [{ resource: 'credit_notes', action: 'view' }],
+    paymentForecast: [{ resource: 'payment_forecast', action: 'view' }],
+    renewalForecast: [{ resource: 'monthly_renewal_forecast', action: 'view' }],
+    biners: [{ resource: 'biners', action: 'view' }],
+    hr: [{ resource: 'hr', action: 'view' }],
+    accounting: [{ resource: 'accounting', action: 'view' }],
+    backupCenter: [{ resource: 'backup_center', action: 'view' }],
+    lifecycleAnalytics: [{ resource: 'analytics', action: 'list' }],
+    clients: [{ resource: 'clients', action: 'list' }],
+    proposalCatalog: [{ resource: 'proposal_catalog', action: 'list' }],
+    communicationCentre: [{ resource: 'communication_centre', action: 'list' }, { resource: 'communication_centre', action: 'view' }],
+    communication_centre: [{ resource: 'communication_centre', action: 'list' }, { resource: 'communication_centre', action: 'view' }],
+    notifications: [{ resource: 'notifications', action: 'list' }],
+    notificationSetup: [{ resource: 'notification_settings', action: 'list' }],
+    workflow: [{ resource: 'workflow', action: 'list' }],
+    users: [{ resource: 'users', action: 'list' }],
+    rolePermissions: [{ resource: 'role_permissions', action: 'list' }]
+  }),
+  tabResourceMap: {
+    issues: null,
+    calendar: 'events',
+    csm: 'csm',
+    company: 'companies',
+    contacts: 'contacts',
+    leads: 'leads',
+    deals: 'deals',
+    proposals: 'proposals',
+    agreements: 'agreements',
+    commissionTracker: 'sales_commissions',
+    operationsOnboarding: 'operations_onboarding',
+    invoices: 'invoices',
+    receipts: 'receipts',
+    creditNotes: 'credit_notes',
+    paymentForecast: 'payment_forecast',
+    renewalForecast: 'monthly_renewal_forecast',
+    biners: 'biners',
+    hr: 'hr',
+    accounting: 'accounting',
+    backupCenter: 'backup_center',
+    lifecycleAnalytics: 'analytics',
+    clients: 'clients',
+    proposalCatalog: 'proposal_catalog',
+    communicationCentre: 'communication_centre',
+    communication_centre: 'communication_centre',
+    notifications: 'notifications',
+    notificationSetup: 'notification_settings',
+    users: 'users',
+    rolePermissions: 'role_permissions',
+    workflow: 'workflow'
+  },
+  state: {
+    loaded: false,
+    loading: false,
+    loadedRole: null,
+    requestId: 0,
+    rows: [],
+    page: 1,
+    limit: 50,
+    offset: 0,
+    returned: 0,
+    hasMore: false,
+    total: 0,
+    matrix: new Map(),
+    error: null
+  },
+  actionAliasMap: Object.freeze({
+    view: ['list', 'get'],
+    view_all: ['view', 'list', 'get', 'export'],
+    view_related: ['view', 'list', 'get', 'export'],
+    manage_all: ['view', 'list', 'get', 'create', 'save', 'update', 'delete', 'export', 'manage', 'pay'],
+    manage: ['view', 'list', 'get', 'create', 'save', 'update', 'delete', 'export']
+  }),
+  createMatrixEntry() {
+    return {
+      hasAnyRow: false,
+      allowedRoles: new Set(),
+      deniedRoles: new Set()
+    };
+  },
+  normalizeRole(value) {
+    return String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '_')
+      .replace(/-/g, '_')
+      .replace(/_+/g, '_');
+  },
+  extractRows(response) {
+    const parseJsonIfNeeded = value => {
+      if (typeof value !== 'string') return value;
+      const trimmed = value.trim();
+      if (!(trimmed.startsWith('[') || trimmed.startsWith('{'))) return value;
+      try {
+        return JSON.parse(trimmed);
+      } catch (_error) {
+        return value;
+      }
+    };
+    const coerceRows = value => {
+      const parsed = parseJsonIfNeeded(value);
+      if (Array.isArray(parsed)) return parsed;
+      if (!parsed || typeof parsed !== 'object') return [];
+
+      const objectValues = Object.values(parsed).filter(Boolean);
+      if (objectValues.length && objectValues.every(item => item && typeof item === 'object')) {
+        const hasRuleLikeShape = objectValues.some(
+          item => 'resource' in item || 'action' in item || 'allowed_roles' in item || 'allowed_roles_csv' in item
+        );
+        if (hasRuleLikeShape) return objectValues;
+      }
+      return [];
+    };
+    const candidates = [
+      response,
+      response?.items,
+      response?.rows,
+      response?.permissions,
+      response?.data,
+      response?.result,
+      response?.payload,
+      response?.data?.items,
+      response?.data?.rows
+    ];
+    for (const candidate of candidates) {
+      const rows = coerceRows(candidate);
+      if (rows.length) return rows;
+    }
+    return [];
+  },
+  extractListResult(response) {
+    if (response && typeof response === 'object' && Array.isArray(response.rows)) {
+      const total = Number(response.total ?? response.rows.length) || response.rows.length;
+      const returned = Number(response.returned ?? response.rows.length) || response.rows.length;
+      const limit = Number(response.limit || this.state.limit || 50);
+      const page = Number(response.page || this.state.page || 1);
+      const offset = Number(response.offset ?? Math.max(0, (page - 1) * limit));
+      const hasMore = response.hasMore !== undefined
+        ? Boolean(response.hasMore)
+        : response.has_more !== undefined
+          ? Boolean(response.has_more)
+          : offset + returned < total;
+      return { rows: response.rows, total, returned, hasMore, page, limit, offset };
+    }
+    const rows = this.extractRows(response);
+    const limit = Number(this.state.limit || 50);
+    const page = Number(this.state.page || 1);
+    const returned = rows.length;
+    const offset = Math.max(0, (page - 1) * limit);
+    return {
+      rows,
+      total: rows.length,
+      returned,
+      hasMore: false,
+      page,
+      limit,
+      offset
+    };
+  },
+  normalizeAllowedRoles(row = {}) {
+    const normalizedFromArray = Array.isArray(row.allowed_roles)
+      ? row.allowed_roles.map(v => this.normalizeRole(v)).filter(Boolean)
+      : [];
+    if (normalizedFromArray.length) return normalizedFromArray;
+
+    const normalizedFromCsv = String(row.allowed_roles_csv || '')
+      .split(',')
+      .map(v => this.normalizeRole(v))
+      .filter(Boolean);
+    if (normalizedFromCsv.length) return normalizedFromCsv;
+
+    const hasSupabaseRoleRow = row && typeof row === 'object' && 'role_key' in row && 'is_allowed' in row;
+    if (hasSupabaseRoleRow && Boolean(row.is_allowed)) {
+      const normalizedRoleKey = this.normalizeRole(row.role_key);
+      return normalizedRoleKey ? [normalizedRoleKey] : [];
+    }
+
+    return [];
+  },
+  toBoolean(value, defaultValue = false) {
+    if (value === undefined || value === null || value === '') return defaultValue;
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value !== 0;
+    const normalized = String(value).trim().toLowerCase();
+    if (!normalized) return defaultValue;
+    if (['true', '1', 'yes', 'y'].includes(normalized)) return true;
+    if (['false', '0', 'no', 'n'].includes(normalized)) return false;
+    return defaultValue;
+  },
+  canLoadRuntimeMatrix(role = Session.role()) {
+    return Boolean(this.normalizeRole(role));
+  },
+  resourceAliases(resource) {
+    const normalizedResource = String(resource || '').trim().toLowerCase();
+    if (normalizedResource === 'csm') return ['csm', 'csm_activities'];
+    if (['hr','human_resources','human-resources','hr_employees'].includes(normalizedResource)) return ['hr', 'hr_employees'];
+    if (['accounting','accounts','chart_of_accounts','chart-of-accounts'].includes(normalizedResource)) return ['accounting','accounting_accounts'];
+    if (['accounting_accounts','coa','chart'].includes(normalizedResource)) return ['accounting_accounts','accounting'];
+    if (['accounting_journals','journal_entries','journal-entries','journals'].includes(normalizedResource)) return ['accounting_journals','accounting'];
+    if (['accounting_ledger','general_ledger','general-ledger','ledger'].includes(normalizedResource)) return ['accounting_ledger','accounting'];
+    if (['accounting_bank','bank_cash','bank-cash','cash_bank'].includes(normalizedResource)) return ['accounting_bank','accounting'];
+    if (['accounting_reports','trial_balance','trial-balance'].includes(normalizedResource)) return ['accounting_reports','accounting'];
+    if (['hr_self_service','self_service','self-service'].includes(normalizedResource)) return ['hr_self_service','hr'];
+    if (['hr_team','team'].includes(normalizedResource)) return ['hr_team','hr'];
+    if (['hr_leave_balance','leave_balance','leave-balances'].includes(normalizedResource)) return ['hr_leave_balance','hr_leave'];
+    if (['hr_holidays','holidays','holiday_calendar','holiday-calendar'].includes(normalizedResource)) return ['hr_holidays','hr'];
+    if (['hr_salary_receipts','salary_receipts','salary-receipts','payroll_receipts'].includes(normalizedResource)) return ['hr_salary_receipts','hr_payroll'];
+    if (['hr_attendance_correction','attendance_correction','corrections'].includes(normalizedResource)) return ['hr_attendance_correction','hr_attendance'];
+    if (['hr_overtime','overtime'].includes(normalizedResource)) return ['hr_overtime','hr_payroll'];
+    if (['hr_notifications'].includes(normalizedResource)) return ['hr_notifications','hr'];
+    if (['hr_attendance','attendance'].includes(normalizedResource)) return ['hr_attendance'];
+    if (['hr_payroll','payroll','payslips'].includes(normalizedResource)) return ['hr_payroll'];
+    if (normalizedResource === 'csm_activities') return ['csm_activities', 'csm'];
+    if (['contacts', 'crm_contacts'].includes(normalizedResource)) return ['contacts', 'crm_contacts'];
+    if (['communicationcentre', 'communication-center', 'communication-centre', 'communication_center'].includes(normalizedResource)) return ['communication_centre'];
+    return [normalizedResource];
+  },
+  buildMatrixFromRows(rows = []) {
+    const matrix = new Map();
+    let totalActiveRows = 0;
+    let totalDeniedRows = 0;
+    rows.forEach(row => {
+      const resource = String(row.resource || '').trim().toLowerCase();
+      const action = String(row.action || '').trim().toLowerCase();
+      if (!resource || !action) return;
+      const key = `${resource}:${action}`;
+      const existing = matrix.get(key) || this.createMatrixEntry();
+      existing.hasAnyRow = true;
+      const isRowAllowed = this.toBoolean(row.is_allowed, true);
+      const isRowActive = this.toBoolean(row.is_active, true);
+      const normalizedAllowedRoles = this.normalizeAllowedRoles(row);
+      const normalizedRoleKey = this.normalizeRole(row.role_key);
+      if (!isRowActive) {
+        matrix.set(key, existing);
+        return;
+      }
+      totalActiveRows += 1;
+      if (normalizedRoleKey) {
+        if (isRowAllowed) {
+          existing.allowedRoles.add(normalizedRoleKey);
+          existing.deniedRoles.delete(normalizedRoleKey);
+        } else {
+          existing.deniedRoles.add(normalizedRoleKey);
+          existing.allowedRoles.delete(normalizedRoleKey);
+          totalDeniedRows += 1;
+        }
+      }
+      if (isRowAllowed) normalizedAllowedRoles.forEach(roleValue => existing.allowedRoles.add(roleValue));
+      matrix.set(key, existing);
+    });
+    return { matrix, totalActiveRows, totalDeniedRows };
+  },
+  async loadMatrix(force = false) {
+    if (!Session.isAuthenticated()) {
+      this.reset();
+      return [];
+    }
+
+    const currentRole = this.normalizeRole(Session.role());
+    if (!currentRole) {
+      this.reset();
+      return [];
+    }
+
+    if (this.state.loading && !force) return this.state.rows;
+
+    const requestId = Number(this.state.requestId || 0) + 1;
+    this.state.requestId = requestId;
+    this.state.loading = true;
+    this.state.loaded = false;
+    this.state.loadedRole = null;
+    this.state.rows = [];
+    this.state.matrix = new Map();
+    this.state.error = null;
+
+    try {
+      let rows = [];
+      let total = 0;
+      const limit = Number(this.state.limit || 50);
+      const client = window.SupabaseClient?.getClient?.();
+      if (!client || typeof client.rpc !== 'function') {
+        throw new Error('Supabase RPC client is unavailable for get_my_role_permissions');
+      }
+
+      const { data, error } = await client.rpc('get_my_role_permissions');
+      if (error) throw error;
+
+      const roleAtCompletion = this.normalizeRole(Session.role());
+      if (requestId !== this.state.requestId || roleAtCompletion !== currentRole || !Session.isAuthenticated()) {
+        console.warn('[Permissions] discarded stale matrix response', {
+          requestedRole: currentRole,
+          currentRole: roleAtCompletion,
+          requestId,
+          activeRequestId: this.state.requestId
+        });
+        return [];
+      }
+
+      rows = this.extractRows(data);
+      total = rows.length;
+      const roleKey = currentRole;
+      rows = rows.filter(row => this.normalizeRole(row.role_key) === roleKey && this.toBoolean(row.is_active, true) === true);
+      const { matrix, totalActiveRows, totalDeniedRows } = this.buildMatrixFromRows(rows);
+      this.state.rows = rows;
+      this.state.total = total;
+      this.state.returned = rows.length;
+      this.state.hasMore = false;
+      this.state.page = 1;
+      this.state.limit = limit;
+      this.state.offset = 0;
+      this.state.matrix = matrix;
+      this.state.loadedRole = roleKey;
+      this.state.loaded = true;
+      console.log('[Permissions] loaded matrix for role', {
+        roleKey,
+        rowsCount: rows.length,
+        resources: [...new Set(rows.map(row => String(row.resource || '').trim().toLowerCase()).filter(Boolean))]
+      });
+      console.info('[Permissions] matrix loaded stats', {
+        roleKey,
+        totalActiveRows,
+        totalDeniedRows
+      });
+      return rows;
+    } catch (error) {
+      if (requestId === this.state.requestId) {
+        this.state.rows = [];
+        this.state.matrix = new Map();
+        this.state.loaded = false;
+        this.state.loadedRole = null;
+        const isPermErr =
+          typeof window !== 'undefined' && typeof window.isPermissionError === 'function'
+            ? window.isPermissionError(error)
+            : String(error?.message || '').toLowerCase().includes('forbidden') ||
+              String(error?.message || '').toLowerCase().includes('cannot list');
+        this.state.error = error;
+        console.error('[Permissions] loadMatrix error', {
+          isPermErr,
+          message: error?.message,
+          roleKey: currentRole,
+          error
+        });
+      }
+      return [];
+    } finally {
+      if (requestId === this.state.requestId) this.state.loading = false;
+    }
+  },
+  reset() {
+    this.state.requestId = Number(this.state.requestId || 0) + 1;
+    this.state.loaded = false;
+    this.state.loading = false;
+    this.state.loadedRole = null;
+    this.state.rows = [];
+    this.state.matrix = new Map();
+    this.state.error = null;
+  },
+  isReady() {
+    const currentRole = this.normalizeRole(Session.role());
+    return Boolean(this.state.loaded) &&
+      !this.state.loading &&
+      Boolean(currentRole) &&
+      this.normalizeRole(this.state.loadedRole) === currentRole;
+  },
+  requireReady(message = 'Permissions are still loading. Please wait.') {
+    if (this.isReady()) return true;
+    UI?.toast?.(message);
+    return false;
+  },
+  can(resource, action, options = {}) {
+    if (!Session.isAuthenticated()) return false;
+    const role = this.normalizeRole(Session.role());
+    const normalizedResource = String(resource || '').trim().toLowerCase();
+    const normalizedAction = String(action || '').trim().toLowerCase();
+    if (!normalizedResource || !normalizedAction) return false;
+
+    if (!role) {
+      if (typeof options.fallback === 'boolean') return options.fallback;
+      return false;
+    }
+
+    return this.canPerformAction(normalizedResource, normalizedAction, role, options);
+  },
+  hasMatrixPermission(resource, action, role = Session.role()) {
+    return this.canPerformAction(resource, action, role);
+  },
+  getBaseAllowedRoles(resource, action) {
+    const resourceAliases = this.resourceAliases(resource);
+    const candidateActions = this.getActionCandidates(action);
+    const allowedRoles = new Set();
+    resourceAliases.forEach(candidateResource => {
+      candidateActions.forEach(candidateAction => {
+        const allowedByBase = this.baseMatrix?.[candidateResource]?.[candidateAction];
+        if (!Array.isArray(allowedByBase)) return;
+        allowedByBase
+          .map(value => this.normalizeRole(value))
+          .filter(Boolean)
+          .forEach(roleValue => allowedRoles.add(roleValue));
+      });
+    });
+    return [...allowedRoles];
+  },
+  getActionCandidates(action) {
+    const normalizedAction = String(action || '').trim().toLowerCase();
+    if (!normalizedAction) return [];
+    const candidates = new Set([normalizedAction]);
+    Object.entries(this.actionAliasMap).forEach(([parentAction, impliedActions]) => {
+      if (!Array.isArray(impliedActions)) return;
+      if (impliedActions.includes(normalizedAction)) candidates.add(parentAction);
+    });
+    return [...candidates];
+  },
+  roleMatchesRow(row = {}, role = '') {
+    const normalizedRole = this.normalizeRole(role);
+    if (!normalizedRole) return false;
+    const directRole = this.normalizeRole(row.role_key);
+    const groupedRoles = this.normalizeAllowedRoles(row);
+    return directRole === normalizedRole || groupedRoles.includes(normalizedRole);
+  },
+  getMatchedRows(resource, action, role = Session.role(), options = {}) {
+    const normalizedResource = String(resource || '').trim().toLowerCase();
+    const resourceAliases = this.resourceAliases(normalizedResource);
+    const normalizedRole = this.normalizeRole(role);
+    const candidateActions = this.getActionCandidates(action);
+    if (!normalizedResource || !candidateActions.length || !normalizedRole) return [];
+    const includeDenied = options.includeDenied !== false;
+    return this.state.rows
+      .filter(row => {
+        const rowResource = String(row.resource || '').trim().toLowerCase();
+        const rowAction = String(row.action || '').trim().toLowerCase();
+        if (!resourceAliases.includes(rowResource) || !candidateActions.includes(rowAction)) return false;
+        if (this.toBoolean(row.is_active, true) === false) return false;
+        const isAllowed = this.toBoolean(row.is_allowed, true);
+        if (!isAllowed && !includeDenied) return false;
+        return this.roleMatchesRow(row, normalizedRole);
+      })
+      .map(row => ({
+        role_key: this.normalizeRole(row.role_key),
+        resource: String(row.resource || '').trim().toLowerCase(),
+        action: String(row.action || '').trim().toLowerCase(),
+        is_allowed: this.toBoolean(row.is_allowed, true),
+        is_active: this.toBoolean(row.is_active, true),
+        allowed_roles: this.normalizeAllowedRoles(row)
+      }));
+  },
+  getMatrixEntry(resource, action) {
+    const normalizedResource = String(resource || '').trim().toLowerCase();
+    const normalizedAction = String(action || '').trim().toLowerCase();
+    const aliases = this.resourceAliases(normalizedResource);
+    const merged = this.createMatrixEntry();
+    let hasAny = false;
+    aliases.forEach(alias => {
+      const existing = this.state.matrix.get(`${alias}:${normalizedAction}`);
+      if (!existing) return;
+      hasAny = true;
+      if (Array.isArray(existing)) {
+        existing.forEach(roleValue => merged.allowedRoles.add(this.normalizeRole(roleValue)));
+        merged.hasAnyRow = merged.hasAnyRow || existing.length > 0;
+        return;
+      }
+      merged.hasAnyRow = merged.hasAnyRow || Boolean(existing.hasAnyRow);
+      existing.allowedRoles?.forEach(roleValue => merged.allowedRoles.add(this.normalizeRole(roleValue)));
+      existing.deniedRoles?.forEach(roleValue => merged.deniedRoles.add(this.normalizeRole(roleValue)));
+    });
+    return hasAny ? merged : null;
+  },
+  decidePermission(resource, action, role = Session.role(), options = {}) {
+    const currentRole = this.normalizeRole(role);
+    const normalizedResource = String(resource || '').trim().toLowerCase();
+    const normalizedAction = String(action || '').trim().toLowerCase();
+    if (!currentRole || !normalizedResource || !normalizedAction) return false;
+
+    if (!this.isReady()) {
+      return false;
+    }
+
+    const matchedRows = this.getMatchedRows(normalizedResource, normalizedAction, currentRole, { includeDenied: true });
+    const hasDeniedRow = matchedRows.some(row => row.is_active === true && row.is_allowed === false);
+    const hasAllowedRow = matchedRows.some(row => row.is_active === true && row.is_allowed === true);
+
+    let decision = false;
+    if (hasDeniedRow) decision = false;
+    else if (hasAllowedRow) decision = true;
+
+    console.log('[permissions check]', JSON.stringify({
+      role: currentRole,
+      resource: normalizedResource,
+      action: normalizedAction,
+      aliases: this.resourceAliases(normalizedResource),
+      matchedRows,
+      result: decision
+    }, null, 2));
+    if (!decision) {
+      const available = this.state.rows
+        .filter(row => this.normalizeRole(row.role_key) === currentRole && String(row.resource || '').trim().toLowerCase() === normalizedResource && this.toBoolean(row.is_active, true) === true && this.toBoolean(row.is_allowed, true) === true)
+        .map(row => String(row.action || '').trim().toLowerCase())
+        .filter(Boolean);
+      console.warn('[Permission denied]', {
+        roleKey: currentRole,
+        resource: normalizedResource,
+        action: normalizedAction,
+        available,
+        reason: hasDeniedRow ? 'explicitly_denied' : (hasAllowedRow ? 'unexpected_block' : 'missing_permission')
+      });
+    }
+    return decision;
+  },
+  getTabPermissionRequirements(viewKey) {
+    const key = String(viewKey || '').trim();
+    if (!key) return [];
+    const explicit = this.tabPermissionRequirements[key];
+    if (Array.isArray(explicit) && explicit.length) return explicit;
+    const fallbackResource = this.tabResourceMap[key];
+    if (!fallbackResource) return [];
+    return [{ resource: fallbackResource, action: 'list' }];
+  },
+  canPerformAction(resource, action, role = Session.role(), options = {}) {
+    const normalizedRole = this.normalizeRole(role);
+    const normalizedResource = String(resource || '').trim().toLowerCase();
+    const normalizedAction = String(action || '').trim().toLowerCase();
+    if (normalizedRole === ROLES.ADMIN || Boolean(window.AdminOverride?.canOverride?.())) return true;
+    return this.decidePermission(resource, action, role, options);
+  },
+  canView(resource, role = Session.role()) {
+    return this.canPerformAction(resource, 'list', role) || this.canPerformAction(resource, 'get', role) || this.canPerformAction(resource, 'view', role) || this.canPerformAction(resource, 'manage', role);
+  },
+  canCreate(resource, role = Session.role()) {
+    return this.canPerformAction(resource, 'create', role) || this.canPerformAction(resource, 'manage', role);
+  },
+  canEdit(resource, role = Session.role()) {
+    return this.canPerformAction(resource, 'update', role) || this.canPerformAction(resource, 'manage', role);
+  },
+  canDelete(resource, role = Session.role()) {
+    const normalizedResource = String(resource || '').trim().toLowerCase();
+    if (normalizedResource === 'communication_centre' || normalizedResource === 'communicationcentre' || normalizedResource === 'communication-centre') {
+      return this.canPerformAction('communication_centre', 'delete', role);
+    }
+    return this.canPerformAction(resource, 'delete', role) || this.canPerformAction(resource, 'manage', role);
+  },
+  canExport(resource, role = Session.role()) {
+    return this.canPerformAction(resource, 'export', role) || this.canPerformAction(resource, 'manage', role);
+  },
+  isAdmin() {
+    return this.normalizeRole(Session.role()) === ROLES.ADMIN;
+  },
+  isDev() {
+    return this.normalizeRole(Session.role()) === ROLES.DEV;
+  },
+  isHoo() {
+    return this.normalizeRole(Session.role()) === ROLES.HOO;
+  },
+  isViewer() {
+    return this.normalizeRole(Session.role()) === ROLES.VIEWER;
+  },
+  hasAdminOverride() {
+    return this.isAdmin() || Boolean(window.AdminOverride?.canOverride?.());
+  },
+  isAdminLike() {
+    return this.hasAdminOverride();
+  },
+  canCreateTicket() {
+    return this.canPerformAction('tickets', 'create') || this.canPerformAction('tickets', 'manage');
+  },
+  canCreateLead() {
+    return this.canCreate('leads');
+  },
+
+  getCompanyVerificationRole(currentUser = this.getResolvedCurrentUser()) {
+    const user = currentUser || {};
+    return this.normalizeRole(
+      user.role_key ||
+      user.roleKey ||
+      user.role ||
+      user.user_role ||
+      user.profile?.role_key ||
+      user.profile?.role ||
+      user.app_metadata?.role_key ||
+      user.app_metadata?.role ||
+      user.user_metadata?.role_key ||
+      user.user_metadata?.role ||
+      Session?.role?.() ||
+      ''
+    );
+  },
+  canVerifyCompany(currentUser = this.getResolvedCurrentUser()) {
+    const roleKey = this.getCompanyVerificationRole(currentUser);
+    if (roleKey === 'admin') return true;
+    return Boolean(
+      this.can('companies', 'verify') ||
+      this.can('companies', 'verify_company') ||
+      window.PermissionService?.can?.('companies', 'verify') ||
+      window.PermissionService?.can?.('companies', 'verify_company')
+    );
+  },
+  getContactCreateRole(currentUser = this.getResolvedCurrentUser()) {
+    const user = currentUser || {};
+    return this.normalizeRole(
+      user.role_key ||
+      user.roleKey ||
+      user.role ||
+      user.user_role ||
+      user.profile?.role_key ||
+      user.profile?.role ||
+      user.app_metadata?.role_key ||
+      user.app_metadata?.role ||
+      user.user_metadata?.role_key ||
+      user.user_metadata?.role ||
+      Session?.role?.() ||
+      ''
+    );
+  },
+  canCreateContact(currentUser = this.getResolvedCurrentUser()) {
+    const permissionChecks = [
+      () => this.can('contacts', 'create'),
+      () => this.can('crm_contacts', 'create'),
+      () => this.can('crm', 'create'),
+      () => window.PermissionService?.can?.('contacts', 'create'),
+      () => window.PermissionService?.can?.('crm_contacts', 'create'),
+      () => window.PermissionService?.can?.('crm', 'create')
+    ];
+    if (permissionChecks.some(check => {
+      try { return Boolean(check()); } catch (_error) { return false; }
+    })) return true;
+
+    const roleKey = this.getContactCreateRole(currentUser);
+    return roleKey === ROLES.ADMIN;
+  },
+  canViewCsmActivity() {
+    return this.canView('csm_activities');
+  },
+  canExportCsmActivity() {
+    return this.canExport('csm_activities');
+  },
+  canCreateCsmActivity() {
+    return this.canCreate('csm_activities');
+  },
+  canUpdateCsmActivity() {
+    return this.canEdit('csm_activities');
+  },
+  canDeleteCsmActivity() {
+    return this.canDelete('csm_activities');
+  },
+  canManageCsmActivity() {
+    return this.canUpdateCsmActivity() || this.canDeleteCsmActivity();
+  },
+  canEditTicket() {
+    return this.canPerformAction('tickets', 'update') || this.canPerformAction('tickets', 'manage');
+  },
+  canUpdateLead() {
+    return this.canEdit('leads');
+  },
+  canDeleteLead() {
+    return this.canDelete('leads');
+  },
+  canEditDeleteLead() {
+    return this.canUpdateLead() || this.canDeleteLead();
+  },
+  canManageEvents() {
+    return (
+      this.canCreate('events') ||
+      this.canEdit('events') ||
+      this.canDelete('events')
+    );
+  },
+  canManageUsers() {
+    return this.canView('users');
+  },
+  canManageRolesPermissions() {
+    return this.isAdmin();
+  },
+  canManageNotificationSettings() {
+    return this.canPerformAction('notification_settings', 'list');
+  },
+  canManageWorkflow() {
+    return this.canView('workflow');
+  },
+  canEditRolesPermissions() {
+    return (
+      this.canEdit('roles') ||
+      this.canEdit('role_permissions')
+    );
+  },
+  canCreateProposal() {
+    return this.canCreate('proposals') || this.canPerformAction('proposals', 'manage');
+  },
+  canUpdateProposal() {
+    return this.canEdit('proposals') || this.canPerformAction('proposals', 'manage');
+  },
+  canDeleteProposal() {
+    return this.canDelete('proposals');
+  },
+  canCreateProposalFromDeal() {
+    return (
+      this.canPerformAction('deals', 'convert_to_proposal') ||
+      this.canPerformAction('proposals', 'create_from_deal') ||
+      this.canPerformAction('proposals', 'create') ||
+      this.canPerformAction('proposals', 'manage')
+    );
+  },
+  canPreviewProposal() {
+    return (
+      this.canPerformAction('proposals', 'preview') ||
+      this.canPerformAction('proposals', 'get') ||
+      this.canPerformAction('proposals', 'manage')
+    );
+  },
+  canGenerateProposalHtml() {
+    return this.canPreviewProposal();
+  },
+  canCreateAgreement() {
+    return this.canCreate('agreements') || this.canPerformAction('agreements', 'manage');
+  },
+  canUpdateAgreement() {
+    return this.canEdit('agreements') || this.canPerformAction('agreements', 'manage');
+  },
+  canDeleteAgreement() {
+    return this.canDelete('agreements');
+  },
+  canPreviewAgreement() {
+    return (
+      this.canPerformAction('agreements', 'preview') ||
+      this.canPerformAction('agreements', 'get') ||
+      this.canPerformAction('agreements', 'manage')
+    );
+  },
+  canGenerateAgreementHtml() {
+    return this.canPreviewAgreement();
+  },
+  canCreateAgreementFromProposal() {
+    return this.canPerformAction('proposals', 'convert_to_agreement') ||
+      this.canPerformAction('agreements', 'create_from_proposal') ||
+      this.canCreate('agreements');
+  },
+  canViewOperationsOnboarding() {
+    return this.canView('operations_onboarding');
+  },
+  canViewTechnicalAdmin() {
+    return false;
+  },
+  canRequestTechnicalAdmin() {
+    return false;
+  },
+  canManageTechnicalAdmin() {
+    return false;
+  },
+  canManageOperationsOnboarding() {
+    return this.canEdit('operations_onboarding');
+  },
+  canSendAgreementToOperations() {
+    return this.canPerformAction('agreements', 'send_to_operations');
+  },
+  canRequestAgreementIncheckLite() {
+    return this.canPerformAction('agreements', 'request_incheck_lite');
+  },
+  canRequestAgreementIncheckFull() {
+    return this.canPerformAction('agreements', 'request_incheck_full');
+  },
+  canAssignAgreementCsm() {
+    return this.canPerformAction('agreements', 'assign_csm');
+  },
+  canUpdateAgreementOnboardingStatus() {
+    return this.canPerformAction('agreements', 'update_onboarding_status');
+  },
+
+
+  canViewInvoices() {
+    return this.canView('invoices');
+  },
+  canCreateInvoice() {
+    return this.canCreate('invoices');
+  },
+  canUpdateInvoice() {
+    return this.canEdit('invoices');
+  },
+  canDeleteInvoice() {
+    return this.canDelete('invoices');
+  },
+  canCreateInvoiceFromAgreement() {
+    return this.canPerformAction('invoices', 'create_from_agreement');
+  },
+  canPreviewInvoice() {
+    return this.canPerformAction('invoices', 'generate_invoice_html') || this.canView('invoices');
+  },
+  canViewReceipts() {
+    return this.canView('receipts');
+  },
+  canCreateReceipt() {
+    return this.canCreate('receipts');
+  },
+  canUpdateReceipt() {
+    return this.canEdit('receipts');
+  },
+  canDeleteReceipt() {
+    return this.canDelete('receipts');
+  },
+  canCreateReceiptFromInvoice() {
+    return this.canPerformAction('receipts', 'create_from_invoice');
+  },
+  canPreviewReceipt() {
+    return this.canPerformAction('receipts', 'generate_receipt_html') || this.canView('receipts');
+  },
+  canViewCreditNotes() {
+    return this.canPerformAction('credit_notes', 'view') || this.canView('credit_notes') || this.hasAdminOverride();
+  },
+  canCreateCreditNote() {
+    return this.canPerformAction('credit_notes', 'create') || this.hasAdminOverride();
+  },
+  canCancelCreditNote() {
+    return this.canPerformAction('credit_notes', 'cancel') || this.hasAdminOverride();
+  },
+  canPrintCreditNote() {
+    return this.canPerformAction('credit_notes', 'print') || this.canViewCreditNotes() || this.hasAdminOverride();
+  },
+  canExportCreditNote() {
+    return this.canPerformAction('credit_notes', 'export') || this.hasAdminOverride();
+  },
+  canPreviewCreditNote() {
+    return this.canPrintCreditNote();
+  },
+  canViewPaymentForecast() {
+    return this.canPerformAction('payment_forecast', 'view') || this.canView('payment_forecast') || this.hasAdminOverride();
+  },
+  canExportPaymentForecast() {
+    return this.canPerformAction('payment_forecast', 'export') || this.canPerformAction('payment_forecast', 'manage') || this.hasAdminOverride();
+  },
+  canCreateReceiptFromPaymentForecast() {
+    return this.canPerformAction('payment_forecast', 'create_receipt') || this.canPerformAction('payment_forecast', 'manage') || this.hasAdminOverride();
+  },
+  canViewBiners() {
+    return this.canPerformAction('biners', 'view') || this.canView('biners') || this.hasAdminOverride();
+  },
+  canCreateBiners() {
+    return this.canPerformAction('biners', 'create') || this.canPerformAction('biners', 'manage') || this.hasAdminOverride();
+  },
+  canEditBiners() {
+    return this.canPerformAction('biners', 'edit') || this.canPerformAction('biners', 'update') || this.canPerformAction('biners', 'manage') || this.hasAdminOverride();
+  },
+  canRecordBinersPayment() {
+    return this.canPerformAction('biners', 'record_payment') || this.canPerformAction('biners', 'manage') || this.hasAdminOverride();
+  },
+  canCreateProposalCatalogItem() {
+    return this.canCreate('proposal_catalog') || this.canPerformAction('proposal_catalog_items', 'create');
+  },
+  canUpdateProposalCatalogItem() {
+    return this.canEdit('proposal_catalog') || this.canPerformAction('proposal_catalog_items', 'update');
+  },
+  canDeleteProposalCatalogItem() {
+    return this.canDelete('proposal_catalog') || this.canPerformAction('proposal_catalog_items', 'delete');
+  },
+  canViewClients() {
+    return this.canView('clients');
+  },
+  canViewClientRenewals() {
+    // Client profile renewals timeline is controlled by clients:view_renewals, not agreements:view.
+    return this.canPerformAction('clients', 'view_renewals');
+  },
+  canViewClientStatement() {
+    return this.canPerformAction('clients', 'view_statement') || this.canPerformAction('clients', 'statement_view');
+  },
+  canExportClientStatement() {
+    return this.canPerformAction('clients', 'statement_export');
+  },
+  canChangePlanner() {
+    return this.canPerformAction('planner', 'manage');
+  },
+  canManageFreezeWindows() {
+    return this.canPerformAction('freeze_windows', 'manage');
+  },
+  canUseInternalIssueFilters() {
+    return this.canPerformAction('tickets', 'internal_filters');
+  },
+  getResolvedCurrentUser() {
+    return (
+      window.App?.currentUser ||
+      window.app?.currentUser ||
+      window.InCheck360?.currentUser ||
+      window.InCheck360App?.currentUser ||
+      window.AppState?.user ||
+      window.AppState?.currentUser ||
+      window.AuthState?.user ||
+      window.AuthState?.currentUser ||
+      window.authUser ||
+      window.currentSession?.user ||
+      window.supabaseSession?.user ||
+      window.Session?.authContext?.()?.profile ||
+      null
+    );
+  },
+  getCurrentUserRole() {
+    const user = this.getResolvedCurrentUser() || {};
+
+    return this.normalizeRole(
+      user.role_key ||
+      user.roleKey ||
+      user.role ||
+      user.user_role ||
+      user.profile?.role_key ||
+      user.profile?.role ||
+      user.app_metadata?.role_key ||
+      user.app_metadata?.role ||
+      user.user_metadata?.role_key ||
+      user.user_metadata?.role ||
+      ''
+    );
+  },
+  isAuthReady() {
+    return Boolean(
+      window.__AUTH_RESTORED__ ||
+      window.__APP_UNLOCKED__ ||
+      window.AppState?.authReady ||
+      window.AuthState?.ready ||
+      window.Permissions?.state?.loaded
+    );
+  },
+  canAccessTab(viewKey) {
+    const key = String(viewKey || '').trim();
+    if (!key) return false;
+    if (!Session.isAuthenticated()) return false;
+
+    const requirements = this.getTabPermissionRequirements(key);
+    if (!requirements.length) return true;
+
+    return requirements.some(requirement => {
+      if (!requirement || typeof requirement !== 'object') return false;
+      const resource = String(requirement.resource || '').trim().toLowerCase();
+      const action = String(requirement.action || '').trim().toLowerCase();
+      if (!resource || !action) return false;
+      return this.canPerformAction(resource, action);
+    });
+  }
+};
+
+function requirePermission(check, message) {
+  if (check()) return true;
+  UI.toast(message || 'You do not have permission for this action.');
+  return false;
+}
+
+async function handleExpiredSession(message = 'Session expired. Please log in again.') {
+  Session.clearClientSession();
+  Permissions.reset();
+  UI.applyRolePermissions();
+  try {
+    const loginIdentifierEl = document.getElementById('loginIdentifier');
+    const loginPasscodeEl = document.getElementById('loginPasscode');
+    if (loginIdentifierEl) loginIdentifierEl.value = '';
+    if (loginPasscodeEl) loginPasscodeEl.value = '';
+    const loginSection = document.getElementById('loginSection');
+    if (loginSection) window.location.hash = '#loginSection';
+    document.body.classList.add('auth-locked');
+    const appEl = document.getElementById('app');
+    if (appEl) {
+      appEl.classList.add('is-locked');
+      appEl.setAttribute('aria-hidden', 'true');
+    }
+  } catch {}
+  UI.toast(message);
+}
+
+
+const PermissionAudit = {
+  resources: ['tickets','events','companies','contacts','leads','deals','proposals','agreements','sales_commissions','sales_commission_installments','operations_onboarding','invoices','receipts','credit_notes','payment_forecast','monthly_renewal_forecast','biners','hr','hr_attendance','hr_leave','hr_self_service','hr_team','hr_leave_balance','hr_attendance_correction','hr_overtime','hr_notifications','hr_holidays','hr_payroll','hr_salary_receipts','hr_documents','hr_settings','clients','analytics','notifications','notification_settings','workflow','users','role_permissions'],
+  actions: ['list','get','create','update','delete','export','manage','approve','reject','convert_to_deal','create_from_deal','create_from_proposal','create_from_agreement','create_from_invoice','cancel','print','export','assign_csm','update_status','view_renewals','view_statement','statement_view','statement_export','create_receipt','schedule_payment','record_payment','pay','view_details','mark_renewed','mark_no_renewal_needed','undo_override','create_renewal_invoice','generate','review','pay','manage_attendance'],
+  inspect(resource, action) {
+    const role = Permissions.normalizeRole(Session.role());
+    const matchedRows = Permissions.getMatchedRows(resource, action, role, { includeDenied: true });
+    const allowed = Permissions.can(resource, action);
+    const denied = !allowed;
+    return { role, resource, action, allowed, matchedRows: matchedRows.length, reason: denied ? 'denied' : 'allowed' };
+  },
+  run() {
+    const rows = [];
+    this.resources.forEach(resource => this.actions.forEach(action => rows.push(this.inspect(resource, action))));
+    console.table(rows);
+    return rows;
+  },
+  assertDenied(resource, action) {
+    const result = this.inspect(resource, action);
+    if (result.allowed) throw new Error(`Expected denied for ${resource}.${action}`);
+    console.info('[PermissionAudit] assertDenied OK', result);
+    return true;
+  },
+  assertAllowed(resource, action) {
+    const result = this.inspect(resource, action);
+    if (!result.allowed) throw new Error(`Expected allowed for ${resource}.${action}`);
+    console.info('[PermissionAudit] assertAllowed OK', result);
+    return true;
+  }
+};
+
+window.PermissionAudit = PermissionAudit;
+window.PermissionAudit.checkVisibleActions = function () {
+  const rows = [];
+  document.querySelectorAll('[data-permission-resource][data-permission-action]').forEach(node => {
+    const resource = node.getAttribute('data-permission-resource');
+    const action = node.getAttribute('data-permission-action');
+    const allowed = Permissions.can(resource, action);
+    const visible = !!(node.offsetWidth || node.offsetHeight || node.getClientRects().length);
+    rows.push({ text: (node.textContent || "").trim(), resource, action, allowed, visible, problem: visible && !allowed ? 'VISIBLE_BUT_DENIED' : '' });
+  });
+  console.table(rows);
+  return rows;
+};
+
+window.isMonthlyRenewalForecastAdmin = isMonthlyRenewalForecastAdmin;
+window.Permissions = Permissions;
+window.AppPermissions = Permissions;
+window.requirePermission = requirePermission;
+window.handleExpiredSession = handleExpiredSession;
+
+window.PermissionAudit.deniedVisible = function () {
+  return window.PermissionAudit.checkVisibleActions().filter(row => row.problem);
+};

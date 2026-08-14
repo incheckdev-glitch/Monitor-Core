@@ -1,0 +1,26 @@
+{
+  "name": "incheck360-platform",
+  "version": "2.0.0",
+  "description": "InCheck360 clean deployment master for isolated client environments",
+  "main": "index.html",
+  "scripts": {
+    "test": "node scripts/run-tests.js",
+    "check:syntax": "node scripts/check-js-syntax.js",
+    "check:migrations": "node scripts/validate-sql-migrations.js",
+    "check": "npm run check:syntax && npm run check:migrations && npm test",
+    "ci": "npm run check"
+  },
+  "keywords": [
+    "ticketing",
+    "dashboard",
+    "analytics"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2",
+    "@vercel/analytics": "^2.0.1",
+    "nodemailer": "^8.0.7",
+    "web-push": "^3.6.7"
+  }
+}

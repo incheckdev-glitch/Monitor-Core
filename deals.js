@@ -1,0 +1,2105 @@
+const Deals = {
+  columns: [
+    'deal_id',
+    'lead_id',
+    'lead_code',
+    'full_name',
+    'company_name',
+    'phone',
+    'email',
+    'country',
+    'lead_source',
+    'service_interest',
+    'stage',
+    'next_follow_up_at',
+    'last_contacted_date',
+    'priority',
+    'estimated_value',
+    'currency',
+    'assigned_to',
+    'converted_at',
+    'converted_by',
+    'notes',
+    'created_at',
+    'updated_at'
+  ],
+  formDropdownDefaults: {
+    lead_source: ['Website', 'Referral', 'LinkedIn', 'Email', 'Call', 'WhatsApp', 'Event', 'Other'],
+    service_interest: ['Software', 'Other', 'Consulting'],
+    stage: ['New', 'In Progress', 'Qualified', 'Lost'],
+    priority: ['High', 'Medium', 'Low'],
+    currency: ['USD', 'EUR', 'GBP', 'AED']
+  },
+
+  columnMap: {
+    deal_id:{accessor:r=>r.deal_id}, lead_id:{accessor:r=>r.lead_id}, contact_name:{accessor:r=>r.contact_name}, company_name:{accessor:r=>r.company_name}, phone:{accessor:r=>r.phone}, email:{accessor:r=>r.email}, country:{accessor:r=>r.country}, lead_source:{accessor:r=>r.lead_source}, service_interest:{accessor:r=>r.service_interest}, stage:{accessor:r=>r.stage||r.deal_stage}, next_follow_up:{accessor:r=>r.next_follow_up_date}, last_contacted:{accessor:r=>r.last_contacted_date}, priority:{accessor:r=>r.priority}, estimated_value:{accessor:r=>r.estimated_value}, currency:{accessor:r=>r.currency}, assigned_to:{accessor:r=>r.assigned_to}, converted_at:{accessor:r=>r.converted_at}, converted_by:{accessor:r=>r.converted_by}, notes:{accessor:r=>r.notes}, created_at:{accessor:r=>r.created_at}, updated_at:{accessor:r=>r.updated_at}
+  },
+  tableColumns: ['Deal ID','Lead ID','Contact Name','Company Name','Phone','Email','Country','Lead Source','Service Interest','Stage','Next Follow-up','Last Contacted','Priority','Estimated Value','Currency','Assigned To','Converted At','Converted By','Notes','Created At','Updated At'].map(label => ({ key: label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, ''), label })).concat([null]),
+  state: {
+    rows: [],
+    filteredRows: [],
+    loading: false,
+    loadError: '',
+    loaded: false,
+    lastLoadedAt: 0,
+    cacheTtlMs: 2 * 60 * 1000,
+    initialized: false,
+    search: '',
+    stage: 'All',
+    priority: 'All',
+    serviceInterest: 'All',
+    leadSource: 'All',
+    assignedTo: 'All',
+    convertedFrom: '',
+    convertedTo: '',
+    kpiFilter: 'total',
+    saveInFlight: false,
+    rowActionInFlight: new Set(),
+    page: 1,
+    limit: 50,
+    offset: 0,
+    total: 0,
+    returned: 0,
+    hasMore: false,
+    selectedDetailsId: '',
+    form: { mode: 'create', selectedLead: null, selectedCompany: null, selectedContact: null, companyId: '', contactId: '', lockLinks: false }
+  },
+  normalizeBool(value) {
+    const normalized = String(value ?? '')
+      .trim()
+      .toLowerCase();
+    if (['true', '1', 'yes', 'y'].includes(normalized)) return 'yes';
+    if (['false', '0', 'no', 'n'].includes(normalized)) return 'no';
+    return '';
+  },
+  boolLabel(value) {
+    if (value === 'yes') return 'Yes';
+    if (value === 'no') return 'No';
+    return '—';
+  },
+  normalizeCompany(company = {}) {
+    const rawCompany = company?.raw_company && typeof company.raw_company === 'object' ? company.raw_company : {};
+    const c = { ...rawCompany, ...(company && typeof company === 'object' ? company : {}) };
+    const uuid = String(c.id || c.company_uuid || c.companyUuid || '').trim();
+    const businessId = String(c.company_business_id || c.companyBusinessId || c.company_ref || c.companyRef || c.company_id || c.companyId || c.company_number || c.companyNumber || c.company_code || c.companyCode || '').trim();
+    return {
+      ...c,
+      id: uuid,
+      company_id: uuid || businessId,
+      company_uuid: uuid,
+      company_business_id: businessId,
+      company_name: String(c.company_name || c.companyName || c.name || '').trim(),
+      legal_name: String(c.legal_name || c.legalName || c.company_name || c.companyName || c.name || '').trim(),
+      company_type: String(c.company_type || c.companyType || '').trim(),
+      industry: String(c.industry || '').trim(),
+      website: String(c.website || '').trim(),
+      main_email: String(c.main_email || c.mainEmail || c.email || c.company_email || c.billing_email || '').trim(),
+      main_phone: String(c.main_phone || c.mainPhone || c.phone || c.phone_number || c.mobile || '').trim(),
+      country: String(c.country || '').trim(),
+      city: String(c.city || '').trim(),
+      address: String(c.address || c.company_address || c.customer_address || '').trim(),
+      tax_number: String(c.tax_number || c.taxNumber || c.registration_number || c.company_registration_number || '').trim(),
+      company_status: String(c.company_status || c.companyStatus || c.status || '').trim(),
+      notes: String(c.notes || '').trim()
+    };
+  },
+  normalizeContact(contact = {}) {
+    const rawContact = contact?.raw_contact && typeof contact.raw_contact === 'object' ? contact.raw_contact : {};
+    const c = { ...rawContact, ...(contact && typeof contact === 'object' ? contact : {}) };
+    const phone = String(c.phone || c.phone_number || '').trim();
+    const mobile = String(c.mobile || '').trim();
+    const uuid = String(c.id || c.contact_uuid || c.contactUuid || '').trim();
+    const companyCandidate = String(c.company_id || c.companyId || '').trim();
+    const companyUuid = String(c.company_uuid || c.companyUuid || c.selected_company_uuid || c.selectedCompanyUuid || (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(companyCandidate) ? companyCandidate : '')).trim();
+    return {
+      ...c,
+      id: uuid,
+      contact_id: uuid || String(c.contact_id || c.contactId || c.contact_ref || c.contactRef || '').trim(),
+      company_id: companyUuid || companyCandidate,
+      company_uuid: companyUuid,
+      company_name: String(c.company_name || c.companyName || '').trim(),
+      first_name: String(c.first_name || c.firstName || '').trim(),
+      last_name: String(c.last_name || c.lastName || '').trim(),
+      full_name: String(
+        c.contact_name || c.contactName || c.full_name || c.fullName || c.name || [c.first_name || c.firstName, c.last_name || c.lastName].filter(Boolean).join(' ') || ''
+      ).trim(),
+      job_title: String(c.contact_position || c.contactPosition || c.position || c.job_title || c.jobTitle || c.title || '').trim(),
+      department: String(c.department || '').trim(),
+      email: String(c.email || c.contact_email || '').trim(),
+      phone,
+      mobile,
+      decision_role: String(c.decision_role || c.decisionRole || '').trim(),
+      is_primary_contact: Boolean(c.is_primary_contact ?? c.isPrimaryContact ?? c.is_primary),
+      contact_status: String(c.contact_status || c.contactStatus || c.status || '').trim(),
+      notes: String(c.notes || '').trim()
+    };
+  },
+
+  formatCompanyType(value) {
+    const map = { single_branch: 'Single Branch', chain: 'Chain', franchise: 'Franchise', enterprise: 'Enterprise', sme: 'SME', distributor: 'Distributor', partner: 'Partner', other: 'Other' };
+    return map[String(value || '').trim()] || String(value || '').trim() || '—';
+  },
+  formatCompanyIndustry(value) {
+    const map = { fnb: 'F&B', retail: 'Retail', hospitality: 'Hospitality', healthcare: 'Healthcare', education: 'Education', real_estate: 'Real Estate', logistics: 'Logistics', manufacturing: 'Manufacturing', technology: 'Technology', security: 'Security', finance: 'Finance', other: 'Other' };
+    return map[String(value || '').trim()] || String(value || '').trim() || '—';
+  },
+  normalizeDeal(raw = {}) {
+    const source = raw && typeof raw === 'object' ? raw : {};
+    const lead = source.lead && typeof source.lead === 'object' ? source.lead : {};
+    const pick = (...values) => {
+      for (const value of values) {
+        if (value !== undefined && value !== null && String(value).trim() !== '') return value;
+      }
+      return '';
+    };
+
+    const id = String(raw.id || '').trim();
+    const dealId = String(raw.deal_id || raw.dealId || '').trim();
+    return {
+      id,
+      deal_id: dealId,
+      lead_code: String(pick(source.lead_code, source.leadCode, lead.lead_id, lead.leadId)).trim(),
+      lead_id: String(pick(source.lead_id, source.leadId, lead.lead_id, lead.leadId)).trim(),
+      full_name: String(pick(source.full_name, source.fullName, lead.full_name, lead.fullName)).trim(),
+      company_id: String(pick(source.company_id, source.companyId, lead.company_id, lead.companyId)).trim(),
+      company_name: String(
+        pick(source.company_name, source.companyName, lead.company_name, lead.companyName)
+      ).trim(),
+      customer_name: String(pick(source.customer_name, source.customerName, lead.customer_name, lead.customerName)).trim(),
+      customer_legal_name: U.getCustomerLegalName(
+        { legal_name: pick(source.company?.legal_name, source.company?.legalName), company_name: pick(source.company_name, source.companyName, lead.company_name, lead.companyName) },
+        {
+          customer_legal_name: pick(source.customer_legal_name, source.customerLegalName, lead.customer_legal_name, lead.customerLegalName),
+          customer_name: pick(source.customer_name, source.customerName, lead.customer_name, lead.customerName),
+          company_name: pick(source.company_name, source.companyName, lead.company_name, lead.companyName)
+        }
+      ),
+      customer_address: String(pick(source.customer_address, source.customerAddress, lead.customer_address, lead.customerAddress)).trim(),
+      contact_id: String(pick(source.contact_id, source.contactId, source.customer_contact_id, source.customerContactId, source.client_contact_id, source.clientContactId, source.primary_contact_id, source.primaryContactId, source.selected_contact_id, source.selectedContactId, source.contact_uuid, source.contactUuid, lead.contact_id, lead.contactId)).trim(),
+      customer_contact_id: String(pick(source.customer_contact_id, source.customerContactId, source.contact_id, source.contactId, lead.customer_contact_id, lead.customerContactId, lead.contact_id, lead.contactId)).trim(),
+      client_contact_id: String(pick(source.client_contact_id, source.clientContactId, lead.client_contact_id, lead.clientContactId)).trim(),
+      primary_contact_id: String(pick(source.primary_contact_id, source.primaryContactId, lead.primary_contact_id, lead.primaryContactId)).trim(),
+      selected_contact_id: String(pick(source.selected_contact_id, source.selectedContactId, lead.selected_contact_id, lead.selectedContactId)).trim(),
+      contact_uuid: String(pick(source.contact_uuid, source.contactUuid, lead.contact_uuid, lead.contactUuid)).trim(),
+      contact_name: String(pick(source.contact_name, source.contactName, lead.contact_name, lead.contactName, source.full_name)).trim(),
+      contact_email: String(pick(source.contact_email, source.contactEmail, lead.contact_email, lead.contactEmail, source.email)).trim(),
+      contact_phone: String(pick(source.contact_phone, source.contactPhone, lead.contact_phone, lead.contactPhone, source.phone)).trim(),
+      contact_title: String(pick(source.contact_title, source.contactTitle, lead.contact_title, lead.contactTitle)).trim(),
+      phone: String(pick(source.phone, lead.phone)).trim(),
+      email: String(pick(source.email, lead.email)).trim(),
+      country: String(pick(source.country, lead.country)).trim(),
+      lead_source: String(
+        pick(source.lead_source, source.leadSource, lead.lead_source, lead.leadSource)
+      ).trim(),
+      service_interest: String(
+        pick(source.service_interest, source.serviceInterest, lead.service_interest, lead.serviceInterest)
+      ).trim(),
+      stage: String(pick(source.stage)).trim() || 'New',
+      next_follow_up_at: pick(source.next_follow_up_at, source.nextFollowUpAt, source.next_follow_up_date, source.nextFollowUpDate),
+      last_contacted_date: pick(source.last_contacted_date, source.lastContactedDate),
+      priority: String(pick(source.priority, lead.priority)).trim(),
+      estimated_value: pick(
+        source.estimated_value,
+        source.estimatedValue,
+        lead.estimated_value,
+        lead.estimatedValue
+      ),
+      currency: String(pick(source.currency, lead.currency)).trim(),
+      assigned_to: String(pick(source.assigned_to, source.assignedTo, lead.assigned_to, lead.assignedTo)).trim(),
+      proposal_id: String(pick(source.proposal_id, source.proposalId, lead.proposal_id, lead.proposalId)).trim(),
+      converted_at: pick(source.converted_at, source.convertedAt, lead.converted_at, lead.convertedAt),
+      converted_by: String(
+        pick(source.converted_by, source.convertedBy, lead.converted_by, lead.convertedBy)
+      ).trim(),
+      notes: String(pick(source.notes, lead.notes)).trim(),
+      created_at: pick(source.created_at, source.createdAt, lead.created_at, lead.createdAt),
+      updated_at: pick(source.updated_at, source.updatedAt, lead.updated_at, lead.updatedAt)
+    };
+  },
+  generateDealId() {
+    const now = new Date();
+    const yyyy = String(now.getFullYear());
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
+    return `DEAL-${yyyy}${mm}${dd}-${rand}`;
+  },
+  backendDeal(deal, { ensureDealId = false } = {}) {
+    const hasOwn = key => Object.prototype.hasOwnProperty.call(deal || {}, key);
+    const toTextOrEmpty = keys => {
+      const hasAny = keys.some(hasOwn);
+      if (!hasAny) return undefined;
+      const value = keys.map(key => deal[key]).find(value => value !== undefined);
+      if (value === undefined || value === null) return '';
+      return String(value).trim();
+    };
+    const toNumberOrNull = keys => {
+      const hasAny = keys.some(hasOwn);
+      if (!hasAny) return undefined;
+      const value = keys.map(key => deal[key]).find(value => value !== undefined);
+      if (value === undefined || value === null || String(value).trim() === '') return null;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    const toDateOrNull = keys => {
+      const hasAny = keys.some(hasOwn);
+      if (!hasAny) return undefined;
+      const value = keys.map(key => deal[key]).find(value => value !== undefined);
+      if (value === undefined || value === null) return null;
+      const text = String(value).trim();
+      return text || null;
+    };
+    const toBoolOrNull = keys => {
+      const hasAny = keys.some(hasOwn);
+      if (!hasAny) return undefined;
+      return this.normalizeBool(keys.map(key => deal[key]).find(value => value !== undefined)) === 'yes'
+        ? true
+        : this.normalizeBool(keys.map(key => deal[key]).find(value => value !== undefined)) === 'no'
+          ? false
+          : null;
+    };
+    const mapped = {
+      deal_id: toTextOrEmpty(['deal_id', 'dealId']),
+      lead_id: toTextOrEmpty(['lead_id', 'leadId']),
+      lead_code: toTextOrEmpty(['lead_code', 'leadCode']),
+      source_lead_uuid: toTextOrEmpty(['source_lead_uuid', 'sourceLeadUuid', 'lead_uuid', 'leadUuid']),
+      full_name: toTextOrEmpty(['full_name', 'fullName']),
+      company_id: toTextOrEmpty(['company_id', 'companyId']),
+      company_name: toTextOrEmpty(['company_name', 'companyName']),
+      contact_id: toTextOrEmpty(['contact_id', 'contactId']),
+      customer_contact_id: toTextOrEmpty(['customer_contact_id', 'customerContactId']),
+      client_contact_id: toTextOrEmpty(['client_contact_id', 'clientContactId']),
+      primary_contact_id: toTextOrEmpty(['primary_contact_id', 'primaryContactId']),
+      selected_contact_id: toTextOrEmpty(['selected_contact_id', 'selectedContactId']),
+      contact_uuid: toTextOrEmpty(['contact_uuid', 'contactUuid']),
+      contact_name: toTextOrEmpty(['contact_name', 'contactName']),
+      contact_email: toTextOrEmpty(['contact_email', 'contactEmail']),
+      contact_phone: toTextOrEmpty(['contact_phone', 'contactPhone']),
+      contact_title: toTextOrEmpty(['contact_title', 'contactTitle']),
+      phone: toTextOrEmpty(['phone']),
+      email: toTextOrEmpty(['email']),
+      country: toTextOrEmpty(['country']),
+      lead_source: toTextOrEmpty(['lead_source', 'leadSource']),
+      service_interest: toTextOrEmpty(['service_interest', 'serviceInterest']),
+      stage: toTextOrEmpty(['stage']),
+      next_follow_up_at: toDateOrNull(['next_follow_up_at', 'nextFollowUpAt', 'next_follow_up_date', 'nextFollowUpDate']),
+      last_contacted_date: toDateOrNull(['last_contacted_date', 'lastContactedDate']),
+      priority: toTextOrEmpty(['priority']),
+      estimated_value: toNumberOrNull(['estimated_value', 'estimatedValue']),
+      currency: toTextOrEmpty(['currency']),
+      assigned_to: toTextOrEmpty(['assigned_to', 'assignedTo']),
+      converted_by: toTextOrEmpty(['converted_by', 'convertedBy']),
+      converted_at: toDateOrNull(['converted_at', 'convertedAt']),
+      notes: toTextOrEmpty(['notes']),
+      created_at: toDateOrNull(['created_at', 'createdAt']),
+      updated_at: toDateOrNull(['updated_at', 'updatedAt'])
+    };
+    return {
+      ...mapped,
+      ...(ensureDealId ? { deal_id: mapped.deal_id || this.generateDealId() } : {})
+    };
+  },
+  extractRows(response) {
+    const candidates = [
+      response,
+      response?.deals,
+      response?.items,
+      response?.rows,
+      response?.data,
+      response?.result,
+      response?.payload,
+      response?.data?.deals,
+      response?.result?.deals,
+      response?.payload?.deals
+    ];
+    for (const candidate of candidates) {
+      if (Array.isArray(candidate)) return candidate;
+    }
+    return [];
+  },
+  getClient() {
+    return SupabaseClient.getClient();
+  },
+  async getCurrentUserId() {
+    try {
+      const { data, error } = await this.getClient().auth.getUser();
+      if (error) return '';
+      return String(data?.user?.id || '').trim();
+    } catch {
+      return '';
+    }
+  },
+  formatDateTimeLocalValue(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) {
+      const match = raw.match(/^(\d{4}-\d{2}-\d{2})(?:[T\s](\d{2}:\d{2}))?/);
+      return match ? `${match[1]}T${match[2] || '00:00'}` : '';
+    }
+    const yyyy = String(date.getFullYear()).padStart(4, '0');
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    const hh = String(date.getHours()).padStart(2, '0');
+    const min = String(date.getMinutes()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+  },
+  dateTimeLocalToIso(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const date = new Date(raw);
+    return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+  },
+  pickNextFollowUpValue(deal = {}) {
+    return String(
+      deal.next_follow_up_at ||
+        deal.nextFollowUpAt ||
+        deal.next_follow_up_date ||
+        deal.nextFollowUpDate ||
+        ''
+    ).trim();
+  },
+  pickLastContactedDateValue(deal = {}) {
+    return String(deal.last_contacted_date || deal.lastContactedDate || '').trim().slice(0, 10);
+  },
+  getUserDisplayName(userId, usersById = new Map()) {
+    const id = String(userId || '').trim();
+    if (!id) return 'Unknown user';
+    const user = usersById.get(id) || usersById.get(String(userId));
+    if (!user) return 'Unknown user';
+    return String(user.full_name || user.fullName || user.name || user.display_name || user.displayName || user.email || '').trim() || 'Unknown user';
+  },
+  addUserLookup(usersById, user = {}) {
+    if (!usersById || !user || typeof user !== 'object') return;
+    ['id', 'auth_user_id', 'authUserId', 'user_id', 'userId'].forEach(key => {
+      const value = String(user?.[key] || '').trim();
+      if (value && !usersById.has(value)) usersById.set(value, user);
+    });
+  },
+  addCurrentUserLookup(usersById, userIds = []) {
+    const currentUser = Session?.user?.() || {};
+    const authUser = currentUser.user || {};
+    const profile = currentUser.profile || {};
+    const currentUserId = String(currentUser.user_id || authUser.id || profile.id || '').trim();
+    const currentUserIdentifiers = [currentUser.user_id, authUser.id, profile.id].map(value => String(value || '').trim()).filter(Boolean);
+    if (!currentUserIdentifiers.some(id => userIds.includes(id))) return;
+    this.addUserLookup(usersById, {
+      ...profile,
+      id: profile.id || currentUserId,
+      auth_user_id: authUser.id || currentUserId,
+      user_id: currentUserId,
+      full_name: profile.full_name || currentUser.name,
+      name: profile.name || currentUser.name,
+      display_name: profile.display_name || currentUser.name,
+      email: profile.email || currentUser.email || authUser.email
+    });
+  },
+  addLogUserHints(usersById, logs = []) {
+    logs.forEach(log => {
+      const createdBy = String(log?.created_by || '').trim();
+      if (!createdBy || usersById.has(createdBy)) return;
+      const hintedUser = {
+        id: createdBy,
+        full_name: log?.user_name || log?.created_by_name,
+        name: log?.user_name || log?.created_by_name,
+        email: log?.created_by_email
+      };
+      if (this.getUserDisplayName(createdBy, new Map([[createdBy, hintedUser]])) !== createdBy) this.addUserLookup(usersById, hintedUser);
+    });
+  },
+  async loadDealNoteUsersById(logs = []) {
+    const userIds = [...new Set((Array.isArray(logs) ? logs : []).map(log => String(log?.created_by || '').trim()).filter(Boolean))];
+    const usersById = new Map();
+    if (!userIds.length) return usersById;
+    this.addCurrentUserLookup(usersById, userIds);
+    this.addLogUserHints(usersById, logs);
+    const queryProfiles = async field => {
+      const { data, error } = await this.getClient().from('profiles').select('*').in(field, userIds);
+      if (error) {
+        console.warn(`[deals] unable to resolve note users by profiles.${field}`, error);
+        return;
+      }
+      (Array.isArray(data) ? data : []).forEach(user => this.addUserLookup(usersById, user));
+    };
+    await queryProfiles('id');
+    const unresolvedIds = () => userIds.filter(id => !usersById.has(id));
+    if (unresolvedIds().length) await queryProfiles('auth_user_id');
+    if (unresolvedIds().length) await queryProfiles('user_id');
+    return usersById;
+  },
+  toSupabaseError(prefix, error) {
+    const message = String(error?.message || error?.error_description || 'Unknown error').trim();
+    return new Error(`${prefix}: ${message}`);
+  },
+  async listDeals(options = {}) {
+    const client = this.getClient();
+    const page = Math.max(1, Number(options.page) || 1);
+    const pageSize = Math.max(1, Math.min(200, Number(options.limit || options.pageSize) || 50));
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize;
+    let query = client.from('deals').select('*').order('updated_at', { ascending: false });
+    const term = String(this.state.search || '').replace(/[%_]/g, ' ').trim();
+    if (term) {
+      query = query.or(
+        `deal_id.ilike.%${term}%,lead_id.ilike.%${term}%,lead_code.ilike.%${term}%,full_name.ilike.%${term}%,company_name.ilike.%${term}%,email.ilike.%${term}%,phone.ilike.%${term}%,country.ilike.%${term}%,lead_source.ilike.%${term}%,service_interest.ilike.%${term}%,assigned_to.ilike.%${term}%,notes.ilike.%${term}%`
+      );
+    }
+    query = query.range(from, to);
+    const { data, error } = await query;
+    if (error) throw this.toSupabaseError('Unable to load deals', error);
+    const fetched = Array.isArray(data) ? data : [];
+    const hasMore = fetched.length > pageSize;
+    const rows = hasMore ? fetched.slice(0, pageSize) : fetched;
+    return {
+      rows,
+      total: from + rows.length + (hasMore ? 1 : 0),
+      returned: rows.length,
+      hasMore,
+      page,
+      limit: pageSize,
+      offset: from
+    };
+  },
+  upsertLocalRow(row) {
+    const normalized = this.normalizeDeal(row);
+    const idx = this.state.rows.findIndex(item => item.id === normalized.id);
+    if (idx === -1) this.state.rows.unshift(normalized);
+    else this.state.rows[idx] = { ...this.state.rows[idx], ...normalized };
+    this.rerenderVisibleTable();
+  },
+  removeLocalRow(id) {
+    this.state.rows = this.state.rows.filter(item => item.id !== id);
+    this.rerenderVisibleTable();
+  },
+  rerenderVisibleTable() {
+    this.applyFilters();
+    this.renderFilters();
+    this.render();
+  },
+  async getDeal(id) {
+    const { data, error } = await this.getClient().from('deals').select('*').eq('id', id).single();
+    if (error) throw this.toSupabaseError('Unable to load deal details', error);
+    return data;
+  },
+  async createDeal(deal) {
+    const userId = await this.getCurrentUserId();
+    const payload = {
+      ...this.backendDeal(deal, { ensureDealId: true }),
+      created_by: userId || undefined,
+      updated_by: userId || undefined
+    };
+    const data = await Api.requestWithSession('deals', 'create', payload, { requireAuth: true });
+    this.refreshCompanyLifecycleStatus(data || payload, 'Deal');
+    await Api.safeSendBusinessPwaPush({
+      resource: 'deals',
+      action: 'deal_created',
+      recordId: Api.extractBusinessRecordId(data, payload.deal_id || deal?.deal_id || ''),
+      title: 'New deal created',
+      body: 'New deal created for ' + (payload.company_name || payload.company || payload.client_name || payload.name || 'a customer') + '.',
+      roles: ['admin', 'hoo'],
+      url: '/#deals'
+    });
+    return data;
+  },
+  async updateDeal(dealId, updates) {
+    const userId = await this.getCurrentUserId();
+    const payload = {
+      ...this.backendDeal(updates),
+      updated_by: userId || undefined
+    };
+    const data = await Api.requestWithSession('deals', 'update', {
+      id: dealId,
+      updates: payload
+    }, { requireAuth: true });
+    this.refreshCompanyLifecycleStatus(data || payload, 'Deal');
+    const stageKeys = ['stage', 'deal_stage'];
+    const isStageUpdate = stageKeys.some(key => Object.prototype.hasOwnProperty.call(payload || {}, key));
+    await Api.safeSendBusinessPwaPush({
+      resource: 'deals',
+      action: isStageUpdate ? 'deal_stage_changed' : 'deal_updated',
+      recordId: Api.extractBusinessRecordId(data, dealId),
+      title: isStageUpdate ? 'Deal stage changed' : 'Deal updated',
+      body: 'Deal ' + (dealId || '') + ' was updated.',
+      roles: ['admin', 'hoo'],
+      url: dealId ? '/#deals?id=' + encodeURIComponent(dealId) : '/#deals'
+    });
+    return data;
+  },
+
+  refreshCompanyLifecycleStatus(row = {}, stage = 'Deal') {
+    const companyId = String(row?.company_id || row?.companyId || '').trim();
+    if (!companyId) return;
+    window.Companies?.refreshCompanyLifecycleStatusByBusinessId?.(companyId, { stage }).catch(error => {
+      console.error('[deals] company lifecycle refresh failed', error);
+      UI?.toast?.('Deal saved, but company lifecycle status could not be refreshed');
+    });
+  },
+  async deleteDeal(dealId) {
+    const { error } = await this.getClient().from('deals').delete().eq('id', dealId);
+    if (error) throw this.toSupabaseError('Unable to delete deal', error);
+    return { ok: true };
+  },
+  formatDate(value) {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return U.escapeHtml(String(value));
+    return U.escapeHtml(U.fmtDisplayDate(value));
+  },
+  formatNoteLogDate(value) {
+    if (!value) return '—';
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: '2-digit',
+      year: 'numeric'
+    }).replace(',', '');
+  },
+  formatDateTime(value) {
+    if (!value) return '—';
+    const formatted = U.formatDateTimeMMDDYYYYHHMM(value);
+    if (formatted === '—') return U.escapeHtml(String(value));
+    return U.escapeHtml(formatted);
+  },
+  dealInitials(row = {}) {
+    const source = String(row.full_name || row.contact_name || row.company_name || row.deal_id || '').trim();
+    if (!source) return 'D';
+    const words = source.split(/\s+/).filter(Boolean);
+    const initials = words.length > 1 ? `${words[0][0] || ''}${words[1][0] || ''}` : source.slice(0, 2);
+    return initials.toUpperCase();
+  },
+  dealAvatarClass(row = {}) {
+    const source = String(row.full_name || row.company_name || row.deal_id || 'deal');
+    const sum = [...source].reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return ['violet', 'blue', 'green', 'orange'][sum % 4];
+  },
+  dealChip(label = '', variant = 'neutral') {
+    const text = String(label || '').trim() || '—';
+    return `<span class="deal-chip deal-chip--${U.escapeAttr(variant)}">${U.escapeHtml(text)}</span>`;
+  },
+  dealStageChip(stage = '') {
+    const normalized = this.normalizeStage(stage);
+    const lower = this.normalizeText(normalized);
+    const variant = this.matchesWonStatus(lower) ? 'success' : this.matchesLostStatus(lower) ? 'danger' : lower.includes('qualif') ? 'success' : lower.includes('progress') || lower.includes('negotiat') ? 'info' : 'neutral';
+    return this.dealChip(normalized, variant);
+  },
+  dealPriorityChip(priority = '') {
+    const normalized = String(priority || '').trim();
+    const lower = normalized.toLowerCase();
+    const variant = lower === 'high' || lower === 'urgent' ? 'danger' : lower === 'medium' ? 'info' : lower === 'low' ? 'success' : 'neutral';
+    return this.dealChip(normalized || '—', variant);
+  },
+  dealAssigneePill(name = '') {
+    const display = String(name || '').trim();
+    if (!display) return '—';
+    const initials = display.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'U';
+    return `<span class="deal-assignee-pill"><span>${U.escapeHtml(initials)}</span>${U.escapeHtml(display)}</span>`;
+  },
+  formatDealMoneyCell(row = {}) {
+    const amount = Number(row.estimated_value);
+    if (!Number.isFinite(amount)) return '—';
+    const currency = String(row.currency || '').trim().toUpperCase();
+    if (currency) {
+      try {
+        return U.escapeHtml(amount.toLocaleString(undefined, { style: 'currency', currency, maximumFractionDigits: 2 }));
+      } catch (_) {
+        return U.escapeHtml(`${currency} ${amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
+      }
+    }
+    return U.escapeHtml(amount.toLocaleString(undefined, { maximumFractionDigits: 2 }));
+  },
+  compactDealDate(value) {
+    if (!value) return '—';
+    const formatted = U.formatDateTimeMMDDYYYYHHMM(value);
+    return formatted && formatted !== '—' ? U.escapeHtml(formatted) : U.escapeHtml(String(value).slice(0, 10));
+  },
+  truncateDealNotes(value = '') {
+    const text = String(value || '').trim();
+    if (!text) return '—';
+    return U.escapeHtml(text.length > 150 ? `${text.slice(0, 147)}...` : text);
+  },
+  formatDateTimeMMDDYYYYHHMM(value) {
+    if (!value) return '';
+    const formatted = U.formatDateTimeMMDDYYYYHHMM(value);
+    return formatted === '—' ? '' : formatted;
+  },
+  getDealValue(row, ...keys) {
+    if (!row || typeof row !== 'object') return '';
+    for (const key of keys) {
+      if (!key) continue;
+      if (row[key] !== undefined && row[key] !== null) return row[key];
+    }
+    return '';
+  },
+  displayLeadId(row = {}, relatedLead = null) {
+    return String(
+      this.getDealValue(row, 'lead_code', 'leadCode') ||
+        this.getDealValue(relatedLead, 'lead_id', 'leadId') ||
+        this.getDealValue(row, 'lead_id', 'leadId')
+    ).trim();
+  },
+  csvEscape(value) {
+    const text = String(value ?? '');
+    if (/[",\n\r]/.test(text)) {
+      return `"${text.replace(/"/g, '""')}"`;
+    }
+    return text;
+  },
+  downloadCsv(filename, csvText) {
+    const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  },
+  updateExportButtonState() {
+    if (!E.dealsExportCsvBtn) return;
+    const canExport = Permissions.canExport('deals');
+    E.dealsExportCsvBtn.style.display = canExport ? '' : 'none';
+    E.dealsExportCsvBtn.disabled = this.state.loading || !canExport;
+    if (!canExport) {
+      E.dealsExportCsvBtn.title = 'You do not have permission to export this data.';
+    } else {
+      E.dealsExportCsvBtn.removeAttribute('title');
+    }
+  },
+  updateCreateButtonState() {
+    if (!E.dealsCreateBtn) return;
+    const allowed = this.canCreate();
+    E.dealsCreateBtn.style.display = allowed ? '' : 'none';
+    E.dealsCreateBtn.disabled = !allowed;
+    if (!allowed) E.dealsCreateBtn.title = 'You do not have permission to create deals.';
+    else E.dealsCreateBtn.removeAttribute('title');
+  },
+  exportDealsCsv() {
+    if (!Permissions.canExport('deals')) {
+      UI.toast('You do not have permission to export deals.');
+      return;
+    }
+    const rows = Array.isArray(this.state.filteredRows) ? this.state.filteredRows : [];
+    if (!rows.length) {
+      UI.toast('No deals match the current filters.');
+      return;
+    }
+    const headers = [
+      'Deal ID',
+      'Lead ID',
+      'Contact Name',
+      'Company Name',
+      'Phone',
+      'Email',
+      'Country',
+      'Lead Source',
+      'Service Interest',
+      'Stage',
+      'Next Follow-up',
+      'Last Contacted Date',
+      'Priority',
+      'Estimated Value',
+      'Currency',
+      'Assigned To',
+      'Converted By',
+      'Converted At',
+      'Notes',
+      'Created At',
+      'Updated At'
+    ];
+    const lines = [
+      headers.map(value => this.csvEscape(value)).join(','),
+      ...rows.map(row =>
+        [
+          this.getDealValue(row, 'deal_id', 'dealId'),
+          this.getDealValue(row, 'lead_code', 'leadCode') ||
+            this.getDealValue(row, 'leadId', 'lead_id'),
+          this.getDealValue(row, 'full_name', 'fullName'),
+          this.getDealValue(row, 'company_name', 'companyName'),
+          this.getDealValue(row, 'phone'),
+          this.getDealValue(row, 'email'),
+          this.getDealValue(row, 'country'),
+          this.getDealValue(row, 'lead_source', 'leadSource'),
+          this.getDealValue(row, 'service_interest', 'serviceInterest'),
+          this.getDealValue(row, 'stage'),
+          this.formatDateTimeMMDDYYYYHHMM(this.getDealValue(row, 'next_follow_up_at', 'nextFollowUpAt', 'next_follow_up_date', 'nextFollowUpDate')),
+          this.getDealValue(row, 'last_contacted_date', 'lastContactedDate'),
+          this.getDealValue(row, 'priority'),
+          this.getDealValue(row, 'estimated_value', 'estimatedValue'),
+          this.getDealValue(row, 'currency'),
+          this.getDealValue(row, 'assigned_to', 'assignedTo'),
+          this.getDealValue(row, 'converted_by', 'convertedBy'),
+          this.formatDateTimeMMDDYYYYHHMM(this.getDealValue(row, 'converted_at', 'convertedAt')),
+          this.getDealValue(row, 'notes'),
+          this.formatDateTimeMMDDYYYYHHMM(this.getDealValue(row, 'created_at', 'createdAt')),
+          this.formatDateTimeMMDDYYYYHHMM(this.getDealValue(row, 'updated_at', 'updatedAt'))
+        ]
+          .map(value => this.csvEscape(value))
+          .join(',')
+      )
+    ];
+    const now = new Date();
+    const filename = `deals-export-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
+      now.getDate()
+    ).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}.csv`;
+    this.downloadCsv(filename, lines.join('\n'));
+  },
+  isUuid(value) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      String(value || '').trim()
+    );
+  },
+  async hydrateLeadCodeFromLeadUuid(row = {}) {
+    if (!row?.id || !E.dealFormLeadId || !this.isUuid(row.lead_id)) return;
+    if (String(row.lead_code || '').trim()) return;
+    try {
+      const { data, error } = await this.getClient()
+        .from('leads')
+        .select('lead_id')
+        .eq('id', row.lead_id)
+        .limit(1);
+      if (error) return;
+      const relatedLead = Array.isArray(data) ? data[0] : null;
+      const displayLeadId = this.displayLeadId(row, relatedLead);
+      if (displayLeadId) E.dealFormLeadId.value = displayLeadId;
+      const leadCode = String(relatedLead?.lead_id || '').trim();
+      if (leadCode) {
+        E.dealFormLeadId.dataset.leadCode = leadCode;
+        const existing = this.state.rows.find(item => item.id === row.id);
+        if (existing) existing.lead_code = leadCode;
+      }
+    } catch {
+      // best-effort for display only
+    }
+  },
+  canCreate() {
+    return canAnyPermission([['deals', 'create'], ['deals', 'manage']]);
+  },
+  canEdit() {
+    return canAnyPermission([['deals', 'update'], ['deals', 'manage']]);
+  },
+  canDelete() {
+    return canAnyPermission([['deals', 'delete'], ['deals', 'manage']]);
+  },
+  canEditDelete() {
+    return this.canEdit() || this.canDelete();
+  },
+  canCreateProposalFromDeal() {
+    return canAnyPermission([['deals', 'convert_to_proposal'], ['proposals', 'create_from_deal'], ['proposals', 'create'], ['proposals', 'manage']]);
+  },
+  canShowCreateProposalForDeal(row = {}) {
+    return String(row?.stage || '').trim() === 'Qualified' && !this.isProposalAlreadyCreated(row) && this.canCreateProposalFromDeal();
+  },
+  isProposalAlreadyCreated(row = {}) {
+    const proposalId = String(row?.proposal_id || '').trim();
+    if (proposalId) return true;
+    const stage = this.normalizeText(row?.stage);
+    if (stage.includes('proposal')) return true;
+    return false;
+  },
+  uniqueSorted(values = []) {
+    return [...new Set(values.filter(Boolean).map(value => String(value).trim()))].sort((a, b) =>
+      a.localeCompare(b)
+    );
+  },
+  isRemovedDealUiStatusValue(value) {
+    return ['proposal needed', 'agreement needed'].includes(this.normalizeText(value));
+  },
+  visibleDealUiValues(values = []) {
+    return (Array.isArray(values) ? values : []).filter(value => !this.isRemovedDealUiStatusValue(value));
+  },
+  syncDealFormDropdowns(selected = {}) {
+    const assign = (el, options = [], selectedValue = '') => {
+      if (!el) return;
+      const values = this.uniqueSorted(this.visibleDealUiValues(options));
+      const finalOptions = ['', ...values];
+      el.innerHTML = finalOptions
+        .map(value => `<option value="${U.escapeAttr(value)}">${U.escapeHtml(value || '—')}</option>`)
+        .join('');
+      if (finalOptions.includes(selectedValue)) {
+        el.value = selectedValue;
+        return;
+      }
+      if (selectedValue && !this.isRemovedDealUiStatusValue(selectedValue)) {
+        el.innerHTML += `<option value="${U.escapeAttr(selectedValue)}">${U.escapeHtml(selectedValue)}</option>`;
+        el.value = selectedValue;
+      }
+    };
+
+    const sourceValues = this.formDropdownDefaults.lead_source.concat(
+      this.state.rows.map(row => row.lead_source)
+    );
+    const serviceValues = this.formDropdownDefaults.service_interest.concat(
+      this.state.rows.map(row => row.service_interest)
+    );
+    const stageValues = this.formDropdownDefaults.stage.concat(this.state.rows.map(row => row.stage));
+    const priorityValues = this.formDropdownDefaults.priority.concat(
+      this.state.rows.map(row => row.priority)
+    );
+    const currencyValues = this.formDropdownDefaults.currency.concat(
+      this.state.rows.map(row => row.currency)
+    );
+
+    assign(E.dealFormLeadSource, sourceValues, selected.lead_source || '');
+    assign(E.dealFormServiceInterest, serviceValues, selected.service_interest || '');
+    assign(E.dealFormStage, stageValues, selected.stage || '');
+    assign(E.dealFormPriority, priorityValues, selected.priority || '');
+    assign(E.dealFormCurrency, currencyValues, selected.currency || '');
+  },
+  normalizeText(value) {
+    return String(value ?? '')
+      .trim()
+      .toLowerCase();
+  },
+  parseDateOnly(value) {
+    const normalized = String(value || '').trim().slice(0, 10);
+    if (!normalized) return null;
+    const dt = new Date(`${normalized}T00:00:00`);
+    return Number.isNaN(dt.getTime()) ? null : dt;
+  },
+  toNumberSafe(value) {
+    if (value === null || value === undefined || value === '') return 0;
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    const parsed = Number(
+      String(value)
+        .replace(/,/g, '')
+        .trim()
+    );
+    return Number.isFinite(parsed) ? parsed : 0;
+  },
+  matchesWonStatus(status) {
+    const normalized = this.normalizeText(status);
+    return normalized === 'won' || normalized.includes('closed won');
+  },
+  matchesLostStatus(status) {
+    const normalized = this.normalizeText(status);
+    return normalized === 'lost' || normalized.includes('closed lost');
+  },
+  matchesOpenStatus(status) {
+    const normalized = this.normalizeText(status);
+    if (!normalized || this.matchesWonStatus(normalized) || this.matchesLostStatus(normalized)) return false;
+    return ['open', 'active', 'new', 'in progress', 'qualified', 'negotiation'].some(token => normalized.includes(token));
+  },
+  normalizeStage(stage) {
+    const normalized = this.normalizeText(stage);
+    if (!normalized) return 'Unknown';
+    if (normalized === 'new' || normalized.includes('prospect')) return 'New';
+    if (normalized.includes('progress')) return 'In Progress';
+    if (normalized.includes('qualif')) return 'Qualified';
+    if (normalized.includes('proposal')) return 'Proposal Sent';
+    if (normalized.includes('negotiat')) return 'Negotiation';
+    if (normalized.includes('verbal') || normalized.includes('commit')) return 'Verbal Commit';
+    if (this.matchesWonStatus(normalized) || normalized === 'won') return 'Won';
+    if (this.matchesLostStatus(normalized) || normalized === 'lost') return 'Lost';
+    return String(stage || '').trim() || 'Unknown';
+  },
+  formatValue(value, currency = '', hasMixedCurrencies = false) {
+    const numericValue = Number.isFinite(value) ? value : 0;
+    if (currency && !hasMixedCurrencies) {
+      let formatted = numericValue.toLocaleString(undefined, {
+        style: 'currency',
+        currency,
+        maximumFractionDigits: 2
+      });
+      if (formatted === 'NaN') formatted = `${currency} ${numericValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+      return formatted;
+    }
+    return numericValue.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  },
+  matchesKpiFilter(row = {}) {
+    const filter = this.state.kpiFilter || 'total';
+    const stage = this.normalizeText(row?.stage);
+    const priority = this.normalizeText(row?.priority);
+    const value = this.toNumberSafe(row?.estimated_value);
+    if (filter === 'total') return true;
+    if (filter === 'open') return this.matchesOpenStatus(stage);
+    if (filter === 'won' || filter === 'win-rate' || filter === 'average-won-deal-size')
+      return this.matchesWonStatus(stage);
+    if (filter === 'lost') return this.matchesLostStatus(stage);
+    if (filter === 'high-priority') return priority === 'high' || priority === 'urgent';
+    if (filter === 'pipeline-value' || filter === 'weighted-pipeline' || filter === 'average-deal-size')
+      return value > 0;
+    if (filter === 'converted-from-leads')
+      return !!String(row?.lead_id || '').trim() || !!String(row?.converted_at || '').trim();
+    if (filter === 'unique-companies') return !!String(row?.company_name || '').trim();
+    if (filter === 'unique-assignees') return !!String(row?.assigned_to || '').trim();
+    return true;
+  },
+  applyKpiFilter(filter) {
+    const nextFilter = String(filter || 'total').trim() || 'total';
+    this.state.kpiFilter = this.state.kpiFilter === nextFilter ? 'total' : nextFilter;
+    this.applyFilters();
+    this.render();
+  },
+  syncKpiCardState() {
+    const cards = document.querySelectorAll('#dealsAnalyticsGrid [data-kpi-filter]');
+    cards.forEach(card => {
+      const isActive = (card.getAttribute('data-kpi-filter') || 'total') === (this.state.kpiFilter || 'total');
+      card.classList.toggle('kpi-filter-active', isActive);
+      card.setAttribute('role', 'button');
+      card.setAttribute('tabindex', '0');
+      card.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+  },
+  incrementMap(map, key) {
+    const label = String(key || '').trim() || 'Unspecified';
+    map[label] = (map[label] || 0) + 1;
+  },
+  buildTopBreakdown(map = {}, max = 7) {
+    return Object.entries(map)
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, max);
+  },
+  computeDealAnalytics(deals = []) {
+    const rows = Array.isArray(deals) ? deals : [];
+    const stageBreakdown = {
+      New: 0,
+      'In Progress': 0,
+      Qualified: 0,
+      Lost: 0
+    };
+    const assigneeMap = {};
+    const serviceMap = {};
+    const sourceMap = {};
+    const uniqueCompanies = new Set();
+    const uniqueAssignees = new Set();
+    const currencies = new Set();
+    const stageProbability = {
+      New: 0.1,
+      'In Progress': 0.3,
+      Qualified: 0.6,
+      Lost: 0
+    };
+    let openDeals = 0;
+    let wonDeals = 0;
+    let lostDeals = 0;
+    let highPriorityCount = 0;
+    let pipelineValue = 0;
+    let weightedPipelineValue = 0;
+    let validValueCount = 0;
+    let wonValueTotal = 0;
+    let wonValueCount = 0;
+    let convertedFromLeadsCount = 0;
+
+    rows.forEach(row => {
+      const stage = this.normalizeStage(row?.stage);
+      const value = this.toNumberSafe(row?.estimated_value);
+      const priority = this.normalizeText(row?.priority);
+      const companyName = String(row?.company_name || '').trim().toLowerCase();
+      const assignee = String(row?.assigned_to || '').trim().toLowerCase();
+
+      if (this.matchesOpenStatus(stage)) openDeals += 1;
+      if (this.matchesWonStatus(stage)) wonDeals += 1;
+      if (this.matchesLostStatus(stage)) lostDeals += 1;
+      if (priority === 'high' || priority === 'urgent') highPriorityCount += 1;
+      if (String(row?.lead_id || '').trim() || String(row?.converted_at || '').trim()) convertedFromLeadsCount += 1;
+
+      pipelineValue += value;
+      if (value > 0) validValueCount += 1;
+      if (this.matchesWonStatus(stage) && value > 0) {
+        wonValueTotal += value;
+        wonValueCount += 1;
+      }
+      weightedPipelineValue += value * (stageProbability[stage] ?? 0);
+
+      if (companyName) uniqueCompanies.add(companyName);
+      if (assignee) uniqueAssignees.add(assignee);
+      if (row?.assigned_to) this.incrementMap(assigneeMap, row.assigned_to);
+      if (row?.service_interest) this.incrementMap(serviceMap, row.service_interest);
+      if (row?.lead_source) this.incrementMap(sourceMap, row.lead_source);
+      if (stageBreakdown[stage] === undefined) stageBreakdown[stage] = 0;
+      stageBreakdown[stage] += 1;
+
+      const currency = String(row?.currency || '')
+        .trim()
+        .toUpperCase();
+      if (currency) currencies.add(currency);
+    });
+
+    const denominator = wonDeals + lostDeals;
+    return {
+      totalDeals: rows.length,
+      openDeals,
+      wonDeals,
+      lostDeals,
+      highPriorityCount,
+      pipelineValue,
+      weightedPipelineValue,
+      winRate: denominator > 0 ? (wonDeals / denominator) * 100 : 0,
+      averageDealSize: validValueCount > 0 ? pipelineValue / validValueCount : 0,
+      averageWonDealSize: wonValueCount > 0 ? wonValueTotal / wonValueCount : 0,
+      convertedFromLeadsCount,
+      uniqueCompanies: uniqueCompanies.size,
+      uniqueAssignees: uniqueAssignees.size,
+      stageBreakdown,
+      assigneeBreakdown: this.buildTopBreakdown(assigneeMap, 7),
+      serviceBreakdown: this.buildTopBreakdown(serviceMap, 7),
+      sourceBreakdown: this.buildTopBreakdown(sourceMap, 7),
+      pipelineCurrency: currencies.size === 1 ? [...currencies][0] : '',
+      hasMixedCurrencies: currencies.size > 1
+    };
+  },
+  renderDistribution(el, entries = [], total = 0) {
+    if (!el) return;
+    if (!entries.length) {
+      el.innerHTML = '<div class="muted deals-empty-breakdown">No data for current filters.</div>';
+      return;
+    }
+    el.innerHTML = entries
+      .map(([label, count]) => {
+        const percent = total > 0 ? (count / total) * 100 : 0;
+        return `<div class="deals-status-row">
+          <div class="deals-status-label"><span class="deals-status-dot"></span>${U.escapeHtml(label)}</div>
+          <div class="deals-status-count">${count}</div>
+          <div class="deals-status-track"><span class="deals-status-fill" style="width:${Math.min(100, percent).toFixed(1)}%"></span></div>
+          <div class="deals-status-meta">${percent.toFixed(1)}%</div>
+        </div>`;
+      })
+      .join('');
+  },
+  renderDealAnalytics(analytics) {
+    const safe = analytics || this.computeDealAnalytics([]);
+    const setText = (el, value) => {
+      if (el) el.textContent = value;
+    };
+
+    setText(E.dealsKpiTotal, String(safe.totalDeals || 0));
+    setText(E.dealsKpiOpen, String(safe.openDeals || 0));
+    setText(E.dealsKpiWon, String(safe.wonDeals || 0));
+    setText(E.dealsKpiLost, String(safe.lostDeals || 0));
+    setText(E.dealsKpiHighPriority, String(safe.highPriorityCount || 0));
+    setText(E.dealsKpiWinRate, `${(safe.winRate || 0).toFixed(1)}%`);
+    setText(E.dealsKpiConvertedFromLeads, String(safe.convertedFromLeadsCount || 0));
+    setText(E.dealsKpiUniqueCompanies, String(safe.uniqueCompanies || 0));
+    setText(E.dealsKpiUniqueAssignees, String(safe.uniqueAssignees || 0));
+
+    setText(E.dealsKpiPipelineValue, this.formatValue(safe.pipelineValue, safe.pipelineCurrency, safe.hasMixedCurrencies));
+    setText(
+      E.dealsKpiWeightedPipelineValue,
+      this.formatValue(safe.weightedPipelineValue, safe.pipelineCurrency, safe.hasMixedCurrencies)
+    );
+    setText(E.dealsKpiAverageDealSize, this.formatValue(safe.averageDealSize, safe.pipelineCurrency, safe.hasMixedCurrencies));
+    setText(
+      E.dealsKpiAverageWonDealSize,
+      this.formatValue(safe.averageWonDealSize, safe.pipelineCurrency, safe.hasMixedCurrencies)
+    );
+    setText(
+      E.dealsKpiPipelineSub,
+      safe.pipelineCurrency && !safe.hasMixedCurrencies
+        ? `Visible estimated value (${safe.pipelineCurrency})`
+        : `Visible estimated value${safe.hasMixedCurrencies ? ' (mixed currencies)' : ''}`
+    );
+    setText(
+      E.dealsKpiWeightedPipelineSub,
+      safe.pipelineCurrency && !safe.hasMixedCurrencies
+        ? `Stage weighted (${safe.pipelineCurrency})`
+        : `Stage weighted${safe.hasMixedCurrencies ? ' (mixed currencies)' : ''}`
+    );
+
+    const stageOrder = ['New', 'In Progress', 'Qualified', 'Lost'];
+    const stageEntries = stageOrder.map(label => [label, safe.stageBreakdown?.[label] || 0]);
+    this.renderDistribution(E.dealsStageDistribution, stageEntries, safe.totalDeals || 0);
+    this.renderDistribution(E.dealsAssigneeBreakdown, safe.assigneeBreakdown || [], safe.totalDeals || 0);
+    this.renderDistribution(E.dealsServiceBreakdown, safe.serviceBreakdown || [], safe.totalDeals || 0);
+    this.renderDistribution(E.dealsSourceBreakdown, safe.sourceBreakdown || [], safe.totalDeals || 0);
+    this.syncKpiCardState();
+  },
+  applyFilters() {
+    const convertedFrom = this.parseDateOnly(this.state.convertedFrom);
+    const convertedTo = this.parseDateOnly(this.state.convertedTo);
+    const searchTerms = String(this.state.search || '')
+      .trim()
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
+
+    this.state.filteredRows = this.state.rows.filter(row => {
+      if (this.state.stage !== 'All' && row.stage !== this.state.stage) return false;
+      if (this.state.priority !== 'All' && row.priority !== this.state.priority) return false;
+      if (this.state.serviceInterest !== 'All' && row.service_interest !== this.state.serviceInterest)
+        return false;
+      if (this.state.leadSource !== 'All' && row.lead_source !== this.state.leadSource) return false;
+      if (this.state.assignedTo !== 'All' && row.assigned_to !== this.state.assignedTo) return false;
+      if (!this.matchesKpiFilter(row)) return false;
+      if (convertedFrom || convertedTo) {
+        const rowDate = this.parseDateOnly(row.converted_at);
+        if (!rowDate) return false;
+        if (convertedFrom && rowDate < convertedFrom) return false;
+        if (convertedTo && rowDate > convertedTo) return false;
+      }
+      if (!searchTerms.length) return true;
+      const hay = this.columns
+        .map(column => String(row[column] ?? ''))
+        .join(' ')
+        .toLowerCase();
+      return searchTerms.every(term => hay.includes(term));
+    });
+  },
+  renderFilters() {
+    const assign = (el, values = [], selected = 'All') => {
+      if (!el) return;
+      const options = ['All', ...this.uniqueSorted(this.visibleDealUiValues(values))];
+      el.innerHTML = options.map(option => `<option>${U.escapeHtml(option)}</option>`).join('');
+      if (options.includes(selected)) el.value = selected;
+      else if (this.isRemovedDealUiStatusValue(selected)) el.value = 'All';
+    };
+
+    assign(E.dealsStageFilter, this.state.rows.map(row => row.stage), this.state.stage);
+    assign(E.dealsPriorityFilter, this.state.rows.map(row => row.priority), this.state.priority);
+    assign(
+      E.dealsServiceInterestFilter,
+      this.state.rows.map(row => row.service_interest),
+      this.state.serviceInterest
+    );
+    assign(E.dealsLeadSourceFilter, this.state.rows.map(row => row.lead_source), this.state.leadSource);
+    assign(E.dealsAssignedToFilter, this.state.rows.map(row => row.assigned_to), this.state.assignedTo);
+
+    if (E.dealsStartDateFilter) E.dealsStartDateFilter.value = this.state.convertedFrom;
+    if (E.dealsEndDateFilter) E.dealsEndDateFilter.value = this.state.convertedTo;
+    if (E.dealsSidebarSearchInput) E.dealsSidebarSearchInput.value = this.state.search;
+    if (E.dealsSearchInput) E.dealsSearchInput.value = this.state.search;
+  },
+  handleFilterChange() {
+    this.applyFilters();
+    this.render();
+  },
+
+  findDetailsRow(id) {
+    const target = String(id || '').trim();
+    if (!target) return null;
+    return (this.state.rows || []).find(row => [row.id, row.deal_id, row.dealId].some(value => String(value || '').trim() === target)) ||
+      (this.state.filteredRows || []).find(row => [row.id, row.deal_id, row.dealId].some(value => String(value || '').trim() === target)) || null;
+  },
+  detailsMoney(row = {}) {
+    const amount = Number(row.estimated_value);
+    if (!Number.isFinite(amount)) return '—';
+    const currency = String(row.currency || '').trim();
+    return `${currency ? `${currency.toUpperCase()} ` : ''}${U.fmtNumber ? U.fmtNumber(amount) : amount.toFixed(2)}`;
+  },
+  openDetailsDrawer(rowOrId) {
+    const source = typeof rowOrId === 'string' ? this.findDetailsRow(rowOrId) : rowOrId;
+    if (!source || !window.RecordDetailsDrawer) return;
+    const row = this.normalizeDeal(source);
+    const id = String(row.id || row.deal_id || row.dealId || '').trim();
+    this.state.selectedDetailsId = id;
+    window.RecordDetailsDrawer.open({
+      eyebrow: 'CRM · Deal',
+      title: row.deal_id || row.dealId || 'Deal Details',
+      subtitle: [row.company_name, row.full_name, row.stage].filter(Boolean).join(' · '),
+      sections: [
+        { title: 'Summary', cards: [
+          ['Stage', row.stage],
+          ['Priority', row.priority],
+          ['Estimated Value', this.detailsMoney(row)],
+          ['Next Follow-up', this.formatDateTime(row.next_follow_up_at)],
+          ['Assigned To', row.assigned_to],
+          ['Converted At', this.formatDateTime(row.converted_at)]
+        ] },
+        { title: 'Company & Contact', fields: [
+          ['Company', row.company_name],
+          ['Contact', row.full_name],
+          ['Email', row.email],
+          ['Phone', row.phone],
+          ['Country', row.country],
+          ['Lead Ref', this.displayLeadId(row)]
+        ] },
+        { title: 'Deal Information', fields: [
+          ['Lead Source', row.lead_source],
+          ['Service Interest', row.service_interest],
+          ['Currency', row.currency],
+          ['Created At', this.formatDateTime(row.created_at)],
+          ['Updated At', this.formatDateTime(row.updated_at)],
+          ['Converted By', row.converted_by]
+        ] },
+        { title: 'Notes', html: `<div class="lead-details-notes">${U.escapeHtml(row.notes || 'No notes added yet.')}</div>` }
+      ],
+      actions: [
+        this.canEdit() ? { label: 'Edit Deal', variant: 'primary', permissionResource: 'deals', permissionAction: 'update', onClick: () => this.openForm(row) } : null,
+        row.id && this.canShowCreateProposalForDeal(row) ? { label: 'Convert to Proposal', variant: 'ghost', permissionResource: 'proposals', permissionAction: 'create_from_deal', onClick: () => window.Proposals?.createFromDealFlow?.(row.id, { openAfterCreate: true }) } : null,
+        this.canDelete() ? { label: 'Delete', variant: 'ghost', permissionResource: 'deals', permissionAction: 'delete', onClick: () => this.deleteDealById(id) } : null
+      ].filter(Boolean)
+    });
+    this.render();
+  },
+  render() {
+    if (!E.dealsState || !E.dealsTbody) return;
+    this.updateExportButtonState();
+    this.updateCreateButtonState();
+
+    if (this.state.loading) {
+      E.dealsState.textContent = 'Loading deals…';
+      this.renderDealAnalytics(this.computeDealAnalytics([]));
+      E.dealsTbody.innerHTML = Array.from({ length: 6 })
+        .map(() => '<tr class="skeleton-row"><td colspan="22"><div class="skeleton-line" style="height:12px;margin:6px 0;"></div></td></tr>')
+        .join('');
+      return;
+    }
+
+    if (this.state.loadError) {
+      E.dealsState.textContent = this.state.loadError;
+      this.renderDealAnalytics(this.computeDealAnalytics([]));
+      E.dealsTbody.innerHTML = `<tr><td colspan="22" class="muted" style="text-align:center;color:#ffb4b4;">${U.escapeHtml(
+        this.state.loadError
+      )}</td></tr>`;
+      return;
+    }
+
+    TableUtils?.ensureHeaders?.('deals', E.dealsTbody?.closest('table'), this.tableColumns);
+    const rows = TableUtils?.processRows ? TableUtils.processRows('deals', this.state.filteredRows, this.columnMap) : this.state.filteredRows;
+    this.renderDealAnalytics(this.computeDealAnalytics(rows));
+    const shownFrom = rows.length ? (Number(this.state.offset) || 0) + 1 : 0;
+    const shownTo = rows.length ? (Number(this.state.offset) || 0) + rows.length : 0;
+    const totalEstimate = Number(this.state.total) || rows.length;
+    const totalLabel = this.state.hasMore ? `${totalEstimate}+` : String(totalEstimate || rows.length);
+    E.dealsState.textContent = rows.length
+      ? `Showing ${shownFrom}-${shownTo} of ${totalLabel} records`
+      : 'No records to show';
+    const paginationHost = U.ensurePaginationHost({ hostId: 'dealsPaginationControls', anchor: E.dealsState });
+    U.renderPaginationControls({
+      host: paginationHost,
+      moduleKey: 'deals',
+      page: this.state.page,
+      pageSize: this.state.limit,
+      hasMore: this.state.hasMore,
+      returned: this.state.returned,
+      loading: this.state.loading,
+      onPageChange: nextPage => {
+        this.state.page = Math.max(1, nextPage);
+        this.loadAndRefresh({ force: true });
+      },
+      onPageSizeChange: nextSize => {
+        this.state.limit = Math.max(1, Math.min(200, Number(nextSize) || 50));
+        this.state.page = 1;
+        this.loadAndRefresh({ force: true });
+      }
+    });
+
+    if (!rows.length) {
+      E.dealsTbody.innerHTML = '<tr><td colspan="22" class="muted deals-empty-row">No deals found for current filters.</td></tr>';
+      this.updateCreateButtonState();
+      return;
+    }
+
+    E.dealsTbody.innerHTML = rows
+      .map(row => {
+        const rowId = U.escapeAttr(row.id || row.deal_id || '');
+        const actionButtons = [];
+        if (this.canEdit()) {
+          actionButtons.push(
+            `<button class="deal-menu-item" type="button" data-deal-edit="${rowId}" data-permission-resource="deals" data-permission-action="update">Edit</button>`
+          );
+        }
+        if (row.id && this.canShowCreateProposalForDeal(row)) {
+          const inFlight = this.state.rowActionInFlight.has(`create-proposal:${row.id}`);
+          actionButtons.push(
+            `<button class="deal-menu-item" type="button" data-deal-create-proposal="${rowId}" data-permission-resource="proposals" data-permission-action="create_from_deal" ${inFlight ? 'disabled' : ''}>Convert to Proposal</button>`
+          );
+        }
+        if (this.canDelete()) {
+          actionButtons.push(
+            `<button class="deal-menu-item danger" type="button" data-deal-delete="${rowId}" data-permission-resource="deals" data-permission-action="delete">Delete</button>`
+          );
+        }
+        const menu = actionButtons.length
+          ? `<details class="deal-actions-menu"><summary class="deal-more-btn" aria-label="More deal actions">⋮</summary><div class="deal-actions-popover">${actionButtons.join('')}</div></details>`
+          : '';
+        const actions = `<div class="deal-row-actions"><button class="deal-view-btn" type="button" data-deal-view="${rowId}">View</button>${menu}</div>`;
+        const selected = String(this.state.selectedDetailsId || '') === String(row.id || row.deal_id || '');
+        return `<tr class="deal-clickable-row${selected ? ' is-selected' : ''}" tabindex="0" data-deal-row="${rowId}" aria-label="Open deal ${U.escapeAttr(row.deal_id || row.company_name || '')} details">
+          <td class="deal-id-cell">${U.escapeHtml(row.deal_id || '—')}</td>
+          <td>${U.escapeHtml(this.displayLeadId(row) || '—')}</td>
+          <td class="deal-name-cell"><div class="deal-name-wrap"><span class="deal-avatar deal-avatar--${this.dealAvatarClass(row)}">${U.escapeHtml(this.dealInitials(row))}</span><span>${U.escapeHtml(row.full_name || row.contact_name || '—')}</span></div></td>
+          <td>${U.escapeHtml(row.company_name || '—')}</td>
+          <td>${U.escapeHtml(row.phone || '—')}</td>
+          <td class="deal-email-cell">${U.escapeHtml(row.email || '—')}</td>
+          <td>${U.escapeHtml(row.country || '—')}</td>
+          <td>${U.escapeHtml(row.lead_source || '—')}</td>
+          <td>${U.escapeHtml(row.service_interest || '—')}</td>
+          <td>${this.dealStageChip(row.stage)}</td>
+          <td>${this.compactDealDate(row.next_follow_up_at)}</td>
+          <td>${row.last_contacted_date ? U.escapeHtml(String(row.last_contacted_date).slice(0, 10)) : '—'}</td>
+          <td>${this.dealPriorityChip(row.priority)}</td>
+          <td class="deal-money-cell">${this.formatDealMoneyCell(row)}</td>
+          <td>${U.escapeHtml(row.currency || '—')}</td>
+          <td>${this.dealAssigneePill(row.assigned_to)}</td>
+          <td>${this.compactDealDate(row.converted_at)}</td>
+          <td>${U.escapeHtml(row.converted_by || '—')}</td>
+          <td class="deal-notes-cell">${this.truncateDealNotes(row.notes)}</td>
+          <td>${this.compactDealDate(row.created_at)}</td>
+          <td>${this.compactDealDate(row.updated_at)}</td>
+          <td>${actions}</td>
+        </tr>`;
+      })
+      .join('');
+  },
+  async loadAndRefresh({ force = false } = {}) {
+    if (!Session.isAuthenticated()) return;
+    if (this.state.loading && !force) return;
+    const hasWarmCache = this.state.loaded && Date.now() - this.state.lastLoadedAt <= this.state.cacheTtlMs;
+    if (hasWarmCache && !force) {
+      this.rerenderVisibleTable();
+      return;
+    }
+    this.state.loading = true;
+    this.state.loadError = '';
+    this.render();
+
+    try {
+      const response = await this.listDeals({ forceRefresh: force, page: this.state.page, limit: this.state.limit });
+      const responseRows = Array.isArray(response?.rows) ? response.rows : this.extractRows(response);
+      this.state.rows = responseRows.map(item => this.normalizeDeal(item));
+      this.state.returned = Number(response?.returned ?? this.state.rows.length) || this.state.rows.length;
+      this.state.hasMore = Boolean(response?.hasMore);
+      this.state.page = Number(response?.page || this.state.page || 1);
+      this.state.limit = Number(response?.limit || this.state.limit || 50);
+      this.state.offset = Number(response?.offset ?? Math.max(0, (this.state.page - 1) * this.state.limit));
+      this.state.total = Number(response?.total ?? (this.state.offset + this.state.returned + (this.state.hasMore ? 1 : 0)));
+      this.state.loaded = true;
+      this.state.lastLoadedAt = Date.now();
+      this.syncDealFormDropdowns();
+      this.renderFilters();
+      this.applyFilters();
+      this.render();
+    } catch (error) {
+      if (isAuthError(error)) {
+        handleExpiredSession('Session expired. Please log in again.');
+        return;
+      }
+      this.state.rows = [];
+      this.state.filteredRows = [];
+      this.state.loadError = String(error?.message || '').trim() || 'Unable to load deals right now.';
+      this.render();
+      UI.toast(this.state.loadError);
+    } finally {
+      this.state.loading = false;
+      this.render();
+    }
+  },
+  setFormBusy(v) {
+    if (E.dealFormSaveBtn) {
+      E.dealFormSaveBtn.disabled = !!v;
+      E.dealFormSaveBtn.textContent = v ? 'Saving…' : 'Save';
+    }
+    if (E.dealFormDeleteBtn) E.dealFormDeleteBtn.disabled = !!v;
+  },
+  async getFullCompanyRecord(companyIdOrRecord) {
+    if (!companyIdOrRecord) return null;
+    if (typeof companyIdOrRecord === 'object') {
+      const has = companyIdOrRecord.company_type || companyIdOrRecord.companyType || companyIdOrRecord.industry || companyIdOrRecord.website || companyIdOrRecord.main_email || companyIdOrRecord.mainEmail || companyIdOrRecord.main_phone || companyIdOrRecord.mainPhone || companyIdOrRecord.country || companyIdOrRecord.city || companyIdOrRecord.address || companyIdOrRecord.company_status || companyIdOrRecord.companyStatus;
+      if (has) return this.normalizeCompany(companyIdOrRecord);
+    }
+    const companyId = typeof companyIdOrRecord === 'object' ? (companyIdOrRecord.id || companyIdOrRecord.company_uuid || companyIdOrRecord.companyUuid || companyIdOrRecord.company_id || companyIdOrRecord.companyId) : companyIdOrRecord;
+    if (!companyId) return null;
+    const row = await window.CrmCompanyContactSelectors?.loadCompanySafe?.(companyId);
+    return row ? this.normalizeCompany(row) : null;
+  },
+
+  getDealContactId(deal = {}) {
+    return (
+      deal.contact_id ||
+      deal.customer_contact_id ||
+      deal.client_contact_id ||
+      deal.primary_contact_id ||
+      deal.selected_contact_id ||
+      deal.contact_uuid ||
+      null
+    );
+  },
+  async loadDealContact(deal) {
+    const contactId = this.getDealContactId(deal);
+    if (!contactId) return null;
+
+    const { data, error } = await this.getClient()
+      .from('contacts')
+      .select('*')
+      .eq('id', contactId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Failed to load deal contact:', error);
+      return null;
+    }
+
+    return data || null;
+  },
+  async getFullContactRecord(contactIdOrRecord) {
+    if (!contactIdOrRecord) return null;
+    if (typeof contactIdOrRecord === 'object') {
+      const has = contactIdOrRecord.first_name || contactIdOrRecord.firstName || contactIdOrRecord.last_name || contactIdOrRecord.lastName || contactIdOrRecord.job_title || contactIdOrRecord.jobTitle || contactIdOrRecord.department || contactIdOrRecord.decision_role || contactIdOrRecord.decisionRole || contactIdOrRecord.contact_status || contactIdOrRecord.contactStatus;
+      if (has) return this.normalizeContact(contactIdOrRecord);
+    }
+    const contactId = typeof contactIdOrRecord === 'object' ? (contactIdOrRecord.id || contactIdOrRecord.contact_uuid || contactIdOrRecord.contactUuid || contactIdOrRecord.contact_id || contactIdOrRecord.contactId) : contactIdOrRecord;
+    if (!contactId) return null;
+    if (this.isUuid(contactId)) {
+      const { data, error } = await this.getClient()
+        .from('contacts')
+        .select('*')
+        .eq('id', contactId)
+        .maybeSingle();
+      if (!error && data) return this.normalizeContact(data);
+      if (error) console.warn('[deals] contact lookup by deal contact_id failed', { contactId, error });
+    }
+    const response = await Api.requestWithSession('contacts','list',{ filters:{ contact_id: contactId }, limit:1 },{ requireAuth:true });
+    const rows = response?.rows || response?.items || response?.data || [];
+    const row = Array.isArray(rows) ? (rows[0] || null) : (rows || null);
+    return row ? this.normalizeContact(row) : null;
+  },
+  setReadonlyField(node, value) {
+    if (!node) return;
+    node.value = value || '';
+    node.readOnly = true;
+    node.classList.add('readonly-field', 'locked-field');
+    node.setAttribute('aria-readonly', 'true');
+  },
+  lockInput(node) {
+    if (!node) return;
+    node.readOnly = true;
+    node.classList.add('readonly-field', 'locked-field');
+    node.setAttribute('aria-readonly', 'true');
+  },
+  lockSelect(node) {
+    if (!node) return;
+    node.disabled = true;
+    node.classList.add('readonly-field', 'locked-field');
+    node.setAttribute('aria-disabled', 'true');
+  },
+  unlockSelect(node) {
+    if (!node) return;
+    node.disabled = false;
+    node.classList.remove('readonly-field', 'locked-field');
+    node.removeAttribute('aria-disabled');
+  },
+  lockCompanyContactFields({ lockCompanySelector = true, lockContactSelector = true } = {}) {
+    [E.dealFormCompanyId, E.dealFormContactId, E.dealFormCompanyName, E.dealFormPhone, E.dealFormEmail, E.dealFormCountry].forEach(node => this.lockInput(node));
+    if (lockCompanySelector) this.lockSelect(E.dealFormCompanySelector);
+    if (lockContactSelector) this.lockSelect(E.dealFormContactSelector);
+  },
+  resetForm() {
+    if (!E.dealForm) return;
+    E.dealForm.reset();
+    if (E.dealFormDealId) E.dealFormDealId.value = '';
+    if (E.dealFormConvertedAt) {
+      E.dealFormConvertedAt.value = '';
+      E.dealFormConvertedAt.dataset.rawValue = '';
+    }
+    this.state.form.selectedLead = null;
+    this.state.form.selectedCompany = null;
+    this.state.form.selectedContact = null;
+    this.state.form.companyId = '';
+    this.state.form.contactId = '';
+    this.state.form.lockLinks = false;
+    if (E.dealFormCompanySelector) E.dealFormCompanySelector.value = '';
+    if (E.dealFormContactSelector) E.dealFormContactSelector.value = '';
+    if (E.dealFormCompanyId) E.dealFormCompanyId.value = '';
+    if (E.dealFormContactId) E.dealFormContactId.value = '';
+    [
+      E.dealCompanyIdDisplay, E.dealCompanyNameDisplay, E.dealCompanyLegalNameDisplay, E.dealCompanyTypeDisplay, E.dealCompanyIndustryDisplay,
+      E.dealCompanyWebsiteDisplay, E.dealCompanyMainEmailDisplay, E.dealCompanyMainPhoneDisplay, E.dealCompanyCountryDisplay,
+      E.dealCompanyCityDisplay, E.dealCompanyAddressDisplay, E.dealCompanyTaxNumberDisplay, E.dealCompanyStatusDisplay,
+      E.dealContactIdDisplay, E.dealContactFirstNameDisplay, E.dealContactLastNameDisplay,
+      E.dealContactJobTitleDisplay, E.dealContactDepartmentDisplay, E.dealContactEmailDisplay, E.dealContactPhoneDisplay,
+      E.dealContactMobileDisplay, E.dealContactDecisionRoleDisplay, E.dealContactPrimaryDisplay, E.dealContactStatusDisplay
+    ].forEach(node => this.setReadonlyField(node, ''));
+    this.lockCompanyContactFields({ lockCompanySelector: false, lockContactSelector: false });
+    this.syncDealFormDropdowns();
+  },
+  currentUserAssignee() {
+    return String(Session.displayName() || Session.username() || Session.user()?.email || '').trim();
+  },
+  async openForm(row = null) {
+    if (!E.dealFormModal || !E.dealForm) return;
+    const isEdit = !!row;
+    E.dealForm.dataset.mode = isEdit ? 'edit' : 'create';
+    E.dealForm.dataset.id = row?.id || '';
+    if (E.dealFormTitle) E.dealFormTitle.textContent = isEdit ? 'Edit Deal' : 'Create Deal';
+    this.resetForm();
+
+    if (row) {
+      this.state.form.selectedCompany = row.company_id ? { company_id: row.company_id, company_name: row.company_name || '' } : null;
+      this.state.form.selectedContact = row.contact_id
+        ? {
+            contact_id: row.contact_id,
+            full_name: row.contact_name || '',
+            email: row.contact_email || '',
+            phone: row.contact_phone || ''
+          }
+        : null;
+      this.state.form.companyId = row.company_id || '';
+      this.state.form.contactId = row.contact_id || '';
+      this.state.form.lockLinks = true;
+      if (E.dealFormDealId) E.dealFormDealId.value = row.deal_id || '';
+      if (E.dealFormLeadId) {
+        E.dealFormLeadId.dataset.leadUuid = row.lead_id || '';
+        E.dealFormLeadId.dataset.leadCode = row.lead_code || '';
+        E.dealFormLeadId.value = this.displayLeadId(row);
+      }
+            if (E.dealFormCompanyName) E.dealFormCompanyName.value = row.company_name || '';
+      if (E.dealFormPhone) E.dealFormPhone.value = row.phone || '';
+      if (E.dealFormEmail) E.dealFormEmail.value = row.email || '';
+      if (E.dealFormCountry) E.dealFormCountry.value = row.country || '';
+      if (E.dealFormLeadSource) E.dealFormLeadSource.value = row.lead_source || '';
+      if (E.dealFormServiceInterest) E.dealFormServiceInterest.value = row.service_interest || '';
+      if (E.dealFormStage) E.dealFormStage.value = row.stage || 'New';
+      if (E.dealNextFollowUpAtInput) E.dealNextFollowUpAtInput.value = this.formatDateTimeLocalValue(this.pickNextFollowUpValue(row));
+      if (E.dealLastContactedDateInput) E.dealLastContactedDateInput.value = this.pickLastContactedDateValue(row);
+      if (E.dealFormPriority) E.dealFormPriority.value = row.priority || '';
+      if (E.dealFormEstimatedValue) {
+        E.dealFormEstimatedValue.value = row.estimated_value === '' ? '' : String(row.estimated_value);
+      }
+      if (E.dealFormCurrency) E.dealFormCurrency.value = row.currency || '';
+      if (E.dealFormAssignedTo) E.dealFormAssignedTo.value = row.assigned_to || '';
+      if (E.dealFormConvertedBy) E.dealFormConvertedBy.value = row.converted_by || '';
+      if (E.dealFormConvertedAt) {
+        const convertedAtRaw = row.converted_at || '';
+        E.dealFormConvertedAt.dataset.rawValue = convertedAtRaw;
+        E.dealFormConvertedAt.value = convertedAtRaw ? U.formatDateTimeMMDDYYYYHHMM(convertedAtRaw) : '';
+      }
+      if (E.dealFormNotes) E.dealFormNotes.value = '';
+      this.hydrateLeadCodeFromLeadUuid(row);
+      const companyId = row.company_id || row.companyId || '';
+      const contactId = this.getDealContactId(row) || '';
+      if (companyId) {
+        const company = await this.getFullCompanyRecord(companyId);
+        this.hydrateDealFromCompany(company || { company_id: companyId, company_name: row.company_name || row.companyName || '', country: row.country || '' });
+      }
+      if (contactId) {
+        const dealContact = await this.loadDealContact(row);
+        this.hydrateDealFromContact(dealContact || { id: contactId, contact_id: contactId, full_name: row.contact_name || row.contactName || row.full_name || '', email: row.contact_email || row.contactEmail || row.email || '', phone: row.contact_phone || row.contactPhone || row.phone || '' });
+      }
+      this.lockCompanyContactFields();
+      this.syncDealFormDropdowns({
+        lead_source: row.lead_source || '',
+        service_interest: row.service_interest || '',
+        stage: row.stage || 'New',
+        priority: row.priority || '',
+        currency: row.currency || ''
+      });
+    } else {
+      if (E.dealFormDealId) E.dealFormDealId.value = 'Auto-generated';
+      if (E.dealFormLeadId) {
+        E.dealFormLeadId.dataset.leadUuid = '';
+        E.dealFormLeadId.dataset.leadCode = '';
+      }
+      if (E.dealFormConvertedAt) {
+        E.dealFormConvertedAt.dataset.rawValue = '';
+        E.dealFormConvertedAt.value = '';
+      }
+      if (E.dealFormStage) E.dealFormStage.value = 'New';
+      if (E.dealNextFollowUpAtInput) E.dealNextFollowUpAtInput.value = '';
+      if (E.dealLastContactedDateInput) E.dealLastContactedDateInput.value = '';
+      if (E.dealFormNotes) E.dealFormNotes.value = '';
+      if (E.dealFormAssignedTo) E.dealFormAssignedTo.value = this.currentUserAssignee();
+      this.unlockSelect(E.dealFormCompanySelector);
+      this.unlockSelect(E.dealFormContactSelector);
+      this.lockCompanyContactFields({ lockCompanySelector: false, lockContactSelector: false });
+      this.syncDealFormDropdowns({ stage: 'New' });
+    }
+
+    if (E.dealFormDeleteBtn) E.dealFormDeleteBtn.style.display = isEdit && this.canEditDelete() ? '' : 'none';
+    if (E.dealFormSaveBtn) E.dealFormSaveBtn.disabled = false;
+    E.dealFormModal.style.display = 'flex';
+    E.dealFormModal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('modal-open');
+    if (window.setAppHashRoute && window.buildRecordHashRoute) setAppHashRoute(buildRecordHashRoute('deals', row || {}));
+    if (row) await this.refreshDealNoteHistory(row);
+    else this.renderDealNoteHistory([]);
+  },
+  hydrateDealFromCompany(company = {}) {
+    const c = this.normalizeCompany(company);
+    this.state.form.selectedCompany = c.company_id ? c : null;
+    this.state.form.companyId = c.company_id || '';
+    if (E.dealFormCompanyId) E.dealFormCompanyId.value = c.company_id || '';
+    if (E.dealFormCompanySelector) E.dealFormCompanySelector.value = c.company_id || '';
+    if (E.dealFormCompanyName) E.dealFormCompanyName.value = c.company_name || '';
+    if (E.dealFormCountry) E.dealFormCountry.value = c.country || '';
+    this.setReadonlyField(E.dealCompanyIdDisplay, c.company_id);
+    this.setReadonlyField(E.dealCompanyNameDisplay, c.company_name);
+    this.setReadonlyField(E.dealCompanyLegalNameDisplay, U.getCustomerLegalName(c, c));
+    this.setReadonlyField(E.dealCompanyTypeDisplay, this.formatCompanyType(c.company_type));
+    this.setReadonlyField(E.dealCompanyIndustryDisplay, this.formatCompanyIndustry(c.industry));
+    this.setReadonlyField(E.dealCompanyWebsiteDisplay, c.website);
+    this.setReadonlyField(E.dealCompanyMainEmailDisplay, c.main_email);
+    this.setReadonlyField(E.dealCompanyMainPhoneDisplay, c.main_phone);
+    this.setReadonlyField(E.dealCompanyCountryDisplay, c.country);
+    this.setReadonlyField(E.dealCompanyCityDisplay, c.city);
+    this.setReadonlyField(E.dealCompanyAddressDisplay, c.address);
+    this.setReadonlyField(E.dealCompanyTaxNumberDisplay, c.tax_number);
+    this.setReadonlyField(E.dealCompanyStatusDisplay, c.company_status);
+    const shouldLockPartySelectors = E.dealForm?.dataset.mode === 'edit' || this.state.form.lockLinks;
+    this.lockCompanyContactFields({ lockCompanySelector: shouldLockPartySelectors && !!c.company_id, lockContactSelector: shouldLockPartySelectors && !!this.state.form.contactId });
+  },
+  hydrateDealFromContact(contact = {}) {
+    const c = this.normalizeContact(contact);
+    this.state.form.selectedContact = c.contact_id ? c : null;
+    this.state.form.contactId = c.contact_id || '';
+    if (E.dealFormContactId) E.dealFormContactId.value = c.contact_id || '';
+    if (E.dealFormContactSelector) E.dealFormContactSelector.value = c.contact_id || '';
+        if (E.dealFormPhone) E.dealFormPhone.value = c.phone || c.mobile || '';
+    if (E.dealFormEmail) E.dealFormEmail.value = c.email || '';
+    const contactDetails = {
+      contactId: c.contact_number || c.contact_no || c.contact_code || c.id || '—',
+      firstName: c.first_name || '',
+      lastName: c.last_name || '',
+      jobTitle: c.title || c.job_title || c.position || c.designation || '',
+      department: c.department || '',
+      email: c.email || c.contact_email || c.work_email || '',
+      phone: c.phone || c.contact_phone || '',
+      mobile: c.mobile || c.mobile_number || '',
+      decisionRole: c.decision_role || '',
+      primaryContact: c.is_primary ? 'Yes' : '',
+      contactStatus: c.status || c.contact_status || ''
+    };
+    this.setReadonlyField(E.dealContactIdDisplay, contactDetails.contactId);
+        this.setReadonlyField(E.dealContactFirstNameDisplay, contactDetails.firstName);
+    this.setReadonlyField(E.dealContactLastNameDisplay, contactDetails.lastName);
+    this.setReadonlyField(E.dealContactJobTitleDisplay, contactDetails.jobTitle);
+    this.setReadonlyField(E.dealContactDepartmentDisplay, contactDetails.department);
+    this.setReadonlyField(E.dealContactEmailDisplay, contactDetails.email);
+    this.setReadonlyField(E.dealContactPhoneDisplay, contactDetails.phone);
+    this.setReadonlyField(E.dealContactMobileDisplay, contactDetails.mobile);
+    this.setReadonlyField(E.dealContactDecisionRoleDisplay, contactDetails.decisionRole);
+    this.setReadonlyField(E.dealContactPrimaryDisplay, contactDetails.primaryContact);
+    this.setReadonlyField(E.dealContactStatusDisplay, contactDetails.contactStatus);
+    const shouldLockPartySelectors = E.dealForm?.dataset.mode === 'edit' || this.state.form.lockLinks;
+    this.lockCompanyContactFields({ lockCompanySelector: shouldLockPartySelectors && !!this.state.form.companyId, lockContactSelector: shouldLockPartySelectors && !!c.contact_id });
+  },
+  async loadDealNoteLogs(deal = {}) {
+    const dealUuid = String(deal?.id || '').trim();
+    const dealId = String(deal?.deal_id || deal?.dealId || '').trim();
+    if (!dealUuid && !dealId) return [];
+    let query = this.getClient().from('deal_note_logs').select('*').order('created_at', { ascending: false });
+    if (dealUuid && dealId) query = query.or(`deal_uuid.eq.${dealUuid},deal_id.eq.${dealId}`);
+    else if (dealUuid) query = query.eq('deal_uuid', dealUuid);
+    else query = query.eq('deal_id', dealId);
+    const { data, error } = await query;
+    if (error) throw this.toSupabaseError('Unable to load deal note history', error);
+    return Array.isArray(data) ? data : [];
+  },
+  renderDealNoteHistory(logs = [], { loading = false, error = '', usersById = new Map() } = {}) {
+    const host = E.dealNotesHistoryList || document.getElementById('dealNotesHistoryList');
+    if (!host) return;
+    if (loading) {
+      host.innerHTML = '<div class="muted">Loading note history…</div>';
+      return;
+    }
+    if (error) {
+      host.innerHTML = `<div class="muted" style="color:#ffb4b4;">${U.escapeHtml(error)}</div>`;
+      return;
+    }
+    if (!Array.isArray(logs) || !logs.length) {
+      host.innerHTML = '<div class="muted">No note history yet.</div>';
+      return;
+    }
+    host.innerHTML = logs.map(log => {
+      const user = this.getUserDisplayName(log.created_by, usersById);
+      const canShowDebugUserId = Boolean(Session?.isAdmin?.());
+      const userTitle = canShowDebugUserId && log?.created_by ? ` title="${U.escapeAttr(String(log.created_by))}"` : '';
+      const previousNote = String(log.previous_note || log.old_note || '').trim() || '—';
+      const newNote = String(log.new_note || log.note || '').trim() || '—';
+      return `<article class="card" style="padding:10px;margin:8px 0;background:rgba(255,255,255,0.03);">
+        <div class="muted" style="font-size:12px;display:flex;gap:10px;flex-wrap:wrap;">
+          <span>${U.escapeHtml(this.formatNoteLogDate(log.created_at))}</span><span${userTitle}>User: ${U.escapeHtml(user)}</span>
+        </div>
+        <div style="margin-top:8px;"><strong>Previous note</strong><div>${U.escapeHtml(previousNote)}</div></div>
+        <div style="margin-top:8px;"><strong>New note</strong><div>${U.escapeHtml(newNote)}</div></div>
+      </article>`;
+    }).join('');
+  },
+  async refreshDealNoteHistory(row = {}) {
+    if (!row?.id && !row?.deal_id) {
+      this.renderDealNoteHistory([]);
+      return;
+    }
+    this.renderDealNoteHistory([], { loading: true });
+    try {
+      const logs = await this.loadDealNoteLogs(row);
+      const usersById = await this.loadDealNoteUsersById(logs);
+      this.renderDealNoteHistory(logs, { usersById });
+    } catch (error) {
+      console.error('[deals] note history load failed', error);
+      this.renderDealNoteHistory([], { error: 'Unable to load note history.' });
+    }
+  },
+  validateDealWorkflow(deal = {}) {
+    const stage = String(deal.stage || '').trim() || 'New';
+    if (!stage) {
+      UI.toast('Please select a deal stage.');
+      return false;
+    }
+    const nextFollowUp = this.pickNextFollowUpValue(deal);
+    if (!nextFollowUp) {
+      UI.toast('Next follow-up is required for every deal change.');
+      if (E.dealNextFollowUpAtInput) E.dealNextFollowUpAtInput.focus();
+      return false;
+    }
+    const nextFollowUpIso = this.dateTimeLocalToIso(nextFollowUp) || nextFollowUp;
+    deal.stage = stage;
+    deal.next_follow_up_at = nextFollowUpIso;
+    return true;
+  },
+  validateDealNewNote(deal = {}) {
+    const newNote = String(deal.notes || '').trim();
+    if (newNote) return true;
+    UI.toast('New note is required for every deal edit.');
+    if (E.dealFormNotes) E.dealFormNotes.focus();
+    return false;
+  },
+  closeForm() {
+    if (!E.dealFormModal) return;
+    E.dealFormModal.style.display = 'none';
+    E.dealFormModal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('modal-open');
+    if (window.setAppHashRoute) setAppHashRoute('#crm?tab=deals');
+  },
+  collectFormData() {
+    const mode = E.dealForm?.dataset.mode === 'edit' ? 'edit' : 'create';
+    const leadField = E.dealFormLeadId;
+    const editLeadUuid = String(leadField?.dataset?.leadUuid || '').trim();
+    const editLeadCode = String(leadField?.dataset?.leadCode || '').trim();
+    const selectedCompany = this.normalizeCompany(this.state.form.selectedCompany || {});
+    const selectedContact = this.normalizeContact(this.state.form.selectedContact || {});
+    const companyId = selectedCompany.company_id || this.state.form.companyId || E.dealFormCompanyId?.value || E.dealFormCompanySelector?.value || '';
+    const companyName = selectedCompany.company_name || E.dealFormCompanyName?.value || '';
+    const contactId = selectedContact.contact_id || this.state.form.contactId || E.dealFormContactId?.value || E.dealFormContactSelector?.value || '';
+    const contactName = U.buildContactDisplayName(selectedContact); 
+    const customerName = U.getCustomerLegalName(selectedCompany, { company_name: companyName });
+    const contactEmail = selectedContact.email || E.dealFormEmail?.value || '';
+    const contactPhone = selectedContact.phone || selectedContact.mobile || E.dealFormPhone?.value || '';
+    return {
+      deal_id:
+        String(E.dealFormDealId?.value || '').trim() === 'Auto-generated'
+          ? ''
+          : String(E.dealFormDealId?.value || '').trim(),
+      lead_id: mode === 'edit' ? editLeadUuid : String(E.dealFormLeadId?.value || '').trim(),
+      lead_code: mode === 'edit' ? editLeadCode : '',
+      full_name: String(contactName || '').trim(),
+      company_id: String(companyId).trim(),
+      company_name: String(companyName).trim(),
+      customer_name: customerName,
+      customer_legal_name: customerName,
+      customer_address: String(selectedCompany.address || '').trim(),
+      contact_id: String(contactId).trim(),
+      contact_name: String(contactName).trim(),
+      contact_email: String(contactEmail).trim(),
+      contact_phone: String(contactPhone).trim(),
+      phone: String(contactPhone).trim(),
+      email: String(contactEmail).trim(),
+      country: String(selectedCompany.country || E.dealFormCountry?.value || '').trim(),
+      lead_source: String(E.dealFormLeadSource?.value || '').trim(),
+      service_interest: String(E.dealFormServiceInterest?.value || '').trim(),
+      stage: String(E.dealFormStage?.value || '').trim() || 'New',
+      next_follow_up_at: String(E.dealNextFollowUpAtInput?.value || '').trim(),
+      last_contacted_date: String(E.dealLastContactedDateInput?.value || '').trim() || null,
+      priority: String(E.dealFormPriority?.value || '').trim(),
+      estimated_value: String(E.dealFormEstimatedValue?.value || '').trim(),
+      currency: String(E.dealFormCurrency?.value || '').trim(),
+      assigned_to: String(E.dealFormAssignedTo?.value || '').trim(),
+      converted_by: String(E.dealFormConvertedBy?.value || '').trim(),
+      converted_at: String(E.dealFormConvertedAt?.dataset?.rawValue || '').trim(),
+      notes: String(E.dealFormNotes?.value || '').trim()
+    };
+  },
+  async ensureCompanyContactHydratedBeforeSave() {
+    const companyId = this.state.form.selectedCompany?.company_id || this.state.form.companyId || E.dealFormCompanyId?.value || E.dealFormCompanySelector?.value || '';
+    const contactId = this.state.form.selectedContact?.contact_id || this.state.form.contactId || E.dealFormContactId?.value || E.dealFormContactSelector?.value || '';
+    if (companyId) {
+      const company = await this.getFullCompanyRecord(companyId);
+      if (company) this.hydrateDealFromCompany(company);
+    }
+    if (contactId && !this.state.form.selectedContact?.full_name) {
+      const contact = await this.getFullContactRecord(contactId);
+      if (contact) this.hydrateDealFromContact(contact);
+    }
+  },
+  async submitForm() {
+    if (this.state.saveInFlight) return;
+    const mode = E.dealForm?.dataset.mode === 'edit' ? 'edit' : 'create';
+    if (mode === 'edit' && !canAnyPermission([['deals', 'update'], ['deals', 'manage']])) {
+      UI.toast('You do not have permission to update deals.');
+      return;
+    }
+    if (mode !== 'edit' && !this.canCreate()) {
+      UI.toast('You do not have permission to create deals.');
+      return;
+    }
+
+    const dealId = String(E.dealForm?.dataset.id || '').trim();
+    const selectedCompanyId = String(E.dealFormCompanyId?.value || E.dealFormCompanySelector?.value || '').trim();
+    const selectedContactId = String(E.dealFormContactId?.value || E.dealFormContactSelector?.value || '').trim();
+    let loadedSelection;
+    try {
+      loadedSelection = await window.CrmCompanyContactSelectors.validateCompanyContactSelection({ companyId: selectedCompanyId, contactId: selectedContactId, moduleName: 'deal' });
+    } catch (error) {
+      UI.toast(error?.message || 'Selected company data mismatch. Please reselect the company.');
+      return;
+    }
+    let deal = this.collectFormData();
+    deal = window.CrmCompanyContactSelectors.applyLoadedCompanySnapshot(deal, loadedSelection.loadedCompany, loadedSelection.loadedContact);
+    console.log('[SAVE CHECK] final payload:', deal);
+    const isDirectCreate = mode !== 'edit' && !String(deal.lead_id || '').trim();
+    if (isDirectCreate && !String(deal.company_id || '').trim()) {
+      UI.toast('Please select a company.');
+      return;
+    }
+    if (isDirectCreate && !String(deal.contact_id || '').trim()) {
+      UI.toast('Please select a contact.');
+      return;
+    }
+    if (!deal.full_name && !deal.company_name) {
+      UI.toast('Full name or company name is required.');
+      return;
+    }
+    if (!this.validateDealWorkflow(deal)) return;
+    if (!this.validateDealNewNote(deal)) return;
+
+    this.setFormBusy(true);
+    this.state.saveInFlight = true;
+    console.time('entity-save');
+    try {
+      if (mode === 'edit') {
+        console.log('[deal edit] save payload', deal);
+        await this.updateDeal(dealId, deal);
+        const savedDeal = await this.getDeal(dealId);
+        this.upsertLocalRow(savedDeal);
+        UI.toast('Deal updated.');
+      } else {
+        console.log('[deal edit] save payload', deal);
+        const response = await this.createDeal(deal);
+        const createdId = String(response?.id || response?.row?.id || response?.data?.id || '').trim();
+        const savedDeal = createdId ? await this.getDeal(createdId) : response;
+        this.upsertLocalRow(savedDeal || deal);
+        UI.toast('Deal created.');
+      }
+      this.closeForm();
+      this.rerenderVisibleTable();
+    } catch (error) {
+      if (isAuthError(error)) {
+        handleExpiredSession('Session expired. Please log in again.');
+        return;
+      }
+      UI.toast('Unable to save deal: ' + (error?.message || 'Unknown error'));
+    } finally {
+      console.timeEnd('entity-save');
+      this.state.saveInFlight = false;
+      this.setFormBusy(false);
+    }
+  },
+  async deleteDealById(dealUuid) {
+    if (!this.canEditDelete()) {
+      UI.toast('You do not have permission to delete deals.');
+      return;
+    }
+    const row = this.state.rows.find(item => item.id === dealUuid);
+    const label = row?.deal_id || dealUuid;
+    const confirmed = window.confirm(`Delete deal ${label}?`);
+    if (!confirmed) return;
+
+    this.setFormBusy(true);
+    try {
+      await this.deleteDeal(dealUuid);
+      this.removeLocalRow(dealUuid);
+      UI.toast('Deal deleted.');
+      this.closeForm();
+      this.rerenderVisibleTable();
+    } catch (error) {
+      if (isAuthError(error)) {
+        handleExpiredSession('Session expired. Please log in again.');
+        return;
+      }
+      UI.toast('Unable to delete deal: ' + (error?.message || 'Unknown error'));
+    } finally {
+      this.setFormBusy(false);
+    }
+  },
+  wire() {
+    if (this.state.initialized) return;
+
+    const bindState = (el, key) => {
+      if (!el) return;
+      const sync = () => {
+        this.state[key] = String(el.value || '').trim();
+        if (key === 'search') {
+          if (E.dealsSidebarSearchInput && el !== E.dealsSidebarSearchInput)
+            E.dealsSidebarSearchInput.value = this.state.search;
+          if (E.dealsSearchInput && el !== E.dealsSearchInput) E.dealsSearchInput.value = this.state.search;
+        }
+        this.state.page = 1;
+        this.loadAndRefresh({ force: true });
+      };
+      el.addEventListener('input', sync);
+      el.addEventListener('change', sync);
+    };
+
+    bindState(E.dealsSearchInput, 'search');
+    bindState(E.dealsSidebarSearchInput, 'search');
+    bindState(E.dealsStageFilter, 'stage');
+    bindState(E.dealsPriorityFilter, 'priority');
+    bindState(E.dealsServiceInterestFilter, 'serviceInterest');
+    bindState(E.dealsLeadSourceFilter, 'leadSource');
+    bindState(E.dealsAssignedToFilter, 'assignedTo');
+    bindState(E.dealsStartDateFilter, 'convertedFrom');
+    bindState(E.dealsEndDateFilter, 'convertedTo');
+
+    if (E.dealsResetBtn) {
+      E.dealsResetBtn.addEventListener('click', () => {
+        this.state.search = '';
+        this.state.stage = 'All';
+        this.state.priority = 'All';
+        this.state.serviceInterest = 'All';
+        this.state.leadSource = 'All';
+        this.state.assignedTo = 'All';
+        this.state.convertedFrom = '';
+        this.state.convertedTo = '';
+        this.state.kpiFilter = 'total';
+        this.state.page = 1;
+        this.loadAndRefresh({ force: true });
+      });
+    }
+
+    if (E.dealsRefreshBtn) {
+      E.dealsRefreshBtn.addEventListener('click', () => this.loadAndRefresh({ force: true }));
+    }
+    if (E.dealsExportCsvBtn) {
+      E.dealsExportCsvBtn.addEventListener('click', () => this.exportDealsCsv());
+    }
+    document.querySelectorAll('[data-deals-export-proxy]').forEach(button => {
+      button.addEventListener('click', () => this.exportDealsCsv());
+    });
+
+    if (E.dealsCreateBtn) {
+      E.dealsCreateBtn.addEventListener('click', () => {
+        if (!this.canCreate()) {
+          UI.toast('You do not have permission to create deals.');
+          return;
+        }
+        this.openForm();
+      });
+    }
+
+    if (E.dealsTbody) {
+      E.dealsTbody.addEventListener('click', event => {
+        const editId = event.target?.getAttribute('data-deal-edit');
+        if (editId) {
+          if (!this.canEdit()) return UI.toast('You do not have permission to edit deals.');
+          const row = this.state.rows.find(item => item.id === editId);
+          if (row) this.openForm(row);
+          return;
+        }
+        const deleteId = event.target?.getAttribute('data-deal-delete');
+        if (deleteId) {
+          if (!this.canDelete()) return UI.toast('You do not have permission to delete deals.');
+          this.deleteDealById(deleteId);
+        }
+        const createProposalDealId = event.target?.getAttribute('data-deal-create-proposal');
+        if (createProposalDealId && window.Proposals?.createFromDealFlow) {
+          const row = this.state.rows.find(item => item.id === createProposalDealId);
+          if (!row || String(row.stage || '').trim() !== 'Qualified') return UI.toast('Deal must be qualified before converting to proposal.');
+          if (!String(row.next_follow_up_at || '').trim()) return UI.toast('Next follow-up is required for every deal change.');
+          if (!this.canCreateProposalFromDeal()) return UI.toast('You do not have permission to create proposals from deals.');
+          const actionKey = `create-proposal:${createProposalDealId}`;
+          if (this.state.rowActionInFlight.has(actionKey)) return;
+          this.state.rowActionInFlight.add(actionKey);
+          const trigger = event.target?.closest?.('button');
+          if (trigger && 'disabled' in trigger) trigger.disabled = true;
+          Promise.resolve(
+            Proposals.createFromDealFlow(createProposalDealId, { openAfterCreate: true })
+          ).finally(() => {
+            this.state.rowActionInFlight.delete(actionKey);
+            if (trigger && 'disabled' in trigger) trigger.disabled = false;
+            this.render();
+          });
+          return;
+        }
+        const viewId = event.target?.getAttribute('data-deal-view');
+        if (viewId) {
+          this.openDetailsDrawer(viewId);
+          return;
+        }
+        if (event.target?.closest?.('.deal-actions-menu')) return;
+        const detailsRow = event.target?.closest?.('tr[data-deal-row]');
+        const detailsId = detailsRow?.getAttribute('data-deal-row');
+        if (detailsId) this.openDetailsDrawer(detailsId);
+      });
+      E.dealsTbody.addEventListener('keydown', event => {
+        if (!['Enter', ' '].includes(event.key)) return;
+        if (event.target?.closest?.('.deal-actions-menu')) return;
+        const row = event.target?.closest?.('tr[data-deal-row]');
+        const id = row?.getAttribute('data-deal-row');
+        if (!id) return;
+        event.preventDefault();
+        this.openDetailsDrawer(id);
+      });
+    }
+    const dealsAnalyticsGrid = document.getElementById('dealsAnalyticsGrid');
+    if (dealsAnalyticsGrid) {
+      const activate = card => {
+        if (!card) return;
+        const filter = card.getAttribute('data-kpi-filter');
+        if (!filter) return;
+        this.applyKpiFilter(filter);
+      };
+      dealsAnalyticsGrid.addEventListener('click', event => {
+        activate(event.target?.closest?.('[data-kpi-filter]'));
+      });
+      dealsAnalyticsGrid.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        const card = event.target?.closest?.('[data-kpi-filter]');
+        if (!card) return;
+        event.preventDefault();
+        activate(card);
+      });
+    }
+
+    if (E.dealFormCloseBtn) E.dealFormCloseBtn.addEventListener('click', () => this.closeForm());
+    if (E.dealFormCancelBtn) E.dealFormCancelBtn.addEventListener('click', () => this.closeForm());
+    if (E.dealFormModal) {
+      E.dealFormModal.addEventListener('click', event => {
+        if (event.target === E.dealFormModal) this.closeForm();
+      });
+    }
+    if (E.dealForm) {
+      E.dealForm.addEventListener('submit', event => {
+        event.preventDefault();
+        this.submitForm();
+      });
+    }
+    if (E.dealFormDeleteBtn) {
+      E.dealFormDeleteBtn.addEventListener('click', () => {
+        const id = String(E.dealForm?.dataset.id || '').trim();
+        if (id) this.deleteDealById(id);
+      });
+    }
+    if (E.dealFormCompanySelector) {
+      E.dealFormCompanySelector.addEventListener('change', async () => {
+        const companyId = String(E.dealFormCompanySelector.value || '').trim();
+        if (!companyId) return;
+        const company = await this.getFullCompanyRecord(companyId);
+        if (!company) return;
+        this.hydrateDealFromCompany(company);
+        if (E.dealForm?.dataset.mode !== 'edit') {
+          this.unlockSelect(E.dealFormCompanySelector);
+          this.unlockSelect(E.dealFormContactSelector);
+        }
+        window.CrmCompanyContactSelectors?.refresh?.().catch?.(() => {});
+      });
+    }
+    if (E.dealFormContactSelector) {
+      E.dealFormContactSelector.addEventListener('change', async () => {
+        const contactId = String(E.dealFormContactSelector.value || '').trim();
+        if (!contactId) return;
+        const contact = await this.getFullContactRecord(contactId);
+        if (!contact) return;
+        this.hydrateDealFromContact(contact);
+        if (E.dealForm?.dataset.mode !== 'edit') {
+          this.unlockSelect(E.dealFormCompanySelector);
+          this.unlockSelect(E.dealFormContactSelector);
+        }
+      });
+    }
+
+    this.state.initialized = true;
+  }
+};
+
+window.Deals = Deals;

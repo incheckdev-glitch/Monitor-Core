@@ -1,0 +1,1912 @@
+const NotificationSound = {
+  STORAGE_KEY: 'notifications:soundEnabled',
+  AUDIO_SRC: '/assets/notification.mp3',
+  audio: null,
+  audioUnlocked: false,
+  soundEnabled: true,
+  initialized: false,
+  seenNotificationIds: new Set(),
+  init() {
+    if (this.initialized) return;
+    this.initialized = true;
+    this.soundEnabled = this.readStoredPreference();
+    this.audio = new Audio(this.AUDIO_SRC);
+    this.audio.preload = 'auto';
+    this.audio.volume = 0.7;
+    const unlockHandler = () => this.unlock();
+    const options = { once: true, passive: true };
+    document.addEventListener('click', unlockHandler, options);
+    document.addEventListener('keydown', unlockHandler, options);
+    document.addEventListener('touchstart', unlockHandler, options);
+  },
+  readStoredPreference() {
+    try {
+      const raw = window.localStorage?.getItem(this.STORAGE_KEY);
+      if (raw === null) return true;
+      return raw === 'true';
+    } catch (error) {
+      console.debug('[notifications] unable to read sound preference', error);
+      return true;
+    }
+  },
+  unlock() {
+    if (this.audioUnlocked) return true;
+    if (!this.audio) this.audio = new Audio(this.AUDIO_SRC);
+    try {
+      const maybePromise = this.audio.play();
+      if (maybePromise && typeof maybePromise.then === 'function') {
+        maybePromise
+          .then(() => {
+            this.audio.pause();
+            this.audio.currentTime = 0;
+            this.audioUnlocked = true;
+          })
+          .catch(error => {
+            console.debug('[notifications] audio unlock blocked', error);
+          });
+      } else {
+        this.audio.pause();
+        this.audio.currentTime = 0;
+        this.audioUnlocked = true;
+      }
+    } catch (error) {
+      console.debug('[notifications] audio unlock failed', error);
+      return false;
+    }
+    return this.audioUnlocked;
+  },
+  hasSeen(notificationId) {
+    return this.seenNotificationIds.has(String(notificationId || ''));
+  },
+  markSeen(notificationId) {
+    const id = String(notificationId || '').trim();
+    if (!id) return false;
+    const alreadySeen = this.seenNotificationIds.has(id);
+    this.seenNotificationIds.add(id);
+    return !alreadySeen;
+  },
+  markSeenMany(items = []) {
+    items.forEach(item => this.markSeen(item?.notification_id));
+  },
+  isEnabled() {
+    return this.soundEnabled;
+  },
+  setEnabled(value) {
+    this.soundEnabled = Boolean(value);
+    try {
+      window.localStorage?.setItem(this.STORAGE_KEY, this.soundEnabled ? 'true' : 'false');
+    } catch (error) {
+      console.debug('[notifications] unable to persist sound preference', error);
+    }
+  },
+  play() {
+    if (!this.soundEnabled || !this.audioUnlocked) return;
+    if (!this.audio) this.audio = new Audio(this.AUDIO_SRC);
+    try {
+      this.audio.currentTime = 0;
+      const maybePromise = this.audio.play();
+      if (maybePromise && typeof maybePromise.catch === 'function') {
+        maybePromise.catch(error => {
+          console.debug('[notifications] audio play blocked', error);
+        });
+      }
+    } catch (error) {
+      console.debug('[notifications] audio play failed', error);
+    }
+  }
+};
+
+const logNotificationDevelopmentWarning = (...args) => {
+  const host = String(window.location?.hostname || '').toLowerCase();
+  if (window.RUNTIME_CONFIG?.DEBUG_API || host === 'localhost' || host === '127.0.0.1') console.warn(...args);
+};
+
+const Notifications = {
+
+  setRouteHash(hash = '') {
+    if (window.setAppHashRoute) return window.setAppHashRoute(hash);
+    const nextHash = String(hash || '').trim();
+    if (!nextHash || nextHash === window.location.hash) return;
+    try {
+      const searchParams = new URLSearchParams(String(window.location.search || '').replace(/^\?/, ''));
+      searchParams.delete('issue');
+      const nextSearch = searchParams.toString();
+      history.replaceState(null, '', `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${nextHash}`);
+    }
+    catch { window.location.hash = nextHash; }
+  },
+
+  POLL_INTERVAL_MS: 90000,
+  state: {
+    items: [],
+    rawResponse: null,
+    rawRows: [],
+    previewItems: [],
+    unreadCount: 0,
+    loading: false,
+    previewLoading: false,
+    filters: {
+      mode: 'all',
+      search: ''
+    },
+    page: 1,
+    limit: 50,
+    offset: 0,
+    returned: 0,
+    hasMore: false,
+    total: 0,
+    lastFetchedAt: '',
+    pollTimer: null,
+    realtimeChannel: null,
+    panelOpen: false,
+    unavailable: false,
+    unavailableReason: '',
+    permissionDenied: false,
+    permissionDeniedLogged: false,
+    refreshCycleId: 0,
+    cyclePermissionLogKey: '',
+    seenHydrated: false,
+    seenRealtimeNotificationIds: new Set(),
+    autoPopupTimer: null,
+    previewHovering: false,
+    communicationReadRequests: new Map(),
+    communicationReadCompletedAt: new Map()
+  },
+  normalize(item = {}) {
+    const source = item && typeof item === 'object' ? item : {};
+    const firstValue = (...values) => {
+      for (const value of values) {
+        if (value !== undefined && value !== null && value !== '') return value;
+      }
+      return '';
+    };
+    const parseBoolean = value => {
+      if (value === true || value === 1) return true;
+      if (value === false || value === 0 || value === null || value === undefined) return false;
+      if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (normalized === 'true' || normalized === '1' || normalized === 'yes') return true;
+        if (normalized === 'false' || normalized === '0' || normalized === '' || normalized === 'no') return false;
+      }
+      return false;
+    };
+    const parseMeta = value => {
+      if (!value) return {};
+      if (typeof value === 'object') return value;
+      if (typeof value === 'string') {
+        try {
+          return JSON.parse(value);
+        } catch {
+          return {};
+        }
+      }
+      return {};
+    };
+    const meta = {
+      ...parseMeta(source.metadata),
+      ...parseMeta(source.payload),
+      ...parseMeta(source.data),
+      ...parseMeta(firstValue(source.meta, source.meta_json))
+    };
+    const statusValue = String(firstValue(source.status, source.notification_status)).trim().toLowerCase();
+    const isRead = parseBoolean(firstValue(source.is_read, source.isRead, source.read)) || statusValue === 'read';
+    return {
+      id: String(firstValue(source.id, source.notification_id)).trim(),
+      notification_id: String(firstValue(source.notification_id, source.id)).trim(),
+      recipient_user_id: String(firstValue(source.recipient_user_id, source.user_id)).trim(),
+      created_at: String(firstValue(source.created_at, source.createdAt, source.timestamp, source.date)).trim(),
+      type: String(firstValue(source.type, source.notification_type)).trim().toLowerCase(),
+      title: String(firstValue(source.title, source.notification_title, 'Untitled notification')).trim(),
+      message: String(firstValue(source.message, source.notification_message, source.details)).trim(),
+      resource: String(firstValue(source.resource, source.target_resource)).trim().toLowerCase(),
+      resource_id: String(firstValue(source.resource_id, source.target_resource_id)).trim(),
+      action_required: parseBoolean(source.action_required),
+      action_label: String(firstValue(source.action_label, source.actionLabel)).trim(),
+      priority: String(firstValue(source.priority, source.priority_level)).trim().toLowerCase(),
+      status: String(firstValue(source.status, source.notification_status)).trim(),
+      is_read: isRead,
+      read: isRead,
+      unread: !isRead,
+      read_at: String(firstValue(source.read_at, source.readAt)).trim(),
+      link_target: String(firstValue(source.link_target, source.link, source.target_link, source.deep_link, source.url)).trim(),
+      conversation_id: String(firstValue(source.conversation_id, source.communication_id, source.related_conversation_id)).trim(),
+      source_id: String(firstValue(source.source_id)).trim(),
+      target_id: String(firstValue(source.target_id)).trim(),
+      related_record_id: String(firstValue(source.related_record_id)).trim(),
+      event_status: String(firstValue(source.event_status, source.eventStatus, meta.event_status, meta.eventStatus)).trim(),
+      meta
+    };
+  },
+  extractRows(payload) {
+    const candidates = [
+      payload,
+      payload?.rows,
+      payload?.items,
+      payload?.notifications,
+      payload?.data,
+      payload?.result,
+      payload?.payload,
+      payload?.data?.rows,
+      payload?.data?.items,
+      payload?.data?.notifications,
+      payload?.result?.rows,
+      payload?.result?.items,
+      payload?.result?.notifications,
+      payload?.payload?.rows,
+      payload?.payload?.items,
+      payload?.payload?.notifications
+    ];
+    for (const candidate of candidates) {
+      if (Array.isArray(candidate)) return candidate;
+    }
+    return [];
+  },
+  extractListResult(response) {
+    if (response && typeof response === 'object' && Array.isArray(response.rows)) {
+      const total = Number(response.total ?? response.rows.length) || response.rows.length;
+      const returned = Number(response.returned ?? response.rows.length) || response.rows.length;
+      const limit = Number(response.limit || this.state.limit || 50);
+      const page = Number(response.page || this.state.page || 1);
+      const offset = Number(response.offset ?? Math.max(0, (page - 1) * limit));
+      const hasMore = response.hasMore !== undefined
+        ? Boolean(response.hasMore)
+        : response.has_more !== undefined
+          ? Boolean(response.has_more)
+          : offset + returned < total;
+      return { rows: response.rows, total, returned, hasMore, page, limit, offset };
+    }
+    const rows = this.extractRows(response);
+    const limit = Number(this.state.limit || 50);
+    const page = Number(this.state.page || 1);
+    const returned = rows.length;
+    const offset = Math.max(0, (page - 1) * limit);
+    return { rows, total: rows.length, returned, hasMore: false, page, limit, offset };
+  },
+  formatDate(value) {
+    return U.formatDateTimeMMDDYYYYHHMM(value);
+  },
+  iconForType(type = '') {
+    const value = String(type || '').toLowerCase();
+    if (value.includes('approval')) return '✅';
+    if (value.includes('operation')) return '🧭';
+    if (value.includes('ticket')) return '🎫';
+    if (value.includes('assign')) return '👤';
+    if (value.includes('onboarding')) return '🚀';
+    return '🔔';
+  },
+  isHighPriority(item = {}) {
+    return String(item.priority || '').toLowerCase() === 'high';
+  },
+  isApproval(item = {}) {
+    return String(item.type || '').includes('approval');
+  },
+  isOperations(item = {}) {
+    const t = String(item.type || '');
+    const r = String(item.resource || '');
+    return t.includes('operation') && !r.includes('operations_onboarding');
+  },
+  isTicket(item = {}) {
+    const t = String(item.type || '');
+    const r = String(item.resource || '');
+    return t.includes('ticket') || r.includes('ticket') || r.includes('issues');
+  },
+  isEvent(item = {}) {
+    const t = String(item.type || '').toLowerCase();
+    const r = String(item.resource || '').toLowerCase();
+    return t.includes('event') || r.includes('event');
+  },
+  eventTitleMarkup(item = {}, fallback = '—') {
+    const title = U.escapeHtml(item.title || fallback);
+    const titleClass = this.isEvent(item) && globalThis.isCancelledEvent?.({ status: item.event_status })
+      ? 'cancelled-event-title'
+      : '';
+    return titleClass ? `<span class="${titleClass}">${title}</span>` : title;
+  },
+  isAssignment(item = {}) {
+    const t = String(item.type || '');
+    return t.includes('assignment') || t.includes('assigned');
+  },
+  getFilteredItems() {
+    const mode = this.state.filters.mode || 'all';
+    const search = String(this.state.filters.search || '').trim().toLowerCase();
+    let list = Array.isArray(this.state.items) ? this.state.items.slice() : [];
+    if (mode === 'unread') list = list.filter(item => !item.is_read);
+    if (mode === 'approvals') list = list.filter(item => this.isApproval(item));
+    if (mode === 'operations') list = list.filter(item => this.isOperations(item));
+    if (mode === 'tickets') list = list.filter(item => this.isTicket(item));
+    if (mode === 'assignments') list = list.filter(item => this.isAssignment(item));
+    if (mode === 'high') list = list.filter(item => this.isHighPriority(item));
+
+    if (search) {
+      const terms = search.split(/\s+/).filter(Boolean);
+      list = list.filter(item => {
+        const hay = [
+          item.title,
+          item.message,
+          item.type,
+          item.priority,
+          item.resource,
+          item.resource_id,
+          item.action_label
+        ]
+          .join(' ')
+          .toLowerCase();
+        return terms.every(term => hay.includes(term));
+      });
+    }
+    return list;
+  },
+  getTitleFromAny(item = {}) {
+    const source = item && typeof item === 'object' ? item : {};
+    return String(
+      source.title ||
+      source.notification_title ||
+      source.message ||
+      source.notification_message ||
+      source.details ||
+      '—'
+    ).trim() || '—';
+  },
+  toFallbackView(item = {}) {
+    const source = item && typeof item === 'object' ? item : {};
+    const normalized = this.normalize(source);
+    return {
+      notification_id: normalized.notification_id,
+      title: normalized.title,
+      message: normalized.message,
+      type: String(source.type || source.notification_type || '').trim(),
+      resource: normalized.resource,
+      created_at: normalized.created_at,
+      status: normalized.status,
+      event_status: normalized.event_status,
+      action_label: normalized.action_label,
+      meta: normalized.meta
+    };
+  },
+  messageFromError(error) {
+    const parts = [
+      error?.message,
+      error?.details,
+      error?.hint,
+      error?.error_description,
+      error?.code,
+      error?.status,
+      error?.statusCode,
+      error
+    ];
+    return parts
+      .map(part => String(part || '').toLowerCase())
+      .filter(Boolean)
+      .join(' ');
+  },
+  isNotificationsUnavailableError(error) {
+    const hay = this.messageFromError(error);
+    return (
+      hay.includes("could not find the table 'public.notifications' in the schema cache") ||
+      (hay.includes('schema cache') && hay.includes('notifications')) ||
+      (hay.includes('public.notifications') && hay.includes('not found')) ||
+      hay.includes('pgrst205') ||
+      (hay.includes('404') && hay.includes('notifications')) ||
+      (hay.includes('rest') && hay.includes('notifications') && hay.includes('not found'))
+    );
+  },
+  setUnavailable(reason = 'Notifications feature unavailable') {
+    if (this.state.unavailable) return;
+    this.state.unavailable = true;
+    this.state.unavailableReason = String(reason || 'Notifications feature unavailable');
+    this.state.items = [];
+    this.state.previewItems = [];
+    this.state.rawResponse = null;
+    this.state.rawRows = [];
+    this.state.unreadCount = 0;
+    this.state.loading = false;
+    this.state.previewLoading = false;
+    this.stopPolling();
+    this.stopRealtime();
+    if (E.notificationBellBtn) {
+      E.notificationBellBtn.disabled = true;
+      E.notificationBellBtn.setAttribute('aria-disabled', 'true');
+      E.notificationBellBtn.title = 'Notifications are unavailable in this environment.';
+    }
+    if (E.notificationsTab) {
+      E.notificationsTab.classList.add('disabled');
+      E.notificationsTab.setAttribute('aria-disabled', 'true');
+      E.notificationsTab.title = 'Notifications are unavailable in this environment.';
+    }
+    this.renderBell();
+    this.renderPreview();
+    this.renderHub();
+    console.warn('[notifications] notifications feature marked unavailable for this session', { reason: this.state.unavailableReason });
+  },
+  clearUnavailable() {
+    this.state.unavailable = false;
+    this.state.unavailableReason = '';
+    if (E.notificationBellBtn) {
+      E.notificationBellBtn.disabled = false;
+      E.notificationBellBtn.removeAttribute('aria-disabled');
+      E.notificationBellBtn.title = '';
+    }
+    if (E.notificationsTab) {
+      E.notificationsTab.classList.remove('disabled');
+      E.notificationsTab.removeAttribute('aria-disabled');
+      E.notificationsTab.title = '';
+    }
+  },
+  setPermissionDenied(context = 'notifications', error = null) {
+    this.state.permissionDenied = true;
+    this.state.items = [];
+    this.state.previewItems = [];
+    this.state.unreadCount = 0;
+    this.state.rawResponse = null;
+    this.state.rawRows = [];
+    this.state.loading = false;
+    this.state.previewLoading = false;
+    const cycleLogKey = `${this.state.refreshCycleId}:${String(context || 'notifications')}`;
+    if (!this.state.permissionDeniedLogged || this.state.cyclePermissionLogKey !== cycleLogKey) {
+      console.info('[notifications] permission denied for current role; using empty state.', {
+        context,
+        message: error?.message || ''
+      });
+      this.state.permissionDeniedLogged = true;
+      this.state.cyclePermissionLogKey = cycleLogKey;
+    }
+    this.renderBell();
+    this.renderPreview();
+    this.renderHub();
+  },
+  hasPermission(action) {
+    if (!Session.isAuthenticated()) return false;
+    if (!Permissions.state?.loaded) return true;
+    return Permissions.canPerformAction('notifications', action, Session.role());
+  },
+  async refreshUnreadCount() {
+    if (!Session.isAuthenticated()) {
+      this.state.unreadCount = 0;
+      this.renderBell();
+      return 0;
+    }
+    if (this.state.unavailable) {
+      this.state.unreadCount = 0;
+      this.renderBell();
+      return 0;
+    }
+    if (this.state.permissionDenied) {
+      this.state.unreadCount = 0;
+      this.renderBell();
+      return 0;
+    }
+    if (!this.hasPermission('get_unread_count')) {
+      this.setPermissionDenied('get_unread_count');
+      return 0;
+    }
+    const isNotificationPermissionError = error => {
+      if (typeof isPermissionError === 'function' && isPermissionError(error)) return true;
+      const message = this.messageFromError(error);
+      return (
+        (message.includes('forbidden') || message.includes('permission')) &&
+        (message.includes('notification') || message.includes('get_unread_count'))
+      );
+    };
+    const isSessionAuthError = error => {
+      if (typeof isAuthError === 'function') return isAuthError(error);
+      const message = this.messageFromError(error);
+      return message.includes('unauthorized') || message.includes('invalid session') || message.includes('expired session');
+    };
+    try {
+      const count = await Api.getNotificationUnreadCount();
+      this.state.unreadCount = Number(count) || 0;
+      this.renderBell();
+      return this.state.unreadCount;
+    } catch (error) {
+      if (isNotificationPermissionError(error)) {
+        this.setPermissionDenied('get_unread_count', error);
+        return 0;
+      }
+      if (this.isNotificationsUnavailableError(error)) {
+        this.setUnavailable(error?.message || 'Notifications feature unavailable');
+        return 0;
+      }
+      if (isSessionAuthError(error)) {
+        console.warn('Notification unread count refresh detected a true session/auth error; expiring session.', error);
+        await handleExpiredSession('Session expired while refreshing notifications.');
+        return 0;
+      }
+      console.warn('Unable to refresh notification unread count', error);
+      return this.state.unreadCount;
+    }
+  },
+  async fetchPreview(force = false) {
+    if (!Session.isAuthenticated()) {
+      this.state.previewItems = [];
+      this.renderPreview();
+      return;
+    }
+    if (this.state.unavailable) {
+      this.state.previewItems = [];
+      this.renderPreview();
+      return;
+    }
+    if (this.state.permissionDenied) {
+      this.state.previewItems = [];
+      this.renderPreview();
+      return;
+    }
+    if (!this.hasPermission('list')) {
+      this.setPermissionDenied('list_preview');
+      return;
+    }
+    this.state.previewLoading = true;
+    this.renderPreview();
+    try {
+      const response = await Api.listNotifications({
+        limit: 10,
+        forceRefresh: force
+      });
+      const rows = this.extractRows(response).map(item => this.normalize(item)).filter(item => !this.isRemovedModuleNotification(item));
+      this.state.previewItems = rows.slice(0, 10);
+      this.handleIncomingNotifications(rows, { source: 'preview' });
+    } catch (error) {
+      if (this.isNotificationsUnavailableError(error)) {
+        this.setUnavailable(error?.message || 'Notifications feature unavailable');
+        this.state.previewItems = [];
+      } else if (typeof isPermissionError === 'function' && isPermissionError(error)) {
+        this.setPermissionDenied('list_preview', error);
+      } else {
+        console.warn('Unable to load notification preview', error);
+        this.state.previewItems = [];
+      }
+    } finally {
+      this.state.previewLoading = false;
+      this.renderPreview();
+    }
+  },
+  async loadHub(force = false) {
+    if (!E.notificationsView?.classList.contains('active') && !force) return;
+    if (force && E.notificationsView?.classList.contains('active') && !this.state.lastFetchedAt) {
+      this.state.filters.mode = 'all';
+      this.state.filters.search = '';
+      this.state.page = 1;
+      if (E.notificationsSearchInput) E.notificationsSearchInput.value = '';
+      if (E.notificationsFilterButtons) {
+        E.notificationsFilterButtons.querySelectorAll('[data-filter]').forEach(btn => {
+          btn.classList.toggle('active', btn.getAttribute('data-filter') === 'all');
+        });
+      }
+    }
+    if (!Session.isAuthenticated()) {
+      this.state.items = [];
+      this.renderHub();
+      return;
+    }
+    if (this.state.unavailable) {
+      this.state.items = [];
+      this.renderHub();
+      return;
+    }
+    if (this.state.permissionDenied) {
+      this.state.items = [];
+      this.renderHub();
+      return;
+    }
+    if (!this.hasPermission('list')) {
+      this.setPermissionDenied('list_hub');
+      return;
+    }
+    this.state.loading = true;
+    this.renderHub();
+    try {
+      const mode = this.state.filters.mode || 'all';
+      const search = this.state.filters.search || '';
+      const payload = {
+        limit: this.state.limit,
+        page: this.state.page,
+        mode,
+        unread_only: mode === 'unread',
+        search,
+        priority: mode === 'high' ? 'high' : '',
+        sort_by: 'created_at',
+        sort_dir: 'desc'
+      };
+
+      const response = await Api.listNotifications(payload);
+      this.state.rawResponse = response;
+      console.debug('[notifications] raw response', response);
+      const normalizedList = this.extractListResult(response);
+      const rows = normalizedList.rows;
+      this.state.rawRows = Array.isArray(rows) ? rows.slice() : [];
+      console.debug('[notifications] extracted rows', rows);
+      const normalizedItems = rows.map(item => this.normalize(item)).filter(item => !this.isRemovedModuleNotification(item));
+      console.debug('[notifications] normalized items', normalizedItems);
+      console.debug('[notifications] active filters', this.state.filters);
+      this.state.items = normalizedItems;
+      this.state.total = normalizedList.total;
+      this.state.returned = normalizedList.returned;
+      this.state.hasMore = normalizedList.hasMore;
+      this.state.page = normalizedList.page;
+      this.state.limit = normalizedList.limit;
+      this.state.offset = normalizedList.offset;
+      this.handleIncomingNotifications(normalizedItems, { source: 'hub' });
+      this.state.lastFetchedAt = new Date().toISOString();
+      if (rows.length > 0 && normalizedItems.length === 0) {
+        this.state.rawRows = rows.slice();
+      }
+    } catch (error) {
+      if (this.isNotificationsUnavailableError(error)) {
+        this.setUnavailable(error?.message || 'Notifications feature unavailable');
+      } else if (typeof isPermissionError === 'function' && isPermissionError(error)) {
+        this.setPermissionDenied('list_hub', error);
+      } else {
+        console.warn('Unable to load notifications hub', error);
+        this.state.items = [];
+        this.state.rawResponse = null;
+        this.state.rawRows = [];
+        UI.toast('Unable to load notifications right now.');
+      }
+    } finally {
+      this.state.loading = false;
+      this.renderHub();
+    }
+  },
+  async refreshAll(force = false) {
+    this.state.refreshCycleId = Number(this.state.refreshCycleId || 0) + 1;
+    if (this.state.unavailable) {
+      this.renderBell();
+      this.renderPreview();
+      this.renderHub();
+      return;
+    }
+    if (this.state.permissionDenied) {
+      this.renderBell();
+      this.renderPreview();
+      this.renderHub();
+      return;
+    }
+    await this.refreshUnreadCount();
+    if (this.state.unavailable || this.state.permissionDenied) return;
+    await this.fetchPreview(force);
+    if (this.state.unavailable || this.state.permissionDenied) return;
+    await this.loadHub(force);
+  },
+  handleIncomingNotifications(items = [], options = {}) {
+    const list = Array.isArray(items) ? items : [];
+    if (!list.length) return;
+    const userId = String(Session.userId?.() || '').trim();
+    if (!this.state.seenHydrated) {
+      NotificationSound.markSeenMany(list);
+      this.state.seenHydrated = true;
+      return;
+    }
+    list.forEach(item => {
+      const id = String(item?.notification_id || '').trim();
+      if (!id) return;
+      if (NotificationSound.hasSeen(id)) return;
+      NotificationSound.markSeen(id);
+      const recipientId = String(item?.recipient_user_id || '').trim();
+      const belongsToCurrentUser = !recipientId || !userId || recipientId === userId;
+      if (!belongsToCurrentUser) return;
+      if (item.is_read) return;
+      NotificationSound.play();
+      console.debug('[notifications] played notification sound', {
+        source: options.source || 'unknown',
+        notificationId: id
+      });
+    });
+  },
+  renderSoundToggle() {
+    if (!E.notificationSoundToggleBtn) return;
+    const enabled = NotificationSound.isEnabled();
+    E.notificationSoundToggleBtn.textContent = enabled ? '🔊 Sound on' : '🔇 Sound off';
+    E.notificationSoundToggleBtn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+    E.notificationSoundToggleBtn.title = enabled ? 'Mute notification sound' : 'Unmute notification sound';
+  },
+  isUnreadNotification(notification) {
+    if (!notification) return false;
+    if (notification.is_read === true) return false;
+    if (notification.read === true) return false;
+    if (notification.unread === false) return false;
+
+    const status = String(notification.status || '').toLowerCase();
+    if (['read', 'seen', 'opened', 'done'].includes(status)) return false;
+
+    return true;
+  },
+  updateLocalRead(notificationId) {
+    if (!notificationId) return;
+    const update = list => list.map(item => {
+      if (String(item.notification_id || item.id || '').trim() !== String(notificationId || '').trim()) return item;
+      return {
+        ...item,
+        is_read: true,
+        read: true,
+        unread: false,
+        status: 'read',
+        read_at: new Date().toISOString()
+      };
+    });
+    this.state.items = update(this.state.items);
+    this.state.previewItems = update(this.state.previewItems);
+  },
+  sortByNewest(items = []) {
+    return (Array.isArray(items) ? items.slice() : []).sort((a, b) => {
+      const aTime = Date.parse(a?.created_at || '');
+      const bTime = Date.parse(b?.created_at || '');
+      if (Number.isNaN(aTime) && Number.isNaN(bTime)) return 0;
+      if (Number.isNaN(aTime)) return 1;
+      if (Number.isNaN(bTime)) return -1;
+      return bTime - aTime;
+    });
+  },
+  recalculateUnreadCount() {
+    this.state.unreadCount = Array.isArray(this.state.items)
+      ? this.state.items.filter(item => this.isUnreadNotification(item)).length
+      : 0;
+    return this.state.unreadCount;
+  },
+  upsertNotification(rawItem) {
+    const item = this.normalize(rawItem);
+    const id = String(item?.notification_id || '').trim();
+    if (!id) return null;
+
+    const upsertInto = (arr, max = null) => {
+      const next = Array.isArray(arr) ? [...arr] : [];
+      const idx = next.findIndex(row => String(row?.notification_id || '').trim() === id);
+      if (idx >= 0) next[idx] = item;
+      else next.unshift(item);
+      next.sort((a, b) => {
+        const ad = new Date(a?.created_at || 0).getTime();
+        const bd = new Date(b?.created_at || 0).getTime();
+        return bd - ad;
+      });
+      return Number.isFinite(max) ? next.slice(0, max) : next;
+    };
+
+    this.state.items = upsertInto(this.state.items);
+    this.state.previewItems = upsertInto(this.state.previewItems, 10);
+    this.recalculateUnreadCount();
+    return item;
+  },
+  removeNotification(notificationId) {
+    const id = String(notificationId || '').trim();
+    if (!id) return;
+    this.state.items = (this.state.items || []).filter(row => String(row?.notification_id || '').trim() !== id);
+    this.state.previewItems = (this.state.previewItems || []).filter(row => String(row?.notification_id || '').trim() !== id);
+    this.recalculateUnreadCount();
+  },
+  showInstantNotificationPopup(item) {
+    if (!item) return;
+    this.renderBell();
+    this.renderPreview();
+    this.renderHub();
+
+    try {
+      if (window.UI?.toast) {
+        const title = String(item.title || 'Notification').trim();
+        const message = String(item.message || '').trim();
+        UI.toast(message ? `${title}: ${message}` : title);
+      }
+    } catch (error) {
+      console.warn('[notifications] toast failed', error);
+    }
+
+    if (!E.notificationsView?.classList.contains('active')) {
+      this.openPanel();
+      if (this.state.autoPopupTimer) clearTimeout(this.state.autoPopupTimer);
+      this.state.autoPopupTimer = window.setTimeout(() => {
+        if (!this.state.panelOpen) return;
+        if (this.state.previewHovering) return;
+        if (E.notificationsView?.classList.contains('active')) return;
+        this.closePanel();
+      }, 5000);
+    }
+  },
+  async setAppBadgeCount(count = 0) {
+    const unread = Math.max(0, Number(count) || 0);
+    try {
+      if (!('setAppBadge' in navigator) || !('clearAppBadge' in navigator)) return;
+      if (unread > 0) await navigator.setAppBadge(unread);
+      else await navigator.clearAppBadge();
+    } catch (_) {
+      // Badge API unavailable or blocked; ignore.
+    }
+  },
+  upsertForegroundPushPayload(payload = {}) {
+    const source = payload && typeof payload === 'object' ? payload : {};
+    const meta = source?.data && typeof source.data === 'object' ? source.data : {};
+    const notificationId = String(
+      meta.notification_id || source.notification_id || source.id || `push-${Date.now()}`
+    ).trim();
+    const createdAt = String(source.timestamp || new Date().toISOString()).trim();
+    const normalized = this.normalize({
+      notification_id: notificationId,
+      recipient_user_id: String(Session.userId?.() || '').trim(),
+      title: source.title || 'InCheck360 MonitorCore',
+      message: source.body || 'You have a new notification.',
+      type: meta.type || 'push',
+      resource: meta.resource || '',
+      resource_id: meta.resource_id || meta.record_id || meta.conversation_id || meta.conversationId || meta.ticket_id || meta.approval_id || meta.onboarding_id || '',
+      link_target: source.url || meta.url || '',
+      created_at: createdAt,
+      is_read: false,
+      status: 'unread',
+      meta
+    });
+    this.upsertNotification(normalized);
+    this.renderBell();
+    this.renderPreview();
+    if (E.notificationsView?.classList.contains('active')) this.renderHub();
+  },
+  handleRealtimeInsert(raw) {
+    const item = this.normalize(raw);
+    const id = String(item?.notification_id || '').trim();
+    if (!id) return;
+    if (this.state.seenRealtimeNotificationIds.has(id)) return;
+    this.state.seenRealtimeNotificationIds.add(id);
+
+    const saved = this.upsertNotification(item);
+    if (!saved) return;
+
+    if (!saved.is_read) {
+      this.showInstantNotificationPopup(saved);
+    } else {
+      this.renderBell();
+      this.renderPreview();
+      this.renderHub();
+    }
+
+    this.refreshUnreadCount();
+  },
+  handleRealtimeUpdate(raw) {
+    const item = this.upsertNotification(raw);
+    if (!item) return;
+    this.renderBell();
+    this.renderPreview();
+    this.renderHub();
+  },
+  handleRealtimeDelete(raw) {
+    const id = String(raw?.notification_id || raw?.id || '').trim();
+    if (!id) return;
+    this.removeNotification(id);
+    this.renderBell();
+    this.renderPreview();
+    this.renderHub();
+  },
+  async markRead(notificationId) {
+    if (!notificationId || !Session.isAuthenticated() || this.state.unavailable) return;
+    if (!this.hasPermission('mark_read')) {
+      this.setPermissionDenied('mark_read');
+      return;
+    }
+    this.updateLocalRead(notificationId);
+    this.renderHub();
+    this.renderPreview();
+    try {
+      await Api.markNotificationRead(notificationId);
+    } catch (error) {
+      console.warn('Unable to mark notification as read', error);
+    }
+    await this.refreshUnreadCount();
+    if (this.state.filters.mode === 'unread') await this.loadHub(true);
+  },
+  async markAllRead() {
+    if (!Session.isAuthenticated() || this.state.unavailable) return;
+    if (!this.hasPermission('mark_all_read')) {
+      this.setPermissionDenied('mark_all_read');
+      return;
+    }
+    try {
+      await Api.markAllNotificationsRead();
+      this.state.items = this.state.items.map(item => ({ ...item, is_read: true, status: item.status || 'read' }));
+      this.state.previewItems = this.state.previewItems.map(item => ({ ...item, is_read: true, status: item.status || 'read' }));
+      this.state.unreadCount = 0;
+      this.renderBell();
+      this.renderPreview();
+      this.renderHub();
+      UI.toast('All notifications marked as read.');
+      await this.loadHub(true);
+    } catch (error) {
+      console.warn('Unable to mark all notifications as read', error);
+      UI.toast('Unable to mark all notifications as read.');
+    }
+  },
+  async handleNotificationClick(item) {
+    if (!item) return;
+    try {
+      await this.markNotificationRead(item);
+      await this.routeNotification(item);
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error);
+      await this.routeNotification(item);
+    }
+  },
+  waitForNextFrame() {
+    return new Promise(resolve => {
+      window.requestAnimationFrame(() => resolve());
+    });
+  },
+  normalizeNotificationToken(value = '') {
+    return String(value || '')
+      .trim()
+      .toLowerCase();
+  },
+  resolveNotificationResource(notification = {}) {
+    const meta = notification?.meta && typeof notification.meta === 'object' ? notification.meta : {};
+    const firstValue = (...values) => {
+      for (const value of values) {
+        if (value !== undefined && value !== null && value !== '') return value;
+      }
+      return '';
+    };
+    const cleanToken = value => String(value || '').trim().toLowerCase();
+    const normalizeResourceToken = value => {
+      const raw = cleanToken(value);
+      if (!raw) return '';
+
+      // Deep links can arrive as /#communication_centre?conversation_id=...
+      // or as a full URL. Extract the hash route before mapping the resource.
+      let route = raw;
+      try {
+        if (/^https?:\/\//i.test(route)) {
+          route = new URL(route).hash || route;
+        }
+      } catch (_) {}
+      route = route
+        .replace(/^https?:\/\/[^#]+/i, '')
+        .replace(/^\/?#/, '')
+        .replace(/^#/, '')
+        .split('?')[0]
+        .split('&')[0]
+        .trim()
+        .toLowerCase();
+
+      const map = {
+        issues: 'tickets',
+        issue: 'tickets',
+        ticket: 'tickets',
+        tickets: 'tickets',
+        event: 'events',
+        events: 'events',
+        workflow: 'workflow',
+        workflow_approvals: 'workflow_approvals',
+        approval_required: 'workflow',
+        approved: 'workflow',
+        rejected: 'workflow',
+        workflow_approval_request: 'workflow',
+        workflow_decision: 'workflow',
+        proposals: 'proposals',
+        proposal: 'proposals',
+        agreements: 'agreements',
+        agreement: 'agreements',
+        invoices: 'invoices',
+        invoice: 'invoices',
+        receipts: 'receipts',
+        receipt: 'receipts',
+        operations_onboarding: 'clients',
+        onboarding: 'clients',
+        technical_admin: 'technical_admin',
+        technical_admin_requests: 'technical_admin',
+        clients: 'clients',
+        client: 'clients',
+        leads: 'leads',
+        lead: 'leads',
+        deals: 'deals',
+        deal: 'deals',
+        csm_activity: 'csm_activities',
+        csm_activities: 'csm_activities',
+        csm: 'csm_activities',
+        communication_centre: 'communication_centre',
+        communication_center: 'communication_centre',
+        communicationcentre: 'communication_centre',
+        communicationcenter: 'communication_centre',
+        'communication-centre': 'communication_centre',
+        'communication-center': 'communication_centre',
+        communication: 'communication_centre'
+      };
+      if (map[route]) return map[route];
+      if (route.includes('communication_centre') || route.includes('communication-centre') || route.includes('communicationcentre') || route.includes('communication_center') || route === 'communication') return 'communication_centre';
+      if (route.includes('ticket') || route.includes('issue')) return 'tickets';
+      if (route.includes('event')) return 'events';
+      if (route.includes('workflow') || route.includes('approval')) return 'workflow';
+      if (route.includes('proposal')) return 'proposals';
+      if (route.includes('agreement')) return 'agreements';
+      if (route.includes('invoice')) return 'invoices';
+      if (route.includes('receipt')) return 'receipts';
+      if (route.includes('onboarding')) return 'clients';
+      if (route.includes('technical_admin') || route.includes('technical-admin')) return 'technical_admin';
+      if (route.includes('client')) return 'clients';
+      if (route.includes('lead')) return 'leads';
+      if (route.includes('deal')) return 'deals';
+      if (route.includes('csm')) return 'csm_activities';
+      return route || raw;
+    };
+
+    // Resource/meta are more reliable than link_target. link_target is a URL, not a resource key.
+    const candidates = [
+      notification?.resource,
+      meta?.resource,
+      meta?.module,
+      meta?.target_resource,
+      notification?.target_resource,
+      notification?.type,
+      notification?.link_target,
+      meta?.url
+    ];
+    const selected = candidates.map(normalizeResourceToken).find(Boolean);
+    return selected || normalizeResourceToken(firstValue(notification?.link_target, meta?.url));
+  },
+  isRemovedModuleNotification(notification = {}) {
+    const resource = this.resolveNotificationResource(notification);
+    const meta = notification?.meta && typeof notification.meta === 'object' ? JSON.stringify(notification.meta) : '';
+    const searchable = [resource, notification?.resource, notification?.type, notification?.title, notification?.action_label, notification?.link_target, meta]
+      .map(value => String(value || '').trim().toLowerCase())
+      .join(' ');
+    return resource === 'technical_admin' || /technical[_ -]?(admin|request)/.test(searchable);
+  },
+  resolveNotificationTargetId(notification = {}) {
+    const meta = notification?.meta && typeof notification.meta === 'object' ? notification.meta : {};
+    const firstValue = (...values) => {
+      for (const value of values) {
+        if (value !== undefined && value !== null && value !== '') return value;
+      }
+      return '';
+    };
+    const parseIdFromLink = value => {
+      const raw = String(value || '').trim();
+      if (!raw) return '';
+      try {
+        const url = /^https?:\/\//i.test(raw) ? new URL(raw) : new URL(raw, window.location.origin);
+        const hash = String(url.hash || '').replace(/^#/, '');
+        const query = hash.includes('?') ? hash.split('?').slice(1).join('?') : url.search.replace(/^\?/, '');
+        const params = new URLSearchParams(query || '');
+        const pathMatch = `${url.pathname || ''}/${hash.split('?')[0] || ''}`.match(/(?:communication-centre|communication|communication_centre)\/conversation\/([^/?#]+)/i);
+        return String(
+          params.get('conversation_id') ||
+          params.get('conversationId') ||
+          params.get('communication_centre_id') ||
+          params.get('id') ||
+          (pathMatch ? decodeURIComponent(pathMatch[1]) : '') ||
+          ''
+        ).trim();
+      } catch (_) {
+        const query = raw.includes('?') ? raw.split('?').slice(1).join('?') : '';
+        const params = new URLSearchParams(query || '');
+        return String(params.get('conversation_id') || params.get('conversationId') || params.get('id') || '').trim();
+      }
+    };
+
+    return String(
+      firstValue(
+        notification?.resource_id,
+        notification?.target_resource_id,
+        notification?.record_id,
+        meta?.conversation_id,
+        meta?.conversationId,
+        meta?.communication_centre_id,
+        meta?.communicationCentreId,
+        meta?.resource_id,
+        meta?.target_resource_id,
+        meta?.entity_id,
+        meta?.record_id,
+        meta?.id,
+        parseIdFromLink(notification?.link_target),
+        parseIdFromLink(meta?.url),
+        meta?.ticket_uuid,
+        meta?.ticket_id,
+        meta?.event_id,
+        meta?.proposal_id,
+        meta?.agreement_id,
+        meta?.invoice_id,
+        meta?.receipt_id,
+        meta?.onboarding_uuid,
+        meta?.onboarding_id,
+        meta?.client_id,
+        meta?.lead_id,
+        meta?.deal_id
+      )
+    ).trim();
+  },
+  notificationMatchesConversation(notification = {}, conversationId = '') {
+    const wanted = String(conversationId || '').trim().toLowerCase();
+    if (!wanted) return false;
+    const meta = notification?.meta && typeof notification.meta === 'object' ? notification.meta : {};
+    const directValues = [
+      notification?.conversation_id, notification?.communication_id, notification?.related_conversation_id,
+      notification?.source_id, notification?.target_id, notification?.related_record_id,
+      notification?.resource_id, notification?.target_resource_id, notification?.entity_id,
+      meta?.conversation_id, meta?.communication_id, meta?.related_conversation_id,
+      meta?.resource_id, meta?.entity_id
+    ];
+    if (directValues.some(value => String(value || '').trim().toLowerCase() === wanted)) return true;
+    return [notification?.link_target, notification?.deep_link, notification?.url, meta?.deep_link, meta?.url]
+      .some(value => String(value || '').toLowerCase().includes(wanted));
+  },
+  applyCommunicationNotificationsRead(conversationId = '') {
+    const mark = list => (Array.isArray(list) ? list : []).map(item => {
+      if (!this.isUnreadNotification(item) || !this.notificationMatchesConversation(item, conversationId)) return item;
+      return { ...item, is_read: true, read: true, unread: false, status: 'read', read_at: new Date().toISOString() };
+    });
+    this.state.items = mark(this.state.items);
+    this.state.previewItems = mark(this.state.previewItems);
+    this.recalculateUnreadCount();
+    this.renderBell();
+    this.renderPreview();
+    this.renderHub();
+  },
+  async markCommunicationNotificationsRead(conversationId = '') {
+    const normalizedConversationId = String(conversationId || '').trim();
+    if (!normalizedConversationId || !Session.isAuthenticated() || this.state.unavailable) return 0;
+    const requestKey = `${String(Session.userId?.() || '').trim()}:${normalizedConversationId}`;
+
+    const existingRequest = this.state.communicationReadRequests.get(requestKey);
+    if (existingRequest) return existingRequest;
+    const lastCompletedAt = Number(this.state.communicationReadCompletedAt.get(requestKey) || 0);
+    if (Date.now() - lastCompletedAt < 5000) return 0;
+
+    const request = (async () => {
+      try {
+        const client = window.SupabaseClient?.getClient?.();
+        if (!client?.rpc) return 0;
+        const { data, error } = await client.rpc('mark_conversation_notifications_read', {
+          p_conversation_id: normalizedConversationId,
+          p_user_id: String(Session.userId?.() || '').trim()
+        });
+        if (error) throw error;
+        this.state.communicationReadCompletedAt.set(requestKey, Date.now());
+        this.applyCommunicationNotificationsRead(normalizedConversationId);
+        await Promise.allSettled([
+          this.fetchPreview(true),
+          this.refreshUnreadCount(),
+          E.notificationsView?.classList.contains('active') ? this.loadHub(true) : Promise.resolve()
+        ]);
+        return Number(data || 0);
+      } catch (error) {
+        logNotificationDevelopmentWarning('[notifications] unable to mark communication notifications as read', error);
+        return 0;
+      } finally {
+        this.state.communicationReadRequests.delete(requestKey);
+      }
+    })();
+
+    this.state.communicationReadRequests.set(requestKey, request);
+    return request;
+  },
+  async markNotificationRead(notification = {}) {
+    const notificationId = String(notification?.notification_id || notification?.id || '').trim();
+    if (!notificationId || !this.isUnreadNotification(notification)) return true;
+    if (!Session.isAuthenticated() || this.state.unavailable) return false;
+    if (!this.hasPermission('mark_read')) {
+      this.setPermissionDenied('mark_read');
+      return false;
+    }
+    this.updateLocalRead(notificationId);
+    this.recalculateUnreadCount();
+    this.renderBell();
+    this.renderPreview();
+    this.renderHub();
+    try {
+      const client = window.SupabaseClient?.getClient?.();
+      if (client?.rpc) {
+        const { error } = await client.rpc('mark_notification_read', {
+          p_notification_id: notificationId
+        });
+        if (error) throw error;
+      } else {
+        await Api.markNotificationRead(notificationId);
+      }
+      await this.refreshUnreadCount();
+      await this.fetchPreview(true);
+      return true;
+    } catch (error) {
+      console.warn('Unable to mark notification as read', error);
+      return false;
+    }
+  },
+  openNotificationsHub() {
+    setActiveView('notifications');
+  },
+  async openModuleTab(tabKey = '') {
+    const viewMap = {
+      tickets: 'issues',
+      events: 'calendar',
+      workflow: 'workflow',
+      workflow_approvals: 'workflow',
+      proposals: 'proposals',
+      agreements: 'agreements',
+      invoices: 'invoices',
+      receipts: 'receipts',
+      credit_notes: 'creditNotes',
+      payment_forecast: 'paymentForecast',
+      operations_onboarding: 'clients',
+      technical_admin: 'issues',
+      clients: 'clients',
+      leads: 'leads',
+      deals: 'deals',
+      csm_activities: 'csm',
+      communicationCentre: 'communicationCentre',
+      communication_centre: 'communicationCentre',
+      communication_center: 'communicationCentre'
+    };
+    const viewKey = viewMap[tabKey] || '';
+    if (!viewKey || !Permissions.canAccessTab(viewKey)) {
+      UI.toast('You do not have permission to open this item.');
+      return false;
+    }
+    setActiveView(viewKey);
+    await this.waitForNextFrame();
+    console.log('[notifications route] opened module', tabKey);
+
+    if (tabKey === 'tickets' && typeof loadIssues === 'function') await loadIssues(true);
+    if (tabKey === 'events' && typeof ensureCalendar === 'function') ensureCalendar();
+    if (tabKey === 'workflow' && window.Workflow?.loadAndRefresh) await Workflow.loadAndRefresh(true);
+    if (tabKey === 'proposals' && window.Proposals?.loadAndRefresh) await Proposals.loadAndRefresh({ force: true });
+    if (tabKey === 'agreements' && window.Agreements?.loadAndRefresh) await Agreements.loadAndRefresh({ force: true });
+    if (tabKey === 'invoices' && window.Invoices?.refresh) await Invoices.refresh({ force: true });
+    if (tabKey === 'receipts' && window.Receipts?.refresh) await Receipts.refresh({ force: true });
+    if (tabKey === 'clients' && window.Clients?.loadAndRefresh) await Clients.loadAndRefresh({ force: true });
+    if (tabKey === 'leads' && window.Leads?.loadAndRefresh) await Leads.loadAndRefresh({ force: true });
+    if (tabKey === 'deals' && window.Deals?.loadAndRefresh) await Deals.loadAndRefresh({ force: true });
+    if (tabKey === 'csm_activities' && window.CSMActivity?.loadAndRefresh) await CSMActivity.loadAndRefresh({ force: true });
+    if (tabKey === 'communicationCentre' || tabKey === 'communication_centre' || tabKey === 'communication_center') {
+      if (window.CommunicationCentre?.init) await window.CommunicationCentre.init();
+      else if (window.CommunicationCentre?.refresh) await window.CommunicationCentre.refresh();
+    }
+    return true;
+  },
+  highlightRowById(id) {
+    const target = String(id || '').trim();
+    if (!target) return false;
+    const escapedId = typeof CSS?.escape === 'function' ? CSS.escape(target) : target.replace(/"/g, '\\"');
+    const selectors = [
+      `[data-id="${escapedId}"]`,
+      `[data-record-id="${escapedId}"]`,
+      `[data-resource-id="${escapedId}"]`,
+      `[data-row-id="${escapedId}"]`
+    ];
+    const el = selectors.map(sel => document.querySelector(sel)).find(Boolean);
+    if (!el) return false;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('notification-target-highlight');
+    window.setTimeout(() => el.classList.remove('notification-target-highlight'), 3000);
+    return true;
+  },
+  
+  canRouteToResource(resource) {
+    const normalized = String(resource || '').trim().toLowerCase();
+    const perms = {
+      proposals: [['proposals','preview'],['proposals','get'],['proposals','manage']],
+      agreements: [['agreements','preview'],['agreements','get'],['agreements','manage']],
+      clients: [['clients','view'],['clients','get'],['clients','list'],['clients','manage']],
+      invoices: [['invoices','view'],['invoices','get'],['invoices','list']],
+      receipts: [['receipts','view'],['receipts','get'],['receipts','list']],
+      technical_admin_requests: [['technical_admin_requests','view'],['technical_admin_requests','get'],['technical_admin_requests','list']],
+      communication_centre: [['communication_centre','view'],['communication_centre','list'],['communication_centre','get'],['communication_centre','manage']]
+    };
+    const needed = perms[normalized] || perms[normalized.replace('technical_admin','technical_admin_requests')];
+    if (!needed) return true;
+    return needed.some(([r,a]) => Permissions.can(r,a));
+  },
+async routeToResourceTarget(resource, targetId, notification) {
+    const normalizedResource = String(resource || '').trim().toLowerCase();
+    if (!this.canRouteToResource(normalizedResource)) { UI.toast('You do not have permission to view this record.'); return false; }
+    const normalizedTargetId = String(targetId || '').trim();
+    console.info('[router] record lookup', { resource: normalizedResource, targetId: normalizedTargetId, found: false, matchedId: null });
+    if (normalizedResource === 'communication_centre') {
+      const opened = await this.openModuleTab('communicationCentre');
+      if (!opened) return false;
+      if (normalizedTargetId) this.setRouteHash(`#communication_centre?conversation_id=${encodeURIComponent(normalizedTargetId)}`);
+      if (normalizedTargetId && window.CommunicationCentre?.openConversationById) {
+        const conversationOpened = await window.CommunicationCentre.openConversationById(normalizedTargetId, { source: 'notification' });
+        if (conversationOpened === false) return false;
+      }
+      return true;
+    }
+    if (resource === 'tickets') {
+      const opened = await this.openModuleTab('tickets');
+      if (!opened) return false;
+      const lookupId = String(targetId || '').trim();
+      console.info('[deep-link] ticket route requested', { targetId: lookupId });
+      if (!lookupId) return true;
+
+      const normalizeId = value => String(value || '').trim().toLowerCase();
+      const wait = ms => new Promise(resolve => window.setTimeout(resolve, ms));
+      const findTicketByAnyId = (tickets, wantedId) => {
+        const wanted = normalizeId(wantedId);
+        if (!wanted) return null;
+        return (Array.isArray(tickets) ? tickets : []).find(row =>
+          [
+            row?.ticket_id,
+            row?.ticketId,
+            row?.ticket_number,
+            row?.ticketNumber,
+            row?.ticket_no,
+            row?.ticketNo,
+            row?.issue_id,
+            row?.issueId,
+            row?.id
+          ].some(value => normalizeId(value) === wanted)
+        ) || null;
+      };
+      const ensureTicketsLoadedForDeepLink = async forceReload => {
+        const existingRows = Array.isArray(window.DataStore?.rows) ? window.DataStore.rows : [];
+        if (!forceReload && existingRows.length) return existingRows;
+        if (typeof window.loadIssues === 'function') {
+          await window.loadIssues(true);
+        }
+        return Array.isArray(window.DataStore?.rows) ? window.DataStore.rows : [];
+      };
+
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        const tickets = await ensureTicketsLoadedForDeepLink(attempt > 1);
+        console.info('[deep-link] tickets loaded for route', { count: tickets.length, attempt });
+        const ticketRow = findTicketByAnyId(tickets, lookupId);
+        const routeTicketId = String(
+          ticketRow?.ticket_id ||
+            ticketRow?.ticketId ||
+            ticketRow?.ticket_number ||
+            ticketRow?.ticketNumber ||
+            lookupId
+        ).trim();
+        console.info('[deep-link] ticket lookup result', {
+          targetId: lookupId,
+          found: Boolean(ticketRow),
+          matchedTicketId: ticketRow?.ticket_id || ticketRow?.ticketId || ticketRow?.ticket_number || ticketRow?.id || null,
+          attempt
+        });
+        if (routeTicketId) this.setRouteHash(`#tickets?ticket_id=${encodeURIComponent(routeTicketId)}`);
+
+        const resolvedTicketId = String(ticketRow?.id || '').trim();
+        if (ticketRow && resolvedTicketId && window.UI?.Modals?.openIssue) {
+          UI.Modals.openIssue(resolvedTicketId);
+          console.info('[deep-link] ticket popup opened', { targetId: lookupId });
+          return this.highlightRowById(resolvedTicketId) || true;
+        }
+
+        if (attempt < 3) await wait(300);
+      }
+
+      console.warn('[deep-link] ticket not found for popup', { targetId: lookupId });
+      return this.highlightRowById(lookupId) || false;
+    }
+    if (normalizedResource === 'events') {
+      const opened = await this.openModuleTab('events');
+      if (!opened) return false;
+      const eventId = String(targetId || notification?.meta?.event_code || '').trim();
+      if (eventId) this.setRouteHash(`#events?id=${encodeURIComponent(eventId)}`);
+      return eventId ? this.highlightRowById(eventId) || true : true;
+    }
+    if (normalizedResource === 'workflow' || normalizedResource === 'workflow_approvals') {
+      const opened = await this.openModuleTab('workflow');
+      if (!opened) return false;
+      const approvalId = String(targetId || notification?.meta?.approval_id || '').trim();
+      const row = (window.Workflow?.state?.approvals || []).find(item => String(item?.approval_id || '').trim() === approvalId);
+      if (approvalId) this.setRouteHash(`#workflow?approval_id=${encodeURIComponent(approvalId)}`);
+      if (row && window.Workflow?.openApprovalPreview) await Workflow.openApprovalPreview(row);
+      return approvalId ? this.highlightRowById(approvalId) || !!row : true;
+    }
+    if (normalizedResource === 'proposals') {
+      if (!Permissions.canPreviewProposal()) { UI.toast('You do not have permission to preview proposals.'); return false; }
+      const opened = await this.openModuleTab('proposals');
+      if (!opened) return false;
+      if (targetId) this.setRouteHash(`#crm?tab=proposals&id=${encodeURIComponent(String(targetId).trim())}`);
+      if (targetId && window.Proposals?.openProposalFormById) await Proposals.openProposalFormById(targetId, { readOnly: true });
+      return targetId ? this.highlightRowById(targetId) || true : true;
+    }
+    if (normalizedResource === 'agreements') {
+      if (!Permissions.canPreviewAgreement()) { UI.toast('You do not have permission to preview agreements.'); return false; }
+      const opened = await this.openModuleTab('agreements');
+      if (!opened) return false;
+      if (targetId) this.setRouteHash(`#crm?tab=agreements&id=${encodeURIComponent(String(targetId).trim())}`);
+      if (targetId && window.Agreements?.openAgreementFormById) await Agreements.openAgreementFormById(targetId, { readOnly: true });
+      return targetId ? this.highlightRowById(targetId) || true : true;
+    }
+    if (normalizedResource === 'invoices') {
+      const opened = await this.openModuleTab('invoices');
+      if (!opened) return false;
+      if (targetId) this.setRouteHash(`#finance?tab=invoices&id=${encodeURIComponent(String(targetId).trim())}`);
+      if (targetId && window.Invoices?.openInvoiceById) await Invoices.openInvoiceById(targetId, { readOnly: true });
+      return targetId ? this.highlightRowById(targetId) || true : true;
+    }
+    if (normalizedResource === 'receipts') {
+      const opened = await this.openModuleTab('receipts');
+      if (!opened) return false;
+      if (targetId) this.setRouteHash(`#finance?tab=receipts&id=${encodeURIComponent(String(targetId).trim())}`);
+      if (targetId && window.Receipts?.openReceiptById) await Receipts.openReceiptById(targetId, { readOnly: true });
+      return targetId ? this.highlightRowById(targetId) || true : true;
+    }
+    if (normalizedResource === 'credit_notes') {
+      const opened = await this.openModuleTab('credit_notes');
+      if (!opened) return false;
+      if (targetId) this.setRouteHash(`#finance?tab=credit_notes&id=${encodeURIComponent(String(targetId).trim())}`);
+      if (targetId && window.CreditNotes?.preview) await CreditNotes.preview(targetId);
+      return targetId ? this.highlightRowById(targetId) || true : true;
+    }
+    if (normalizedResource === 'payment_forecast') {
+      const opened = await this.openModuleTab('payment_forecast');
+      if (!opened) return false;
+      this.setRouteHash('#finance?tab=payment_forecast');
+      if (window.PaymentForecast?.refresh) await PaymentForecast.refresh(true);
+      return true;
+    }
+    if (normalizedResource === 'operations_onboarding') {
+      const opened = await this.openModuleTab('clients');
+      if (!opened) return false;
+      this.setRouteHash('#clients');
+      return true;
+    }
+    if (normalizedResource === 'technical_admin' || normalizedResource === 'technical_admin_requests') {
+      UI.toast('Page not available.');
+      return this.openModuleTab('issues');
+    }
+    if (normalizedResource === 'clients') {
+      const opened = await this.openModuleTab('clients');
+      if (!opened) return false;
+      if (targetId) this.setRouteHash(`#clients?id=${encodeURIComponent(String(targetId).trim())}`);
+      if (targetId && window.Clients?.selectClient) await Clients.selectClient(targetId, { force: true });
+      return targetId ? this.highlightRowById(targetId) || true : true;
+    }
+    if (normalizedResource === 'leads') {
+      const opened = await this.openModuleTab('leads');
+      if (!opened) return false;
+      const row = (window.Leads?.state?.rows || []).find(item => String(item?.id || item?.lead_id || '').trim() === targetId);
+      if (targetId) this.setRouteHash(`#crm?tab=leads&id=${encodeURIComponent(String(targetId).trim())}`);
+      if (row && window.Leads?.openForm) Leads.openForm(row);
+      return targetId ? this.highlightRowById(targetId) || !!row : true;
+    }
+    if (normalizedResource === 'deals') {
+      const opened = await this.openModuleTab('deals');
+      if (!opened) return false;
+      const row = (window.Deals?.state?.rows || []).find(item => String(item?.id || item?.deal_id || '').trim() === targetId);
+      if (targetId) this.setRouteHash(`#crm?tab=deals&id=${encodeURIComponent(String(targetId).trim())}`);
+      if (row && window.Deals?.openForm) Deals.openForm(row);
+      return targetId ? this.highlightRowById(targetId) || !!row : true;
+    }
+    if (resource === 'csm_activities') {
+      const opened = await this.openModuleTab('csm_activities');
+      if (!opened) return false;
+      return targetId ? this.highlightRowById(targetId) : true;
+    }
+    this.openNotificationsHub();
+    return true;
+  },
+  async routeNotification(notification = {}) {
+    const resource = this.resolveNotificationResource(notification);
+    const targetId = this.resolveNotificationTargetId(notification);
+    console.log('[notifications route]', {
+      notification_id: notification.notification_id,
+      type: notification.type,
+      resource: notification.resource,
+      link_target: notification.link_target,
+      resolvedResource: resource,
+      targetId
+    });
+    this.closePanel();
+    try {
+      const opened = await this.routeToResourceTarget(resource, targetId, notification);
+      if (!opened) return;
+      console.log('[notifications route] opened/highlighted target', targetId);
+      if (targetId && !this.highlightRowById(targetId)) {
+        UI.toast('The related record could not be found or may have been deleted.');
+      }
+    } catch (error) {
+      console.warn('Notification navigation failed', error);
+      UI.toast('Notification opened, but route was unavailable.');
+    }
+  },
+  openPanel() {
+    this.state.panelOpen = true;
+    if (E.notificationPreviewPanel) E.notificationPreviewPanel.classList.add('open');
+    this.fetchPreview(true);
+  },
+  closePanel() {
+    this.state.panelOpen = false;
+    if (E.notificationPreviewPanel) E.notificationPreviewPanel.classList.remove('open');
+  },
+  renderBell() {
+    if (!E.notificationUnreadBadge) return;
+    const count = Number(this.state.unreadCount) || 0;
+    E.notificationUnreadBadge.textContent = count > 99 ? '99+' : String(count);
+    E.notificationUnreadBadge.style.display = count > 0 ? 'inline-flex' : 'none';
+    if (E.notificationBellBtn) E.notificationBellBtn.setAttribute('aria-label', `Notifications (${count} unread)`);
+    this.setAppBadgeCount(count);
+  },
+  renderPreview() {
+    if (!E.notificationPreviewList || !E.notificationPreviewState) return;
+    if (this.state.unavailable) {
+      E.notificationPreviewState.textContent = 'Notifications are unavailable in this environment.';
+      E.notificationPreviewList.innerHTML = '';
+      return;
+    }
+    if (this.state.previewLoading) {
+      E.notificationPreviewState.textContent = 'Loading notifications…';
+      E.notificationPreviewList.innerHTML = '';
+      return;
+    }
+    const list = (this.state.previewItems || []).filter(item => !this.isRemovedModuleNotification(item));
+    if (!list.length) {
+      E.notificationPreviewState.textContent = 'No new notifications.';
+      E.notificationPreviewList.innerHTML = '';
+      return;
+    }
+    E.notificationPreviewState.textContent = '';
+    E.notificationPreviewList.innerHTML = list
+      .map(item => {
+        const cls = item.is_read ? 'notification-item' : 'notification-item unread';
+        return `<button type="button" class="${cls}" data-notification-id="${U.escapeAttr(item.notification_id)}">
+          <div class="notification-item-head">
+            <span>${this.iconForType(item.type)} ${this.eventTitleMarkup(item)}</span>
+            <span class="muted">${U.escapeHtml(this.formatDate(item.created_at))}</span>
+          </div>
+          <div class="notification-item-body">${U.escapeHtml(item.message || '—')}</div>
+        </button>`;
+      })
+      .join('');
+    E.notificationPreviewList.querySelectorAll('[data-notification-id]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-notification-id');
+        const item = this.state.previewItems.find(row => row.notification_id === id);
+        this.closePanel();
+        this.handleNotificationClick(item);
+      });
+    });
+  },
+  renderDebugInfo() {
+    const box = document.getElementById('notificationsDebugBox');
+    if (!box) return;
+    box.style.display = '';
+    const rawRows = Array.isArray(this.state.rawRows) ? this.state.rawRows : [];
+    const normalizedItems = Array.isArray(this.state.items) ? this.state.items : [];
+    const mode = this.state.filters.mode || 'all';
+    const search = String(this.state.filters.search || '').trim();
+    const titleSource = normalizedItems.length ? normalizedItems : rawRows;
+    const sample = titleSource.slice(0, 3).map(item => this.getTitleFromAny(item));
+    box.textContent = [
+      'Mode: supabase-only',
+      `Raw rows: ${rawRows.length}`,
+      `Normalized items: ${normalizedItems.length}`,
+      `Mode: ${mode}`,
+      `Search: ${search || '—'}`,
+      'Sample:',
+      ...(sample.length ? sample.map(title => `- ${title}`) : ['- —'])
+    ].join('\n');
+  },
+  renderHub() {
+    if (!E.notificationsState || !E.notificationsTbody) return;
+    this.renderDebugInfo();
+    if (this.state.unavailable) {
+      this.renderPagination();
+      E.notificationsState.textContent = 'Notifications are unavailable in this environment.';
+      E.notificationsTbody.innerHTML = '<tr><td colspan="8" class="muted">Notifications are unavailable in this environment.</td></tr>';
+      if (E.notificationsSummaryTotalUnread) E.notificationsSummaryTotalUnread.textContent = '0';
+      if (E.notificationsSummaryHighUnread) E.notificationsSummaryHighUnread.textContent = '0';
+      if (E.notificationsSummaryApprovalsUnread) E.notificationsSummaryApprovalsUnread.textContent = '0';
+      if (E.notificationsSummaryOperationsUnread) E.notificationsSummaryOperationsUnread.textContent = '0';
+      return;
+    }
+    if (this.state.loading) {
+      this.renderPagination();
+      E.notificationsState.textContent = 'Loading notifications…';
+      E.notificationsTbody.innerHTML = '';
+      return;
+    }
+    this.renderPagination();
+    const list = Array.isArray(this.state.items) ? this.state.items.filter(item => !this.isRemovedModuleNotification(item)) : [];
+    const unread = list.filter(item => !item.is_read);
+    const highUnread = unread.filter(item => this.isHighPriority(item)).length;
+    const approvalsUnread = unread.filter(item => this.isApproval(item)).length;
+    const operationsUnread = unread.filter(item => this.isOperations(item)).length;
+
+    if (E.notificationsSummaryTotalUnread) E.notificationsSummaryTotalUnread.textContent = String(unread.length);
+    if (E.notificationsSummaryHighUnread) E.notificationsSummaryHighUnread.textContent = String(highUnread);
+    if (E.notificationsSummaryApprovalsUnread) E.notificationsSummaryApprovalsUnread.textContent = String(approvalsUnread);
+    if (E.notificationsSummaryOperationsUnread) E.notificationsSummaryOperationsUnread.textContent = String(operationsUnread);
+
+    const lastFetched = this.state.lastFetchedAt ? this.formatDate(this.state.lastFetchedAt) : '—';
+    E.notificationsState.textContent = `${list.length} item(s) • Page ${this.state.page}${this.state.total ? ` • ${this.state.total} total` : ''} • Last refreshed: ${lastFetched}`;
+
+    if (!list.length) {
+      if (this.state.items.length) {
+        console.debug('[notifications] items exist but filters removed all rows', {
+          totalItems: this.state.items.length,
+          activeFilters: this.state.filters,
+          sample: this.state.items.slice(0, 5)
+        });
+        E.notificationsTbody.innerHTML = '<tr><td colspan="8" class="muted">No notifications found for current filters.</td></tr>';
+        return;
+      }
+      if (this.state.rawRows.length) {
+        E.notificationsTbody.innerHTML = this.state.rawRows
+          .map(rawItem => {
+            const item = this.toFallbackView(rawItem);
+            const idAttr = U.escapeAttr(item.notification_id);
+            return `<tr>
+              <td>${this.eventTitleMarkup(item)}</td>
+              <td>${U.escapeHtml(item.message || '—')}</td>
+              <td>${U.escapeHtml(item.type || '—')}</td>
+              <td>${U.escapeHtml(this.formatDate(item.created_at))}</td>
+              <td>${U.escapeHtml(item.status || '—')}</td>
+              <td>
+                <div class="notification-actions">
+                  <button type="button" class="btn sm" data-open-notification-raw="${idAttr}">Open</button>
+                </div>
+              </td>
+            </tr>`;
+          })
+          .join('');
+        E.notificationsTbody.querySelectorAll('[data-open-notification-raw]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-open-notification-raw');
+            const rawItem = this.state.rawRows.find(row => String(row?.notification_id || row?.id || '').trim() === id);
+            this.handleNotificationClick(this.normalize(rawItem || {}));
+          });
+        });
+        return;
+      }
+      E.notificationsTbody.innerHTML = '<tr><td colspan="8" class="muted">No notifications found for current filters.</td></tr>';
+      return;
+    }
+
+    E.notificationsTbody.innerHTML = list
+      .map(item => {
+        const readLabel = item.is_read ? 'Read' : 'Unread';
+        const rowClass = item.is_read ? '' : ' class="notification-row-unread"';
+        const priorityClass = this.isHighPriority(item) ? 'chip high-priority' : 'chip';
+        return `<tr${rowClass}>
+          <td>${this.iconForType(item.type)} ${this.eventTitleMarkup(item)}</td>
+          <td>${U.escapeHtml(item.message || '—')}</td>
+          <td>${U.escapeHtml(item.type || '—')}</td>
+          <td><span class="${priorityClass}">${U.escapeHtml(item.priority || 'normal')}</span></td>
+          <td>${U.escapeHtml(this.formatDate(item.created_at))}</td>
+          <td>${U.escapeHtml(readLabel)}</td>
+          <td>${U.escapeHtml(item.action_label || '—')}</td>
+          <td>
+            <div class="notification-actions">
+              ${item.is_read ? '' : `<button type="button" class="btn ghost sm" data-mark-read="${U.escapeAttr(item.notification_id)}">Mark read</button>`}
+              <button type="button" class="btn sm" data-open-notification="${U.escapeAttr(item.notification_id)}">Open</button>
+            </div>
+          </td>
+        </tr>`;
+      })
+      .join('');
+
+    E.notificationsTbody.querySelectorAll('[data-mark-read]').forEach(btn => {
+      btn.addEventListener('click', async e => {
+        e.stopPropagation();
+        const id = btn.getAttribute('data-mark-read');
+        await this.markRead(id);
+      });
+    });
+    E.notificationsTbody.querySelectorAll('[data-open-notification]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-open-notification');
+        const item = this.state.items.find(row => row.notification_id === id);
+        this.handleNotificationClick(item);
+      });
+    });
+  },
+  renderPagination() {
+    const host = U.ensurePaginationHost({
+      hostId: 'notificationsPagination',
+      anchor: E.notificationsState?.closest?.('.card')
+    });
+    U.renderPaginationControls({
+      host,
+      moduleKey: 'notifications',
+      page: this.state.page,
+      pageSize: this.state.limit,
+      hasMore: this.state.hasMore,
+      returned: this.state.returned,
+      loading: this.state.loading,
+      pageSizeOptions: [25, 50, 100],
+      countText: this.state.total ? `${this.state.total} total` : '',
+      onPageChange: nextPage => {
+        this.state.page = U.normalizePageNumber(nextPage, this.state.page);
+        this.loadHub(true);
+      },
+      onPageSizeChange: nextSize => {
+        this.state.limit = U.normalizePageSize(nextSize, 50, 200);
+        this.state.page = 1;
+        this.loadHub(true);
+      }
+    });
+  },
+  handleFilterChange(mode) {
+    this.state.filters.mode = mode;
+    this.state.page = 1;
+    if (E.notificationsFilterButtons) {
+      E.notificationsFilterButtons.querySelectorAll('[data-filter]').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-filter') === mode);
+      });
+    }
+    this.loadHub(true);
+  },
+  stopRealtime() {
+    try {
+      const client = window.SupabaseClient?.getClient?.();
+      if (client && this.state.realtimeChannel) client.removeChannel(this.state.realtimeChannel);
+    } catch (error) {
+      console.warn('Unable to stop notifications realtime channel', error);
+    } finally {
+      this.state.realtimeChannel = null;
+    }
+  },
+  startRealtime() {
+    this.stopRealtime();
+    if (!Session.isAuthenticated() || this.state.unavailable || this.state.permissionDenied) return;
+    if (!this.hasPermission('list') || !this.hasPermission('get_unread_count')) return;
+    const client = window.SupabaseClient?.getClient?.();
+    const userId = String(Session.userId?.() || '').trim();
+    if (!client || !userId || typeof client.channel !== 'function') return;
+    try {
+      this.state.realtimeChannel = client
+        .channel(`notifications-${userId}`)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          filter: `recipient_user_id=eq.${userId}`
+        }, payload => {
+          try {
+            const eventType = String(payload?.eventType || '').toUpperCase();
+            if (eventType === 'INSERT') {
+              this.handleRealtimeInsert(payload?.new || {});
+              return;
+            }
+            if (eventType === 'UPDATE') {
+              this.handleRealtimeUpdate(payload?.new || {});
+              return;
+            }
+            if (eventType === 'DELETE') {
+              this.handleRealtimeDelete(payload?.old || {});
+              return;
+            }
+        } catch (error) {
+          console.warn('[notifications] realtime handler failed', error);
+          this.refreshUnreadCount();
+          if (this.state.panelOpen) this.fetchPreview(true);
+          if (E.notificationsView?.classList.contains('active')) this.loadHub(true);
+        }
+      })
+      .subscribe((status) => {
+        console.debug('[notifications] realtime status', status);
+      });
+    } catch (error) {
+      console.warn('Unable to start notifications realtime channel', error);
+      this.state.realtimeChannel = null;
+    }
+  },
+  startPolling() {
+    this.stopPolling();
+    this.state.pollTimer = window.setInterval(() => {
+      if (!Session.isAuthenticated() || this.state.unavailable || this.state.permissionDenied) return;
+      if (!this.hasPermission('get_unread_count')) return;
+      this.refreshUnreadCount();
+      if (this.state.panelOpen && this.hasPermission('list')) this.fetchPreview();
+    }, this.POLL_INTERVAL_MS);
+  },
+  stopPolling() {
+    if (this.state.pollTimer) {
+      clearInterval(this.state.pollTimer);
+      this.state.pollTimer = null;
+    }
+  },
+  reset() {
+    this.stopPolling();
+    this.stopRealtime();
+    this.state.items = [];
+    this.state.rawResponse = null;
+    this.state.rawRows = [];
+    this.state.previewItems = [];
+    this.state.unreadCount = 0;
+    this.state.loading = false;
+    this.state.previewLoading = false;
+    this.state.filters.mode = 'all';
+    this.state.filters.search = '';
+    this.state.page = 1;
+    this.state.limit = 50;
+    this.state.offset = 0;
+    this.state.returned = 0;
+    this.state.hasMore = false;
+    this.state.total = 0;
+    this.state.lastFetchedAt = '';
+    this.state.permissionDenied = false;
+    this.state.permissionDeniedLogged = false;
+    this.state.cyclePermissionLogKey = '';
+    this.state.refreshCycleId = 0;
+    this.state.seenHydrated = false;
+    if (this.state.autoPopupTimer) {
+      clearTimeout(this.state.autoPopupTimer);
+      this.state.autoPopupTimer = null;
+    }
+    this.state.seenRealtimeNotificationIds = new Set();
+    this.state.communicationReadRequests = new Map();
+    this.state.communicationReadCompletedAt = new Map();
+    this.state.previewHovering = false;
+    this.clearUnavailable();
+    NotificationSound.seenNotificationIds.clear();
+    if (E.notificationsSearchInput) E.notificationsSearchInput.value = '';
+    if (E.notificationsFilterButtons) {
+      E.notificationsFilterButtons.querySelectorAll('[data-filter]').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-filter') === 'all');
+      });
+    }
+    this.closePanel();
+    this.renderBell();
+    this.renderPreview();
+    this.renderHub();
+    this.renderSoundToggle();
+  },
+  onAuthStateChanged() {
+    if (!Session.isAuthenticated()) {
+      this.reset();
+      return;
+    }
+    this.reset();
+    this.state.filters.mode = 'all';
+    this.state.filters.search = '';
+    this.state.page = 1;
+    this.startPolling();
+    this.startRealtime();
+    this.refreshAll(true);
+  },
+  wire() {
+    NotificationSound.init();
+    if (E.notificationBellBtn) {
+      E.notificationBellBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        if (this.state.unavailable) return;
+        if (this.state.panelOpen) this.closePanel();
+        else this.openPanel();
+      });
+    }
+    if (E.notificationPreviewPanel) {
+      E.notificationPreviewPanel.addEventListener('mouseenter', () => {
+        this.state.previewHovering = true;
+      });
+      E.notificationPreviewPanel.addEventListener('mouseleave', () => {
+        this.state.previewHovering = false;
+      });
+    }
+    document.addEventListener('click', e => {
+      if (!this.state.panelOpen) return;
+      if (E.notificationPreviewPanel?.contains(e.target) || E.notificationBellBtn?.contains(e.target)) return;
+      this.closePanel();
+    });
+    if (E.notificationOpenHubBtn) {
+      E.notificationOpenHubBtn.addEventListener('click', () => {
+        this.closePanel();
+        if (this.state.unavailable) return;
+        setActiveView('notifications');
+      });
+    }
+    if (E.notificationSoundToggleBtn) {
+      E.notificationSoundToggleBtn.addEventListener('click', () => {
+        const nextValue = !NotificationSound.isEnabled();
+        NotificationSound.setEnabled(nextValue);
+        this.renderSoundToggle();
+      });
+    }
+    if (E.notificationsMarkAllBtn) {
+      E.notificationsMarkAllBtn.addEventListener('click', () => this.markAllRead());
+    }
+    if (E.notificationsRefreshBtn) {
+      E.notificationsRefreshBtn.addEventListener('click', () => this.refreshAll(true));
+    }
+    if (E.notificationsSearchInput) {
+      E.notificationsSearchInput.addEventListener('input', debounce(() => {
+        this.state.filters.search = String(E.notificationsSearchInput.value || '').trim();
+        this.state.page = 1;
+        this.loadHub(true);
+      }, 250));
+    }
+    if (E.notificationsFilterButtons) {
+      E.notificationsFilterButtons.querySelectorAll('[data-filter]').forEach(btn => {
+        btn.addEventListener('click', () => this.handleFilterChange(btn.getAttribute('data-filter') || 'all'));
+      });
+    }
+    this.renderBell();
+    this.renderPreview();
+    this.renderHub();
+    this.renderSoundToggle();
+  }
+};
+
+window.Notifications = Notifications;

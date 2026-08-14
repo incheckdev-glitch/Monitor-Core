@@ -1,0 +1,1326 @@
+(function initCrmCompanyContactSelectors(global) {
+  const doc = global.document;
+  if (!doc) return;
+
+  const state = {
+    companies: [],
+    loadingCompanies: null,
+    companyLoadError: null,
+    initialized: false,
+    contactOptionsByCompany: new Map()
+  };
+
+  const FORM_CONFIG = {
+    deal: {
+      formId: 'dealForm',
+      companySelectId: 'dealFormCompanySelector',
+      contactSelectId: 'dealFormContactSelector',
+      companyHiddenId: 'dealFormCompanyId',
+      contactHiddenId: 'dealFormContactId',
+      directSourceIds: ['dealFormLeadId'],
+      companyFields: {
+        id: ['dealCompanyIdDisplay'],
+        name: ['dealCompanyNameDisplay', 'dealFormCompanyName'],
+        legalName: ['dealCompanyLegalNameDisplay'],
+        type: ['dealCompanyTypeDisplay'],
+        industry: ['dealCompanyIndustryDisplay'],
+        website: ['dealCompanyWebsiteDisplay'],
+        email: ['dealCompanyMainEmailDisplay'],
+        phone: ['dealCompanyMainPhoneDisplay'],
+        country: ['dealCompanyCountryDisplay', 'dealFormCountry'],
+        city: ['dealCompanyCityDisplay'],
+        address: ['dealCompanyAddressDisplay'],
+        tax: ['dealCompanyTaxNumberDisplay'],
+        status: ['dealCompanyStatusDisplay']
+      },
+      contactFields: {
+        id: ['dealContactIdDisplay'],
+        firstName: ['dealContactFirstNameDisplay'],
+        lastName: ['dealContactLastNameDisplay'],
+        jobTitle: ['dealContactJobTitleDisplay'],
+        department: ['dealContactDepartmentDisplay'],
+        email: ['dealContactEmailDisplay', 'dealFormEmail'],
+        phone: ['dealContactPhoneDisplay', 'dealFormPhone'],
+        mobile: ['dealContactMobileDisplay'],
+        decisionRole: ['dealContactDecisionRoleDisplay'],
+        primary: ['dealContactPrimaryDisplay'],
+        status: ['dealContactStatusDisplay']
+      },
+      updateModule(company, contact) {
+        const Deals = global.Deals;
+        if (!Deals?.state?.form) return;
+        if (company) {
+          Deals.state.form.selectedCompany = company;
+          Deals.state.form.companyId = company.company_uuid || company.id || '';
+        }
+        if (contact) {
+          Deals.state.form.selectedContact = contact.contact_uuid ? contact : null;
+          Deals.state.form.contactId = contact.contact_uuid || '';
+        }
+      }
+    },
+    proposal: {
+      formId: 'proposalForm',
+      companySelectId: 'proposalFormCompanySelector',
+      contactSelectId: 'proposalFormContactSelector',
+      companyHiddenId: 'proposalFormCompanyId',
+      contactHiddenId: 'proposalFormContactId',
+      directSourceIds: ['proposalFormDealId'],
+      uuidSourceOfTruth: true,
+      companyFields: {
+        name: ['proposalFormCustomerName', 'proposalFormCompanyNameHidden'],
+        legalName: ['proposalFormCustomerLegalName'],
+        address: ['proposalFormCustomerAddress'],
+        email: ['proposalFormCustomerEmail'],
+        phone: ['proposalFormCustomerPhone'],
+        country: ['proposalFormCountry'],
+        city: ['proposalFormCity'],
+        tax: ['proposalFormTaxNumber']
+      },
+      contactFields: {
+        id: ['proposalFormContactId'],
+        fullName: ['proposalFormCustomerContactName', 'proposalFormContactNameHidden'],
+        mobile: ['proposalFormCustomerContactMobile'],
+        phone: ['proposalFormCustomerContactMobile'],
+        email: ['proposalFormCustomerContactEmail'],
+        jobTitle: []
+      },
+      updateModule(company, contact) {
+        const form = byId('proposalForm');
+        if (!form) return;
+        if (company) {
+          form.dataset.companyId = getCompanyOptionValue(company);
+          form.dataset.companyName = company.company_name || company.legal_name || '';
+          form.dataset.companyAddress = company.address || '';
+          form.dataset.companyLegalName = company.legal_name || company.company_name || '';
+        }
+        if (contact) {
+          if (!contact.contact_id) {
+            form.dataset.contactId = '';
+            form.dataset.contactName = '';
+            form.dataset.contactFirstName = '';
+            form.dataset.contactLastName = '';
+            form.dataset.contactJobTitle = '';
+            form.dataset.contactEmail = '';
+            form.dataset.contactPhone = '';
+            form.dataset.contactMobile = '';
+            return;
+          }
+          form.dataset.contactId = contact.contact_id || '';
+          form.dataset.contactName = displayContact(contact, { includeEmail: false });
+          form.dataset.contactFirstName = contact.first_name || '';
+          form.dataset.contactLastName = contact.last_name || '';
+          form.dataset.contactJobTitle = contact.contact_position || contact.job_title || '';
+          form.dataset.contactEmail = contact.email || '';
+          form.dataset.contactPhone = contact.phone || '';
+          form.dataset.contactMobile = contact.mobile || '';
+        }
+      }
+    },
+    agreement: {
+      formId: 'agreementForm',
+      companySelectId: 'agreementFormCompanySelector',
+      contactSelectId: 'agreementFormContactSelector',
+      companyHiddenId: 'agreementFormCompanyId',
+      contactHiddenId: 'agreementFormContactId',
+      directSourceIds: ['agreementFormProposalId', 'agreementFormDealId', 'agreementFormLeadId'],
+      companyFields: {
+        name: ['agreementFormCustomerName', 'agreementFormCustomerLegalName', 'agreementFormCompanyName'],
+        legalName: ['agreementFormCustomerLegalName'],
+        address: ['agreementFormCustomerAddress'],
+        email: ['agreementFormCompanyEmail'],
+        phone: ['agreementFormCompanyPhone'],
+        country: ['agreementFormCountry'],
+        city: ['agreementFormCity'],
+        tax: ['agreementFormTaxNumber']
+      },
+      contactFields: {
+        id: ['agreementFormContactId'],
+        fullName: ['agreementFormCustomerContactName', 'agreementFormContactName'],
+        email: ['agreementFormCustomerContactEmail', 'agreementFormContactEmail', 'agreementFormCustomerSignatoryEmail'],
+        phone: ['agreementFormCustomerContactPhone', 'agreementFormContactPhone', 'agreementFormCustomerSignatoryPhone'],
+        mobile: ['agreementFormCustomerContactMobile', 'agreementFormContactMobile'],
+        jobTitle: []
+      },
+      updateModule(company, contact) {
+        const form = byId('agreementForm');
+        if (!form) return;
+        if (company) {
+          form.dataset.companyId = getCompanyOptionValue(company);
+          form.dataset.companyName = company.company_name || company.legal_name || '';
+          form.dataset.companyAddress = company.address || '';
+        }
+        if (contact) {
+          if (!contact.contact_id) {
+            form.dataset.contactId = '';
+            form.dataset.contactName = '';
+            return;
+          }
+          form.dataset.contactId = contact.contact_id || '';
+          form.dataset.contactName = displayContact(contact, { includeEmail: false });
+          form.dataset.contactEmail = contact.email || '';
+          form.dataset.contactPhone = contact.phone || '';
+          form.dataset.contactMobile = contact.mobile || '';
+          form.dataset.contactJobTitle = contact.contact_position || contact.job_title || '';
+        }
+      }
+    },
+    invoice: {
+      formId: 'invoiceForm',
+      companySelectId: 'invoiceFormCompanySelector',
+      contactSelectId: 'invoiceFormContactSelector',
+      companyHiddenId: 'invoiceFormCompanyId',
+      contactHiddenId: 'invoiceFormContactId',
+      directSourceIds: ['invoiceFormAgreementId'],
+      companyFields: {
+        name: ['invoiceFormCustomerName', 'invoiceFormCustomerLegalName', 'invoiceFormCompanyName'],
+        legalName: ['invoiceFormCustomerLegalName'],
+        address: ['invoiceFormCustomerAddress']
+      },
+      contactFields: {
+        id: ['invoiceFormContactId'],
+        fullName: ['invoiceFormCustomerContactName', 'invoiceFormContactName'],
+        email: ['invoiceFormCustomerContactEmail', 'invoiceFormContactEmail'],
+        phone: ['invoiceFormContactPhone'],
+        mobile: ['invoiceFormContactMobile']
+      },
+      updateModule(company, contact) {
+        if (global.Invoices?.state) {
+          if (company) global.Invoices.state.selectedCompany = company;
+          if (contact) global.Invoices.state.selectedContact = contact.contact_id ? contact : null;
+        }
+        if (global.Invoices?.hydrateInvoiceCustomerSection) {
+          global.Invoices.hydrateInvoiceCustomerSection({
+            agreement: global.Invoices.state?.selectedAgreement || global.Invoices.state?.selectedInvoice || {},
+            company: global.Invoices.state?.selectedCompany || {},
+            contact: global.Invoices.state?.selectedContact || {}
+          });
+        }
+      }
+    },
+    receipt: {
+      formId: 'receiptForm',
+      companySelectId: 'receiptFormCompanySelector',
+      contactSelectId: 'receiptFormContactSelector',
+      companyHiddenId: 'receiptFormCompanyId',
+      contactHiddenId: 'receiptFormContactId',
+      directSourceIds: ['receiptFormInvoiceId'],
+      companyFields: {
+        name: ['receiptFormCustomerName', 'receiptFormCustomerLegalName', 'receiptFormCompanyName'],
+        legalName: ['receiptFormCustomerLegalName'],
+        address: ['receiptFormCustomerAddress']
+      },
+      contactFields: {
+        id: ['receiptFormContactId'],
+        fullName: ['receiptFormContactName'],
+        email: ['receiptFormContactEmail'],
+        phone: ['receiptFormContactPhone'],
+        mobile: ['receiptFormContactMobile']
+      },
+      updateModule(company, contact) {
+        const form = byId('receiptForm');
+        if (!form) return;
+        if (company) {
+          form.dataset.companyId = getCompanyOptionValue(company);
+          form.dataset.companyName = company.company_name || company.legal_name || '';
+          form.dataset.companyAddress = company.address || '';
+        }
+        if (contact) {
+          if (!contact.contact_id) {
+            form.dataset.contactId = '';
+            form.dataset.contactName = '';
+            form.dataset.contactEmail = '';
+            form.dataset.contactPhone = '';
+            form.dataset.contactMobile = '';
+            return;
+          }
+          form.dataset.contactId = contact.contact_id || '';
+          form.dataset.contactName = displayContact(contact, { includeEmail: false });
+          form.dataset.contactEmail = contact.email || '';
+          form.dataset.contactPhone = contact.phone || '';
+          form.dataset.contactMobile = contact.mobile || '';
+        }
+      }
+    }
+  };
+
+  function byId(id) { return id ? doc.getElementById(id) : null; }
+  function str(value) { return String(value ?? '').trim(); }
+  function normalizeCompare(value) { return str(value).toLowerCase(); }
+  function isUuid(value) { return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str(value)); }
+
+  function resolveCompanyAuthorizedSignatory(company = {}) {
+    const c = company && typeof company === 'object' ? company : {};
+    return {
+      name: str(c.authorized_signatory_name || c.authorizedSignatoryName || c.authorized_signatory_full_name || c.authorizedSignatoryFullName || c.signatory_name || c.signatoryName || c.customer_signatory_name || c.customerSignatoryName || c.customer_authorized_signatory_name || c.customerAuthorizedSignatoryName || c.authorized_person_name || c.authorizedPersonName),
+      title: str(c.authorized_signatory_title || c.authorizedSignatoryTitle || c.signatory_title || c.signatoryTitle || c.customer_signatory_title || c.customerSignatoryTitle || c.customer_authorized_signatory_title || c.customerAuthorizedSignatoryTitle || c.authorized_person_title || c.authorizedPersonTitle)
+    };
+  }
+
+  function normalizeCompany(raw = {}) {
+    const c = raw && typeof raw === 'object' ? raw : {};
+    const rawCompanyId = str(c.company_id || c.companyId);
+    const uuid = [c.company_uuid, c.companyUuid, c.id, c.company_uuid_id, c.companyUuidId, c.company_uuid_value, rawCompanyId].map(str).find(isUuid) || '';
+    const businessId = str(c.company_ref || c.companyRef || c.company_business_id || c.companyBusinessId || c.company_number || c.companyNumber || c.company_code || c.companyCode || c.reference || c.code || (isUuid(rawCompanyId) ? '' : rawCompanyId));
+    const canonicalId = uuid || (isUuid(rawCompanyId) ? rawCompanyId : '');
+    return {
+      ...c,
+      id: canonicalId,
+      company_id: canonicalId,
+      company_uuid: canonicalId,
+      company_business_id: businessId,
+      company_ref: businessId,
+      company_number: str(c.company_number || c.companyNumber || businessId),
+      company_code: str(c.company_code || c.companyCode),
+      display_label: str(c.display_label || c.displayLabel || c.company_name || c.companyName || c.name || c.legal_name || c.legalName),
+      secondary: str(c.secondary || c.email || c.main_email || c.mainEmail || c.phone || c.main_phone || c.mainPhone || c.city || c.country),
+      company_name: str(c.company_name || c.companyName || c.companyNameText || c.name || c.display_label || c.displayLabel),
+      name: str(c.name || c.company_name || c.companyName || c.display_label || c.displayLabel),
+      legal_name: str(c.legal_name || c.legalName),
+      company_type: str(c.company_type || c.companyType),
+      industry: str(c.industry),
+      website: str(c.website),
+      main_email: str(c.main_email || c.mainEmail || c.email),
+      main_phone: str(c.main_phone || c.mainPhone || c.phone),
+      country: str(c.country),
+      city: str(c.city),
+      address: str(c.address),
+      tax_number: str(c.tax_number || c.taxNumber),
+      company_status: str(c.company_status || c.companyStatus || c.status),
+      status: str(c.status || c.company_status || c.companyStatus),
+      created_at: str(c.created_at || c.createdAt),
+      updated_at: str(c.updated_at || c.updatedAt),
+      is_archived: c.is_archived === true || c.isArchived === true,
+      is_deleted: c.is_deleted === true || c.isDeleted === true,
+      archived_at: str(c.archived_at || c.archivedAt),
+      deleted_at: str(c.deleted_at || c.deletedAt),
+      currency: str(c.currency),
+      payment_term: str(c.payment_term || c.paymentTerm || c.payment_terms || c.paymentTerms),
+      authorized_signatory_full_name: resolveCompanyAuthorizedSignatory(c).name,
+      authorized_signatory_name: resolveCompanyAuthorizedSignatory(c).name,
+      authorized_signatory_title: resolveCompanyAuthorizedSignatory(c).title,
+      signatory_name: str(c.signatory_name || c.signatoryName),
+      signatory_title: str(c.signatory_title || c.signatoryTitle),
+      customer_signatory_name: str(c.customer_signatory_name || c.customerSignatoryName),
+      customer_signatory_title: str(c.customer_signatory_title || c.customerSignatoryTitle),
+      authorized_person_name: str(c.authorized_person_name || c.authorizedPersonName),
+      authorized_person_title: str(c.authorized_person_title || c.authorizedPersonTitle),
+      documents_verified: c.documents_verified === true || c.documentsVerified === true || String(c.documents_verified ?? c.documentsVerified ?? '').toLowerCase() === 'true',
+      documents_verification_status: str(c.documents_verification_status || c.documentsVerificationStatus)
+    };
+  }
+  function normalizeContact(raw = {}) {
+    const c = raw && typeof raw === 'object' ? raw : {};
+    const rawContact = c.raw_contact && typeof c.raw_contact === 'object' ? c.raw_contact : {};
+    const contactUuid = [c.id, c.contact_uuid, c.contactUuid, c.contact_id_uuid, c.contactIdUuid, c.contact_id, c.contactId].map(str).find(isUuid) || '';
+    const contactBusinessId = str(c.contact_ref || c.contactRef || c.contact_number || c.contactNumber || c.contact_code || c.contactCode || rawContact.contact_id || rawContact.contact_number || rawContact.contact_code || (!isUuid(c.contact_id || c.contactId) ? (c.contact_id || c.contactId) : ''));
+    const rawCompanyId = str(c.company_id || c.companyId || rawContact.company_id || rawContact.companyId);
+    const companyUuid = str(c.selected_company_uuid || c.selectedCompanyUuid || c.company_uuid || c.companyUuid || (isUuid(rawCompanyId) ? rawCompanyId : ''));
+    const companyBusinessId = str(c.selected_company_ref || c.selectedCompanyRef || c.company_ref || c.companyRef || rawContact.company_id || rawContact.companyId || (isUuid(rawCompanyId) ? '' : rawCompanyId));
+    const first = str(c.first_name || c.firstName || rawContact.first_name || rawContact.firstName);
+    const last = str(c.last_name || c.lastName || rawContact.last_name || rawContact.lastName);
+    const full = str(c.contact_name || c.contactName || c.full_name || c.fullName || c.name || rawContact.full_name || rawContact.contact_name || rawContact.name || `${first} ${last}`);
+    return {
+      ...rawContact,
+      ...c,
+      id: contactUuid,
+      contact_id: contactUuid,
+      contact_uuid: contactUuid,
+      contact_business_id: contactBusinessId,
+      contact_ref: contactBusinessId,
+      company_id: companyUuid,
+      company_uuid: companyUuid,
+      company_business_id: companyBusinessId,
+      company_ref: companyBusinessId,
+      company_name: str(c.selected_company_name || c.company_name || c.companyName || rawContact.company_name || rawContact.companyName),
+      legal_company_name: str(c.legal_company_name || c.legalCompanyName || rawContact.legal_company_name),
+      first_name: first,
+      last_name: last,
+      full_name: full,
+      contact_position: str(c.contact_position || c.contactPosition || c.job_title || c.jobTitle || rawContact.position || rawContact.title || rawContact.job_title),
+      job_title: str(c.contact_position || c.contactPosition || c.job_title || c.jobTitle || rawContact.position || rawContact.title || rawContact.job_title),
+      department: str(c.department || rawContact.department),
+      email: str(c.email || rawContact.email || rawContact.contact_email),
+      phone: str(c.phone || rawContact.phone || rawContact.phone_number),
+      mobile: str(c.mobile || rawContact.mobile),
+      decision_role: str(c.decision_role || c.decisionRole || rawContact.decision_role),
+      is_primary_contact: c.is_primary === true || c.isPrimary === true || c.is_primary_contact === true || c.isPrimaryContact === true || String(c.is_primary || c.is_primary_contact || c.isPrimaryContact || rawContact.is_primary_contact || '').toLowerCase() === 'true',
+      contact_status: str(c.contact_status || c.contactStatus || rawContact.contact_status || rawContact.status)
+    };
+  }
+  function displayCompany(company = {}) {
+    return str(company.display_label || company.company_name || company.legal_name || company.name || company.company_uuid || 'Unnamed company');
+  }
+  function companySecondary(company = {}) {
+    return str(company.secondary || company.email || company.main_email || company.phone || company.main_phone || company.city || company.country);
+  }
+  function displayContact(contact = {}, { includeEmail = false } = {}) {
+    const c = contact && typeof contact === 'object' ? contact : {};
+    const first = str(c.first_name);
+    const last = str(c.last_name);
+    const firstLast = str([first, last].filter(Boolean).join(' '));
+    const stripEmailSuffix = value => str(value).replace(/\s+[—-]\s+\S+@\S+$/u, '').trim();
+    const full = stripEmailSuffix(c.full_name || c.fullName);
+    const contactName = stripEmailSuffix(c.contact_name || c.contactName || c.name);
+    const base = firstLast || full || contactName || str(c.email) || 'Unnamed contact';
+    if (includeEmail && str(c.email) && normalizeCompare(base) !== normalizeCompare(c.email)) return `${base} — ${str(c.email)}`;
+    return base;
+  }
+  function setValue(id, value, { readonly = true } = {}) {
+    const el = byId(id);
+    if (!el) return;
+    el.value = value ?? '';
+    if (readonly && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
+      el.readOnly = true;
+      el.setAttribute('aria-readonly', 'true');
+      el.classList.add('readonly-field', 'locked-field');
+    }
+  }
+  function setMany(ids = [], value, options) {
+    ids.forEach(id => setValue(id, value, options));
+  }
+  function setText(id, value) {
+    const el = byId(id);
+    if (!el) return;
+    if ('value' in el) el.value = value ?? '';
+    else el.textContent = value ?? '';
+  }
+  function companyDisplayName(company = {}) {
+    return str(company.legal_name || company.company_name || company.name || company.company_id || company.id);
+  }
+  function companyMatchesId(company = {}, value = '') {
+    const key = str(value);
+    if (!key) return false;
+    return [company.company_id, company.company_uuid, company.company_business_id, company.id]
+      .map(str)
+      .filter(Boolean)
+      .some(candidate => candidate === key);
+  }
+  function findCompanyByAnyId(value = '') {
+    const key = str(value);
+    if (!key) return null;
+    return state.companies.find(company => companyMatchesId(company, key)) || null;
+  }
+  function getCompanyOptionValue(company = {}) {
+    // CRM relations must always use the companies.id UUID, never a display/business code.
+    return str(company.company_uuid);
+  }
+  function getContactOptionValue(contact = {}) {
+    // CRM relations must always use the contacts.id UUID, never Contact# refs or display values.
+    return [contact.contact_uuid, contact.contactUuid, contact.id, contact.contact_id].map(str).find(isUuid) || '';
+  }
+  function contactPhone(contact = {}) {
+    return str(contact.mobile || contact.phone);
+  }
+  function contactSecondary(contact = {}) {
+    return str(contact.email || contact.phone || contact.contact_position || contact.job_title || contact.contact_ref);
+  }
+  function normalizeLoose(value = '') {
+    return str(value).toLowerCase().replace(/[^a-z0-9]/gi, '');
+  }
+  function splitMultiValue(value) {
+    if (Array.isArray(value)) return value.map(v => str(v)).filter(Boolean);
+    const text = str(value);
+    if (!text) return [];
+    if ((text.startsWith('{') && text.endsWith('}')) || (text.startsWith('[') && text.endsWith(']'))) {
+      const body = text.slice(1, -1);
+      return body.split(',').map(v => str(v).replace(/^['"]|['"]$/g, '')).filter(Boolean);
+    }
+    return text.split(',').map(v => str(v)).filter(Boolean);
+  }
+  function contactMatchesCompanyFallback(contact = {}, company = {}, selectedCompanyId = '', fkValue = '') {
+    const c = contact && typeof contact === 'object' ? contact : {};
+    const raw = c.raw_contact && typeof c.raw_contact === 'object' ? c.raw_contact : {};
+    const companyKeys = [
+      selectedCompanyId,
+      fkValue,
+      company.id,
+      company.company_uuid,
+      company.company_id,
+      company.company_ref,
+      company.company_business_id,
+      company.company_number,
+      company.company_code,
+      company.legal_name,
+      company.company_name,
+      company.name
+    ].map(str).filter(Boolean);
+    const contactKeys = [
+      c.company_id,
+      c.company_uuid,
+      c.company_ref,
+      c.company_business_id,
+      c.company_number,
+      c.company_code,
+      c.company_reference,
+      c.client_id,
+      c.company_name,
+      c.client_name,
+      raw.company_id,
+      raw.company_uuid,
+      raw.company_ref,
+      raw.company_number,
+      raw.company_code,
+      raw.company_reference,
+      raw.client_id,
+      raw.company_name,
+      raw.client_name,
+      ...splitMultiValue(c.company_ids || raw.company_ids),
+      ...splitMultiValue(c.company_names || raw.company_names)
+    ].map(str).filter(Boolean);
+    if (!companyKeys.length || !contactKeys.length) return false;
+    const normalizedCompanyKeys = companyKeys.map(normalizeLoose).filter(Boolean);
+    return contactKeys.some(key => {
+      const keyNorm = normalizeLoose(key);
+      if (!keyNorm) return false;
+      return normalizedCompanyKeys.some(companyKey => companyKey && keyNorm === companyKey);
+    });
+  }
+  function setSelectOptions(select, rows, placeholder, type) {
+    if (!select) return;
+    const currentValue = str(select.value);
+    const options = [`<option value="">${escapeHtml(placeholder)}</option>`];
+    rows.forEach(row => {
+      const value = type === 'company'
+        ? getCompanyOptionValue(row)
+        : getContactOptionValue(row);
+      if (!value) return;
+      const label = type === 'company'
+        ? [displayCompany(row), companySecondary(row)].filter(Boolean).join(' — ')
+        : [str(row.label || row.contact_name || displayContact(row, { includeEmail: false })), str(row.secondary || contactSecondary(row))].filter(Boolean).join(' — ');
+      options.push(`<option value="${escapeAttr(value)}">${escapeHtml(label)}</option>`);
+    });
+    select.innerHTML = options.join('');
+    if (currentValue && [...select.options].some(opt => opt.value === currentValue)) select.value = currentValue;
+  }
+  function escapeHtml(value) {
+    return str(value).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  }
+  function escapeAttr(value) { return escapeHtml(value).replace(/'/g, '&#39;'); }
+
+  function isCompanyListUnavailableError(error) {
+    const message = String(error?.message || error || '');
+    return message.includes('cannot list companies') || message.includes('Forbidden');
+  }
+
+  function isSelectableCompany(company = {}) {
+    return company.is_archived !== true && company.is_deleted !== true && !str(company.archived_at) && !str(company.deleted_at);
+  }
+
+  function mergeCompanyRows(rows = [], selected = null) {
+    const byId = new Map();
+    [...rows, selected].filter(Boolean).map(normalizeCompany).filter(isSelectableCompany).forEach(company => {
+      const id = getCompanyOptionValue(company);
+      if (id) byId.set(id, company);
+    });
+    return Array.from(byId.values());
+  }
+
+  async function resolveCompanyUuid(companyKey) {
+    const key = str(companyKey);
+    if (!key) return null;
+    if (isUuid(key)) return key;
+    const client = global.SupabaseClient?.getClient?.() || global.supabaseClient || global.supabase;
+    if (!client?.rpc) {
+      console.error('[Company Resolver] Failed:', key, new Error('Supabase RPC client is unavailable.'));
+      return null;
+    }
+    const { data, error } = await client.rpc('crm_resolve_company_uuid', { p_company_key: key });
+    if (error) {
+      console.error('[Company Resolver] Failed:', key, error);
+      return null;
+    }
+    const resolvedId = str(Array.isArray(data) ? data[0] : data);
+    return isUuid(resolvedId) ? resolvedId : null;
+  }
+
+  async function loadCompanySafe(companyKey) {
+    const key = str(companyKey);
+    if (!key) return null;
+    const client = global.SupabaseClient?.getClient?.() || global.supabaseClient || global.supabase;
+    if (client?.rpc) {
+      const { data, error } = await client.rpc('crm_get_company_by_key', { p_company_key: key });
+      if (!error) {
+        const row = Array.isArray(data) ? data[0] : data;
+        if (row && typeof row === 'object') return normalizeCompany(row);
+      } else {
+        console.error('[Company Loader] RPC failed:', key, error);
+      }
+    }
+    const id = await resolveCompanyUuid(key);
+    if (!id) return null;
+    if (client?.from) {
+      const { data, error } = await client.from('companies').select('*').eq('id', id).maybeSingle();
+      if (!error && data) return normalizeCompany(data);
+      if (error) console.error('[Company Loader] direct UUID lookup failed:', id, error);
+    }
+    if (global.Api?.requestWithSession) {
+      const response = await global.Api.requestWithSession('companies', 'get', { id }, { requireAuth: true });
+      const row = response?.row || response?.data || response?.company || response;
+      return row && typeof row === 'object' ? normalizeCompany(row) : null;
+    }
+    return null;
+  }
+
+  async function fetchCompanyByUuid(companyId) {
+    const id = str(companyId);
+    if (!isUuid(id)) return null;
+    const client = global.SupabaseClient?.getClient?.() || global.supabaseClient || global.supabase;
+    if (client?.from) {
+      const { data, error } = await client.from('companies').select('*').eq('id', id).maybeSingle();
+      if (error) {
+        console.error('[crm selectors] selected company UUID query failed', error);
+        throw error;
+      }
+      return data ? normalizeCompany(data) : null;
+    }
+    return loadCompanySafe(id);
+  }
+
+  async function getCompanyContactFkValue(companyId) {
+    const resolvedCompanyId = await resolveCompanyUuid(companyId);
+    if (!resolvedCompanyId) return '';
+    const client = global.SupabaseClient?.getClient?.() || global.supabaseClient || global.supabase;
+    if (!client?.rpc) return resolvedCompanyId;
+    const { data, error } = await client.rpc('crm_company_contact_fk_value', { p_company_id: resolvedCompanyId });
+    if (error) {
+      console.warn('[crm selectors] company contact FK lookup failed', { companyId: resolvedCompanyId, error });
+      return resolvedCompanyId;
+    }
+    return str(data || resolvedCompanyId);
+  }
+
+  async function upsertContactCompanyLinks(contactKey, companyKeys = []) {
+    const keys = (Array.isArray(companyKeys) ? companyKeys : [companyKeys]).map(str).filter(Boolean);
+    if (!str(contactKey) || !keys.length) return false;
+    const client = global.SupabaseClient?.getClient?.() || global.supabaseClient || global.supabase;
+    if (!client?.rpc) return false;
+    const { data, error } = await client.rpc('crm_upsert_contact_company_links', {
+      p_contact_key: String(contactKey),
+      p_company_keys: keys
+    });
+    if (error) {
+      console.error('[crm selectors] contact-company link upsert failed', { contactKey, companyKeys: keys, error });
+      return false;
+    }
+    return data !== false;
+  }
+
+  async function loadCompanyOptions(searchText = '', includeSelectedId = null) {
+    const search = str(searchText);
+    const selectedId = str(includeSelectedId);
+    const client = global.SupabaseClient?.getClient?.() || global.supabaseClient || global.supabase;
+    state.companyLoadError = null;
+
+    try {
+      if (!client?.rpc) throw new Error('Supabase company search RPC client is unavailable.');
+      const { data, error } = await client.rpc('crm_search_companies_for_select', {
+        p_search: search || '',
+        p_limit: 300
+      });
+      if (error) throw error;
+      const rows = (Array.isArray(data) ? data : [])
+        .map(normalizeCompany)
+        .filter(company => getCompanyOptionValue(company) && isSelectableCompany(company));
+      const selected = selectedId && !rows.some(company => getCompanyOptionValue(company) === selectedId)
+        ? await loadCompanySafe(selectedId)
+        : null;
+      state.companies = mergeCompanyRows(rows, selected);
+      return state.companies;
+    } catch (error) {
+      state.companies = [];
+      state.companyLoadError = error;
+      console.error('[crm selectors] fresh company options RPC failed', error);
+      throw error;
+    }
+  }
+
+  async function fetchCompanies(searchText = '', includeSelectedId = null) {
+    // Deliberately do not reuse state.companies: dropdowns must see newly-created rows immediately.
+    return loadCompanyOptions(searchText, includeSelectedId);
+  }
+
+  function dedupeContacts(rows = []) {
+    const byId = new Map();
+    rows.map(normalizeContact).forEach(contact => {
+      const id = str(contact.contact_id || contact.id);
+      if (id) byId.set(id, contact);
+    });
+    return Array.from(byId.values());
+  }
+
+  async function loadContactsForCompany(companyId) {
+    const originalCompanyKey = str(companyId);
+    const selectedCompanyId = await resolveCompanyUuid(originalCompanyKey);
+    if (!selectedCompanyId) return [];
+
+    state.contactOptionsByCompany.set(selectedCompanyId, []);
+    const client = global.SupabaseClient?.getClient?.() || global.supabaseClient || global.supabase;
+    const loadedCompany = await loadCompanySafe(selectedCompanyId).catch(() => null) || {};
+    const companyFkValue = await getCompanyContactFkValue(selectedCompanyId).catch(() => selectedCompanyId) || selectedCompanyId;
+
+    const mapRpcRows = rows => dedupeContacts((Array.isArray(rows) ? rows : []).map(row => ({
+      ...row,
+      value: row.contact_uuid || row.id,
+      label: row.contact_name || row.full_name || row.name,
+      id: row.contact_uuid || row.id,
+      contact_id: row.contact_uuid || row.id,
+      contact_uuid: row.contact_uuid || row.id,
+      selected_company_uuid: row.selected_company_uuid || selectedCompanyId,
+      company_id: row.selected_company_uuid || selectedCompanyId,
+      company_uuid: row.selected_company_uuid || selectedCompanyId,
+      company_ref: row.selected_company_ref || loadedCompany.company_ref || loadedCompany.company_business_id || '',
+      company_name: row.selected_company_name || loadedCompany.company_name || loadedCompany.legal_name || loadedCompany.name || '',
+      full_name: row.contact_name || row.full_name || row.name,
+      contact_name: row.contact_name || row.full_name || row.name,
+      email: row.email,
+      phone: row.phone,
+      contact_position: row.contact_position || row.job_title || row.position,
+      job_title: row.contact_position || row.job_title || row.position,
+      contact_ref: row.contact_ref || row.contact_id || row.contact_number || row.contact_code,
+      secondary: row.email || row.phone || row.contact_position || row.contact_ref || ''
+    }))).filter(contact => isUuid(contact.contact_uuid));
+
+    let contacts = [];
+    if (client?.rpc) {
+      let rpcData = [];
+      let rpcError = null;
+      ({ data: rpcData, error: rpcError } = await client.rpc('crm_get_contacts_for_company', { p_company_id: selectedCompanyId }));
+      if (rpcError) console.error('[Contacts] RPC failed for company', selectedCompanyId, rpcError);
+      contacts = mapRpcRows(rpcData);
+
+      if (!contacts.length) {
+        const keysToTry = [originalCompanyKey, selectedCompanyId, loadedCompany.company_ref, loadedCompany.company_business_id, loadedCompany.company_name, loadedCompany.legal_name]
+          .map(str)
+          .filter(Boolean);
+        for (const key of keysToTry) {
+          const { data, error } = await client.rpc('crm_get_contacts_for_company_key', { p_company_key: key });
+          if (error) {
+            console.warn('[Contacts] key RPC fallback failed', { key, error });
+            continue;
+          }
+          contacts = mapRpcRows(data);
+          if (contacts.length) break;
+        }
+      }
+    } else {
+      console.error('[Contacts] Supabase RPC client is unavailable. Falling back to API list.');
+    }
+
+    // Final frontend fallback: use the regular contacts list and match UUID/FK/ref/name locally.
+    // This prevents empty dropdowns when the RPC has not been deployed yet or the bridge table is not backfilled.
+    if (!contacts.length && global.Api?.requestWithSession) {
+      const filtersToTry = [
+        { company_id: selectedCompanyId },
+        companyFkValue && companyFkValue !== selectedCompanyId ? { company_id: companyFkValue } : null,
+        loadedCompany.company_ref ? { company_id: loadedCompany.company_ref } : null
+      ].filter(Boolean);
+      const fallbackRows = [];
+      for (const filters of filtersToTry) {
+        try {
+          const response = await global.Api.requestWithSession('contacts', 'list', { page: 1, limit: 500, filters }, { requireAuth: true });
+          const rows = Array.isArray(response?.rows) ? response.rows : (Array.isArray(response?.data) ? response.data : (Array.isArray(response) ? response : []));
+          fallbackRows.push(...rows);
+        } catch (error) {
+          console.warn('[Contacts] API filtered fallback failed', { filters, error });
+        }
+      }
+      if (!fallbackRows.length) {
+        try {
+          const response = await global.Api.requestWithSession('contacts', 'list', { page: 1, limit: 1000 }, { requireAuth: true });
+          const rows = Array.isArray(response?.rows) ? response.rows : (Array.isArray(response?.data) ? response.data : (Array.isArray(response) ? response : []));
+          fallbackRows.push(...rows);
+        } catch (error) {
+          console.warn('[Contacts] API broad fallback failed', error);
+        }
+      }
+      contacts = dedupeContacts(fallbackRows.map(normalizeContact).filter(contact => contactMatchesCompanyFallback(contact, loadedCompany, selectedCompanyId, companyFkValue)));
+    }
+
+    const keys = [selectedCompanyId, originalCompanyKey, loadedCompany.company_ref, loadedCompany.company_business_id, loadedCompany.company_name, loadedCompany.legal_name]
+      .map(str)
+      .filter(Boolean);
+    keys.forEach(key => state.contactOptionsByCompany.set(key, contacts));
+    console.log('[Contacts loaded]', { companyId: selectedCompanyId, count: contacts.length, contacts });
+    return contacts;
+  }
+
+  function isDirectCreate(cfg) {
+    const form = byId(cfg.formId);
+    if (!form) return false;
+    const mode = str(form.dataset.mode || (form.dataset.id ? 'edit' : 'create')).toLowerCase();
+    if (mode === 'edit' || str(form.dataset.id)) return false;
+    const source = str(form.dataset.source || form.dataset.proposalUuid || form.dataset.agreementId || form.dataset.sourceInvoiceUuid);
+    if (source && source !== 'direct') return false;
+    return !cfg.directSourceIds.some(id => str(byId(id)?.value || byId(id)?.dataset?.leadUuid));
+  }
+
+  async function loadCompanyOptionsSafe(searchText = '', includeSelectedId = null) {
+    return fetchCompanies(searchText, includeSelectedId);
+  }
+
+  function bindCompanyRemoteSearch(select, loadSearchResults) {
+    if (!select || typeof loadSearchResults !== 'function' || select.dataset.crmCompanyRemoteSearchBound === 'true') return;
+    select.dataset.crmCompanyRemoteSearchBound = 'true';
+    let typedSearch = '';
+    let resetTimer = null;
+    let requestId = 0;
+    const search = searchText => {
+      const currentRequestId = ++requestId;
+      Promise.resolve(loadSearchResults(searchText)).catch(error => {
+        if (currentRequestId === requestId) console.error('[crm selectors] remote company search failed', error);
+      });
+    };
+    select.addEventListener('keydown', event => {
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.key === 'Escape') {
+        typedSearch = '';
+        return;
+      }
+      if (event.key === 'Backspace') {
+        typedSearch = typedSearch.slice(0, -1);
+      } else if (event.key.length === 1) {
+        typedSearch += event.key;
+      } else {
+        return;
+      }
+      event.preventDefault();
+      global.clearTimeout(resetTimer);
+      resetTimer = global.setTimeout(() => { typedSearch = ''; }, 3000);
+      search(typedSearch);
+    });
+    select.addEventListener('paste', event => {
+      const pastedSearch = str(event.clipboardData?.getData?.('text'));
+      if (!pastedSearch) return;
+      event.preventDefault();
+      typedSearch = pastedSearch;
+      search(typedSearch);
+    });
+  }
+
+  async function populateCompanySelect(cfg, searchText = '') {
+    const select = byId(cfg.companySelectId);
+    if (!select) return;
+    const selectedId = str(select.value || byId(cfg.companyHiddenId)?.value);
+    const requestId = String(Number(select.dataset.companySearchRequestId || 0) + 1);
+    select.dataset.companySearchRequestId = requestId;
+    select.dataset.companyLoadState = 'loading';
+    try {
+      const companies = await loadCompanyOptionsSafe(searchText, selectedId);
+      if (select.dataset.companySearchRequestId !== requestId) return;
+      setSelectOptions(select, companies, 'Select company', 'company');
+      select.dataset.companyLoadState = 'ready';
+    } catch (error) {
+      select.innerHTML = '<option value="">Unable to load companies — retry</option>';
+      select.dataset.companyLoadState = 'error';
+      select.title = String(error?.message || 'Unable to load companies');
+      throw error;
+    }
+  }
+
+  async function loadContactsForConfig(cfg, companyId, selectedContactId = '') {
+    const contactSelect = byId(cfg.contactSelectId);
+    if (!contactSelect) return [];
+    if (!companyId) {
+      contactSelect.disabled = true;
+      contactSelect.innerHTML = '<option value="">Select company first</option>';
+      return [];
+    }
+    contactSelect.disabled = true;
+    contactSelect.innerHTML = '<option value="">Loading contacts…</option>';
+    const requestCompanyId = await resolveCompanyUuid(companyId);
+    if (!requestCompanyId) {
+      contactSelect.innerHTML = '<option value="">Select a valid company first</option>';
+      return [];
+    }
+    contactSelect.dataset.loadingCompanyId = requestCompanyId;
+    const contacts = await loadContactsForCompany(requestCompanyId);
+    const currentCompanyId = await resolveCompanyUuid(byId(cfg.companySelectId)?.value || byId(cfg.companyHiddenId)?.value);
+    if (contactSelect.dataset.loadingCompanyId !== requestCompanyId || currentCompanyId !== requestCompanyId) return [];
+    if (!contacts.length) {
+      contactSelect.innerHTML = '<option value="">No contacts found for this company</option>';
+      contactSelect.disabled = false;
+      return [];
+    }
+    setSelectOptions(contactSelect, contacts, 'Select contact', 'contact');
+    contactSelect.disabled = false;
+    if (selectedContactId && [...contactSelect.options].some(opt => opt.value === selectedContactId)) {
+      contactSelect.value = selectedContactId;
+    }
+    return contacts;
+  }
+
+  function applyCompany(cfg, company) {
+    const c = normalizeCompany(company || {});
+    const companyId = getCompanyOptionValue(c);
+    const displayName = companyDisplayName(c);
+    setValue(cfg.companyHiddenId, companyId, { readonly: false });
+    setValue(`${cfg.formId.replace('Form', 'Form')}CompanyName`, c.company_name || displayName, { readonly: false });
+    if (cfg.companyFields) {
+      setMany(cfg.companyFields.id, companyId);
+      setMany(cfg.companyFields.name, displayName);
+      setMany(cfg.companyFields.legalName, c.legal_name || c.company_name || displayName);
+      setMany(cfg.companyFields.type, c.company_type);
+      setMany(cfg.companyFields.industry, c.industry);
+      setMany(cfg.companyFields.website, c.website);
+      setMany(cfg.companyFields.email, c.main_email);
+      setMany(cfg.companyFields.phone, c.main_phone);
+      setMany(cfg.companyFields.country, c.country);
+      setMany(cfg.companyFields.city, c.city);
+      setMany(cfg.companyFields.address, c.address);
+      setMany(cfg.companyFields.tax, c.tax_number);
+      setMany(cfg.companyFields.status, c.company_status);
+    }
+    const prefix = cfg.formId.replace('Form', 'Form');
+    // Extra common customer/company aliases used by proposal/agreement/invoice/receipt templates.
+    ['CustomerName', 'CustomerLegalName'].forEach(suffix => setText(`${prefix}${suffix}`, suffix === 'CustomerLegalName' ? (c.legal_name || displayName) : displayName));
+    setText(`${prefix}CustomerAddress`, c.address);
+    const companySignatory = resolveCompanyAuthorizedSignatory(c);
+    setText(`${prefix}CustomerOfficialSignatoryName`, companySignatory.name);
+    setText(`${prefix}CustomerOfficialSignatoryTitle`, companySignatory.title);
+    const signatoryNameField = byId(`${prefix}CustomerSignatoryName`);
+    const signatoryTitleField = byId(`${prefix}CustomerSignatoryTitle`);
+    if (!str(signatoryNameField?.value)) setText(`${prefix}CustomerSignatoryName`, companySignatory.name);
+    if (!str(signatoryTitleField?.value)) setText(`${prefix}CustomerSignatoryTitle`, companySignatory.title);
+    setText(`${prefix}CompanyName`, c.company_name || displayName);
+    setText(`${prefix}CompanyEmail`, c.main_email);
+    setText(`${prefix}CompanyPhone`, c.main_phone);
+    setText(`${prefix}Country`, c.country);
+    setText(`${prefix}City`, c.city);
+    setText(`${prefix}TaxNumber`, c.tax_number);
+    const currencyField = byId(`${prefix}Currency`);
+    if (currencyField && c.currency && !str(currencyField.value)) currencyField.value = c.currency;
+    const paymentTermField = byId(`${prefix}PaymentTerm`);
+    if (paymentTermField && c.payment_term && !str(paymentTermField.value)) paymentTermField.value = c.payment_term;
+    cfg.updateModule?.(c, null);
+    byId(cfg.formId)?.dispatchEvent?.(new CustomEvent('crm-company-selected', { bubbles: true, detail: { company: c } }));
+  }
+
+  function applyContact(cfg, contact) {
+    const c = normalizeContact(contact || {});
+    const displayName = displayContact(c, { includeEmail: false });
+    const phone = contactPhone(c);
+    setValue(cfg.contactHiddenId, c.contact_id || '', { readonly: false });
+    const prefix = cfg.formId.replace('Form', 'Form');
+    setValue(`${prefix}ContactName`, displayName, { readonly: false });
+    setValue(`${prefix}ContactEmail`, c.email, { readonly: false });
+    setValue(`${prefix}ContactPhone`, phone, { readonly: false });
+    setValue(`${prefix}ContactMobile`, c.mobile, { readonly: false });
+    if (cfg.contactFields) {
+      setMany(cfg.contactFields.id, c.contact_id);
+      setMany(cfg.contactFields.firstName, c.first_name);
+      setMany(cfg.contactFields.lastName, c.last_name);
+      setMany(cfg.contactFields.fullName, displayName);
+      setMany(cfg.contactFields.jobTitle, c.job_title);
+      setMany(cfg.contactFields.department, c.department);
+      setMany(cfg.contactFields.email, c.email);
+      setMany(cfg.contactFields.phone, phone);
+      setMany(cfg.contactFields.mobile, c.mobile || c.phone);
+      setMany(cfg.contactFields.decisionRole, c.decision_role);
+      setMany(cfg.contactFields.primary, c.is_primary_contact ? 'Yes' : 'No');
+      setMany(cfg.contactFields.status, c.contact_status);
+    }
+    // Extra common customer/contact/signatory aliases used by downstream forms.
+    setText(`${prefix}CustomerContactName`, displayName);
+    if (cfg.formId !== 'proposalForm') setText(`${prefix}CustomerSignatoryName`, displayName);
+    ['CustomerContactEmail', 'CustomerSignatoryEmail'].forEach(suffix => setText(`${prefix}${suffix}`, c.email));
+    ['CustomerContactPhone', 'CustomerSignatoryPhone'].forEach(suffix => setText(`${prefix}${suffix}`, phone));
+    setText(`${prefix}CustomerContactMobile`, c.mobile || c.phone);
+    if (cfg.formId !== 'proposalForm') setText(`${prefix}CustomerSignatoryTitle`, c.contact_position || c.job_title);
+    cfg.updateModule?.(null, c);
+    if (cfg.formId === 'proposalForm') global.Proposals?.applyProposalContactSignatory?.(c, { contactChanged: true });
+    byId(cfg.formId)?.dispatchEvent?.(new CustomEvent('crm-contact-selected', { bubbles: true, detail: { contact: c } }));
+  }
+
+  function syncExistingValues(cfg) {
+    const form = byId(cfg.formId);
+    const companySelect = byId(cfg.companySelectId);
+    const contactSelect = byId(cfg.contactSelectId);
+    if (!form || !companySelect || !contactSelect) return;
+    const currentCompanyId = str(byId(cfg.companyHiddenId)?.value || form.dataset.companyId || companySelect.value);
+    const currentContactId = str(byId(cfg.contactHiddenId)?.value || form.dataset.contactId || contactSelect.value);
+    const matchedCompany = findCompanyByAnyId(currentCompanyId);
+    const matchedCompanyValue = matchedCompany ? getCompanyOptionValue(matchedCompany) : '';
+    if (matchedCompanyValue && [...companySelect.options].some(opt => opt.value === matchedCompanyValue)) {
+      companySelect.value = matchedCompanyValue;
+    } else if (!currentCompanyId || ![...companySelect.options].some(opt => opt.value === currentCompanyId)) {
+      // Never keep a stale company selection from a previously opened agreement.
+      // This was causing many agreements to display the first/previous company.
+      companySelect.value = '';
+    } else {
+      companySelect.value = currentCompanyId;
+    }
+    const contactCompanyKey = matchedCompanyValue || currentCompanyId;
+    if (contactCompanyKey) loadContactsForConfig(cfg, contactCompanyKey, currentContactId);
+    const direct = isDirectCreate(cfg);
+    companySelect.disabled = !direct && currentCompanyId ? true : false;
+    contactSelect.disabled = !contactCompanyKey || (!direct && currentContactId ? true : contactSelect.disabled);
+    companySelect.classList.remove('readonly-field', 'locked-field');
+    contactSelect.classList.remove('readonly-field', 'locked-field');
+  }
+
+  function bindConfig(cfg) {
+    const companySelect = byId(cfg.companySelectId);
+    const contactSelect = byId(cfg.contactSelectId);
+    if (!companySelect || !contactSelect || companySelect.dataset.crmSelectorBound === 'true') return;
+    companySelect.dataset.crmSelectorBound = 'true';
+    contactSelect.dataset.crmSelectorBound = 'true';
+
+    companySelect.addEventListener('focus', () => populateCompanySelect(cfg, '').catch(() => {}));
+    bindCompanyRemoteSearch(companySelect, searchText => populateCompanySelect(cfg, searchText));
+    companySelect.addEventListener('change', async () => {
+      const companyKey = str(companySelect.value);
+      console.log('[Company changed] clearing contact');
+      state.contactOptionsByCompany.clear();
+      setValue(cfg.contactHiddenId, '', { readonly: false });
+      const form = byId(cfg.formId);
+      if (form) form.dataset.contactId = '';
+      cfg.updateModule?.(null, { contact_id: '' });
+      contactSelect.value = '';
+      contactSelect.innerHTML = companyKey ? '<option value="">Loading contacts…</option>' : '<option value="">Select company first</option>';
+      const selectedCompanyId = await resolveCompanyUuid(companyKey);
+      if (str(companySelect.value) !== companyKey) return;
+      console.log('[Company changed] selectedCompanyId:', selectedCompanyId);
+      setValue(cfg.companyHiddenId, selectedCompanyId || '', { readonly: false });
+      const company = findCompanyByAnyId(selectedCompanyId) || null;
+      if (cfg.uuidSourceOfTruth === true) {
+        try {
+          await global.Proposals?.hydrateCreateCustomerByUuid?.(selectedCompanyId, '', 'dropdown');
+        } catch (error) {
+          companySelect.value = '';
+          global.UI?.toast?.(error?.message || 'Selected company data mismatch. Please reselect the company.');
+          return;
+        }
+      } else if (company) applyCompany(cfg, company);
+      ['ContactName', 'ContactEmail', 'ContactPhone', 'ContactMobile', 'CustomerContactName', 'CustomerContactEmail', 'CustomerContactPhone', 'CustomerContactMobile', 'CustomerSignatoryName', 'CustomerSignatoryTitle', 'CustomerSignatoryEmail', 'CustomerSignatoryPhone']
+        .filter(suffix => cfg.formId !== 'proposalForm' || !['CustomerSignatoryName', 'CustomerSignatoryTitle'].includes(suffix))
+        .forEach(suffix => setText(`${cfg.formId.replace('Form', 'Form')}${suffix}`, ''));
+      const contacts = await loadContactsForConfig(cfg, selectedCompanyId);
+      console.log('[Contacts loaded]', contacts);
+      if (isDirectCreate(cfg)) {
+        companySelect.disabled = false;
+        contactSelect.disabled = !selectedCompanyId;
+      }
+    });
+
+    contactSelect.addEventListener('change', async () => {
+      const companyId = str(companySelect.value);
+      const contactId = str(contactSelect.value);
+      const contact = getContactOptionForCompany(contactId, companyId);
+      if (str(companySelect.value) !== companyId || str(contactSelect.value) !== contactId) return;
+      if (cfg.uuidSourceOfTruth === true) {
+        try {
+          await global.Proposals?.hydrateCreateCustomerByUuid?.(companyId, contactId, 'dropdown');
+        } catch (error) {
+          contactSelect.value = '';
+          global.UI?.toast?.(error?.message || 'Selected contact data mismatch. Please reselect the contact.');
+          return;
+        }
+      } else if (contact) applyContact(cfg, contact);
+      if (isDirectCreate(cfg)) {
+        companySelect.disabled = false;
+        contactSelect.disabled = !companyId;
+      }
+    });
+  }
+
+
+
+  function initializeCompanyContactSelectorsForForm(formKey) {
+    const cfg = FORM_CONFIG[formKey];
+    if (!cfg) return Promise.resolve();
+    return populateCompanySelect(cfg).then(() => {
+      bindConfig(cfg);
+      syncExistingValues(cfg);
+    });
+  }
+
+
+  async function refreshAfterCompanySave(savedCompany = {}) {
+    const company = normalizeCompany(savedCompany);
+    const companyId = getCompanyOptionValue(company);
+    state.companies = [];
+    state.loadingCompanies = null;
+    let freshRows = [];
+    try {
+      freshRows = await loadCompanyOptions(company.display_label || company.company_name || company.legal_name || company.name || '', companyId);
+    } catch (error) {
+      // The visible error is rendered below; keep only the just-created response, never stale options.
+      console.error('[crm selectors] company refresh after save failed', error);
+    }
+    state.companies = mergeCompanyRows(freshRows, companyId ? company : null);
+    Object.values(FORM_CONFIG).forEach(cfg => {
+      const select = byId(cfg.companySelectId);
+      if (!select) return;
+      if (!state.companies.length) {
+        select.innerHTML = '<option value="">Unable to load companies — retry</option>';
+        select.dataset.companyLoadState = 'error';
+        return;
+      }
+      setSelectOptions(select, state.companies, 'Select company', 'company');
+      const form = byId(cfg.formId);
+      const modal = byId(cfg.formId.replace('Form', 'FormModal'));
+      const isVisible = form && (!modal || modal.getAttribute('aria-hidden') !== 'true');
+      if (companyId && isVisible && [...select.options].some(option => option.value === companyId)) {
+        select.value = companyId;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
+    return state.companies;
+  }
+
+  async function resolveContactUuid(contactKey) {
+    const key = str(contactKey);
+    if (!key) return null;
+    if (isUuid(key)) return key;
+    const client = global.SupabaseClient?.getClient?.() || global.supabaseClient || global.supabase;
+    if (!client?.rpc) {
+      console.error('[Contact Resolver] Failed:', key, new Error('Supabase RPC client is unavailable.'));
+      return null;
+    }
+    const { data, error } = await client.rpc('crm_resolve_contact_uuid', { p_contact_key: key });
+    if (error) {
+      console.error('[Contact Resolver] Failed:', key, error);
+      return null;
+    }
+    const resolvedId = str(Array.isArray(data) ? data[0] : data);
+    return isUuid(resolvedId) ? resolvedId : null;
+  }
+
+  async function loadContactSafe(contactKey) {
+    const id = await resolveContactUuid(contactKey);
+    if (!id) return null;
+    const client = global.SupabaseClient?.getClient?.() || global.supabaseClient || global.supabase;
+    if (client?.rpc) {
+      const { data, error } = await client.rpc('crm_get_contact_by_key', { p_contact_key: id });
+      if (!error) {
+        const row = Array.isArray(data) ? data[0] : data;
+        if (row && typeof row === 'object') return normalizeContact(row);
+      } else {
+        console.error('[Contact Loader] RPC failed:', id, error);
+      }
+    }
+    return null;
+  }
+
+  async function loadContactByUuid(contactUuid) {
+    return loadContactSafe(contactUuid);
+  }
+
+  async function contactBelongsToCompany(contactKey, companyKey) {
+    if (!contactKey || !companyKey) return false;
+    const client = global.SupabaseClient?.getClient?.() || global.supabaseClient || global.supabase;
+    if (!client?.rpc) {
+      console.error('[Contact ownership check failed]', { contactKey, companyKey, error: new Error('Supabase RPC client is unavailable.') });
+      return false;
+    }
+    const { data, error } = await client.rpc('crm_contact_belongs_to_company', {
+      p_contact_key: String(contactKey),
+      p_company_key: String(companyKey)
+    });
+    if (error) {
+      console.error('[Contact Company Validation] Failed', { contactKey, companyKey, error });
+      return false;
+    }
+    return data === true;
+  }
+
+  function getContactOptionsForCompany(companyKey) {
+    return state.contactOptionsByCompany.get(str(companyKey)) || [];
+  }
+
+  function getContactOptionForCompany(contactKey, companyKey) {
+    const contactId = str(contactKey);
+    if (!contactId) return null;
+    const direct = getContactOptionsForCompany(companyKey).find(contact =>
+      str(contact.contact_uuid) === contactId || str(contact.id) === contactId || str(contact.contact_ref) === contactId
+    );
+    if (direct) return direct;
+    for (const contacts of state.contactOptionsByCompany.values()) {
+      const found = (contacts || []).find(contact =>
+        str(contact.contact_uuid) === contactId || str(contact.id) === contactId || str(contact.contact_ref) === contactId
+      );
+      if (found) return found;
+    }
+    return null;
+  }
+
+  function configForModule(moduleName = '') {
+    const key = str(moduleName).split('-').pop();
+    return FORM_CONFIG[key] || null;
+  }
+
+  async function clearSelectedContactForCompany(companyId, moduleName = '') {
+    const selectedCompanyId = await resolveCompanyUuid(companyId);
+    console.log('[Company changed] clearing contact');
+    state.contactOptionsByCompany.clear();
+    if (str(moduleName) === 'lead') {
+      global.Leads?.clearLeadContactSelection?.();
+      if (global.Leads?.state) global.Leads.state.contactPickerRows = [];
+      if (selectedCompanyId) await global.Leads?.loadLeadPickerOptions?.(selectedCompanyId);
+      return;
+    }
+    const cfg = configForModule(moduleName);
+    if (!cfg) return;
+    const form = byId(cfg.formId);
+    const contactSelect = byId(cfg.contactSelectId);
+    setValue(cfg.contactHiddenId, '', { readonly: false });
+    if (form) form.dataset.contactId = '';
+    cfg.updateModule?.(null, { contact_id: '' });
+    if (contactSelect) {
+      contactSelect.value = '';
+      contactSelect.innerHTML = selectedCompanyId ? '<option value="">Loading contacts…</option>' : '<option value="">Select company first</option>';
+    }
+    if (selectedCompanyId) await loadContactsForConfig(cfg, selectedCompanyId);
+  }
+
+  async function validateCompanyContactSelection({ companyId, contactId = '', moduleName = 'record' } = {}) {
+    const companyKey = str(companyId);
+    const selectedContactKey = str(contactId);
+    console.log('[Save] selectedCompanyId:', companyKey);
+    console.log('[Save] form.company_id before resolve:', companyKey);
+    console.log('[Save] selectedContactId:', selectedContactKey);
+    console.log('[Save] form.contact_id before resolve:', selectedContactKey);
+    if (!companyKey) throw new Error('Please select a company.');
+    const selectedCompanyId = await resolveCompanyUuid(companyKey);
+    console.log('[Save] resolvedCompanyId:', selectedCompanyId);
+    if (!selectedCompanyId) throw new Error('Selected company could not be resolved. Please reselect the company.');
+    const loadedCompany = await loadCompanySafe(selectedCompanyId);
+    if (!loadedCompany || loadedCompany.id !== selectedCompanyId) {
+      throw new Error('Selected company could not be resolved. Please reselect the company.');
+    }
+    let loadedContact = null;
+    let resolvedContactId = null;
+    let selectedContactFromOptions = null;
+    if (selectedContactKey) {
+      resolvedContactId = await resolveContactUuid(selectedContactKey);
+      console.log('[Save] resolvedContactId:', resolvedContactId);
+      if (!resolvedContactId) throw new Error('Selected contact could not be resolved. Please reselect the contact.');
+      selectedContactFromOptions = getContactOptionForCompany(resolvedContactId, selectedCompanyId);
+      if (!selectedContactFromOptions) {
+        await loadContactsForCompany(selectedCompanyId);
+        selectedContactFromOptions = getContactOptionForCompany(resolvedContactId, selectedCompanyId);
+      }
+      console.log('[Save] contactOptions:', state.contactOptionsByCompany.get(selectedCompanyId) || []);
+      console.log('[Save] selectedContactFromOptions:', selectedContactFromOptions);
+      loadedContact = selectedContactFromOptions || await loadContactSafe(resolvedContactId);
+      if (!loadedContact || str(loadedContact.id || loadedContact.contact_uuid) !== resolvedContactId) {
+        throw new Error('Selected contact could not be resolved. Please reselect the contact.');
+      }
+      if (!selectedContactFromOptions) {
+        const belongs = await contactBelongsToCompany(resolvedContactId, selectedCompanyId);
+        console.log('[Save] contact belongs:', belongs);
+        if (!belongs) {
+          await clearSelectedContactForCompany(selectedCompanyId, moduleName);
+          throw new Error('Selected contact does not belong to the selected company. Please reselect the contact.');
+        }
+      }
+    }
+    console.log('[SAVE CHECK] module:', moduleName);
+    console.log('[SAVE CHECK] form.company_id:', selectedCompanyId);
+    console.log('[SAVE CHECK] selectedCompanyId:', selectedCompanyId);
+    console.log('[SAVE CHECK] loadedCompany:', loadedCompany);
+    console.log('[SAVE CHECK] form.contact_id:', resolvedContactId || '');
+    console.log('[SAVE CHECK] loadedContact:', loadedContact);
+    return { resolvedCompanyId: selectedCompanyId, resolvedContactId, loadedCompany, loadedContact, selectedContactFromOptions };
+  }
+
+  function applyLoadedCompanySnapshot(payload = {}, loadedCompany = {}, loadedContact = null) {
+    const companyName = str(loadedCompany.legal_name || loadedCompany.company_name || loadedCompany.name);
+    const address = str(loadedCompany.address);
+    const email = str(loadedCompany.main_email || loadedCompany.email);
+    const phone = str(loadedCompany.main_phone || loadedCompany.phone);
+    const companySignatory = resolveCompanyAuthorizedSignatory(loadedCompany);
+    const existingSignatoryName = str(payload.customer_signatory_name || payload.customer_signatory_Name || payload.customer_authorized_signatory_name || payload.customer_official_signatory_name || payload.authorized_signatory_name);
+    const existingSignatoryTitle = str(payload.customer_signatory_title || payload.customer_authorized_signatory_title || payload.customer_official_signatory_title || payload.authorized_signatory_title);
+    const next = {
+      ...payload,
+      company_id: str(loadedCompany.id),
+      customer_name: companyName,
+      client_name: companyName,
+      company_name: companyName,
+      customer_address: address,
+      customer_email: email,
+      customer_phone: phone,
+      customer_signatory_name: existingSignatoryName || companySignatory.name,
+      customer_signatory_title: existingSignatoryTitle || companySignatory.title
+    };
+    if (loadedContact) next.contact_id = str(loadedContact.id);
+    return next;
+  }
+
+  async function refreshAll() {
+    state.companies = [];
+    state.loadingCompanies = null;
+    state.companyLoadError = null;
+    await Promise.all(Object.values(FORM_CONFIG).map(cfg => populateCompanySelect(cfg)));
+    Object.values(FORM_CONFIG).forEach(cfg => {
+      bindConfig(cfg);
+      syncExistingValues(cfg);
+    });
+  }
+
+  function observeModals() {
+    const observer = new MutationObserver(() => {
+      Object.values(FORM_CONFIG).forEach(cfg => syncExistingValues(cfg));
+    });
+    Object.values(FORM_CONFIG).forEach(cfg => {
+      const modal = byId(cfg.formId.replace('Form', 'FormModal'));
+      if (modal) observer.observe(modal, { attributes: true, attributeFilter: ['class', 'style', 'aria-hidden'] });
+      const form = byId(cfg.formId);
+      if (form) observer.observe(form, { attributes: true, attributeFilter: ['data-mode', 'data-id', 'data-source', 'data-proposal-uuid', 'data-agreement-id', 'data-source-invoice-uuid'] });
+    });
+  }
+
+  async function init() {
+    if (state.initialized) return;
+    state.initialized = true;
+    await refreshAll();
+    observeModals();
+    ['dealsCreateBtn','proposalsCreateBtn','agreementsCreateBtn','invoicesCreateBtn','receiptsCreateBtn'].forEach(id => {
+      const btn = byId(id);
+      if (btn) btn.addEventListener('click', () => global.setTimeout(() => refreshAll().catch(() => {}), 100));
+    });
+    global.addEventListener('focus', () => refreshAll().catch(() => {}));
+  }
+
+  global.CrmCompanyContactSelectors = {
+    init,
+    refresh: refreshAll,
+    initializeCompanyContactSelectorsForDeal: () => initializeCompanyContactSelectorsForForm('deal'),
+    initializeCompanyContactSelectorsForProposal: () => initializeCompanyContactSelectorsForForm('proposal'),
+    initializeCompanyContactSelectorsForAgreement: () => initializeCompanyContactSelectorsForForm('agreement'),
+    initializeCompanyContactSelectorsForInvoice: () => initializeCompanyContactSelectorsForForm('invoice'),
+    initializeCompanyContactSelectorsForReceipt: () => initializeCompanyContactSelectorsForForm('receipt'),
+    loadCompanies: loadCompanyOptionsSafe,
+    loadCompanyOptions,
+    bindCompanyRemoteSearch,
+    resolveCompanyUuid,
+    loadCompanySafe,
+    loadCompanyByUuid: fetchCompanyByUuid,
+    resolveContactUuid,
+    loadContactSafe,
+    loadContactByUuid,
+    contactBelongsToCompany,
+    getCompanyContactFkValue,
+    upsertContactCompanyLinks,
+    getContactOptionsForCompany,
+    getContactOptionForCompany,
+    clearSelectedContactForCompany,
+    validateCompanyContactSelection,
+    applyLoadedCompanySnapshot,
+    invalidateCompanies() { state.companies = []; state.loadingCompanies = null; state.companyLoadError = null; },
+    refreshAfterCompanySave,
+    loadContactsForCompany,
+    applyCompanyToForm(formKey, company) { const cfg = FORM_CONFIG[formKey]; if (cfg) applyCompany(cfg, company); },
+    applyContactToForm(formKey, contact) { const cfg = FORM_CONFIG[formKey]; if (cfg) applyContact(cfg, contact); }
+  };
+
+  // Patch immediately so ui.js captures real select elements instead of legacy readonly inputs.
+  // Full loading/binding waits until all modules are available.
+  if (doc.readyState === 'loading') {
+    doc.addEventListener('DOMContentLoaded', () => init().catch(error => console.warn('[crm selectors] init failed', error)));
+  } else {
+    global.setTimeout(() => init().catch(error => console.warn('[crm selectors] init failed', error)), 0);
+  }
+})(window);

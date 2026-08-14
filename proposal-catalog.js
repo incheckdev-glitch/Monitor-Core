@@ -1,0 +1,731 @@
+const ProposalCatalog = {
+  sectionValues: ['annual_saas', 'one_time_fee', 'hardware'],
+  state: {
+    rows: [],
+    filteredRows: [],
+    loading: false,
+    loadError: '',
+    loaded: false,
+    lastLoadedAt: 0,
+    cacheTtlMs: 2 * 60 * 1000,
+    initialized: false,
+    search: '',
+    section: 'All',
+    active: 'All',
+    page: 1,
+    limit: 50,
+    offset: 0,
+    returned: 0,
+    hasMore: false,
+    total: 0,
+    sort: 'updated_desc',
+    formMode: 'create',
+    currentId: '',
+    lookupRows: [],
+    lookupLoadedAt: 0,
+    lookupTtlMs: 5 * 60 * 1000,
+    lookupLoadingPromise: null,
+    lookupLimit: 500
+  },
+  normalizeText(value) {
+    return String(value ?? '').trim();
+  },
+  toNumberOrNull(value) {
+    if (value === null || value === undefined) return null;
+    const raw = String(value).trim();
+    if (!raw) return null;
+    const parsed = Number(raw.replace(/,/g, ''));
+    return Number.isFinite(parsed) ? parsed : null;
+  },
+  toBool(value, fallback = false) {
+    if (typeof value === 'boolean') return value;
+    const normalized = String(value ?? '')
+      .trim()
+      .toLowerCase();
+    if (!normalized) return fallback;
+    if (['true', '1', 'yes', 'y', 'active'].includes(normalized)) return true;
+    if (['false', '0', 'no', 'n', 'inactive'].includes(normalized)) return false;
+    return fallback;
+  },
+  normalizeItem(raw = {}) {
+    const source = raw && typeof raw === 'object' ? raw : {};
+    const pick = (...values) => {
+      for (const value of values) {
+        if (value !== undefined && value !== null) return value;
+      }
+      return '';
+    };
+    const section = String(pick(source.section, source.item_section, 'annual_saas'))
+      .trim()
+      .toLowerCase();
+    return {
+      id: this.normalizeText(source.id),
+      catalog_item_id: this.normalizeText(pick(source.catalog_item_id, source.catalogItemId)),
+      created_at: this.normalizeText(pick(source.created_at, source.createdAt)),
+      updated_at: this.normalizeText(pick(source.updated_at, source.updatedAt)),
+      deactivated_at: this.normalizeText(pick(source.deactivated_at, source.deactivatedAt)),
+      deactivated_by: this.normalizeText(pick(source.deactivated_by, source.deactivatedBy)),
+      is_active: this.toBool(pick(source.is_active, source.isActive), true),
+      section: this.sectionValues.includes(section) ? section : 'annual_saas',
+      is_capability: section === 'capability',
+      category: this.normalizeText(source.category),
+      item_name: this.normalizeText(pick(source.item_name, source.itemName, source.name)),
+      default_location_name: this.normalizeText(
+        pick(source.default_location_name, source.defaultLocationName, source.location_name)
+      ),
+      unit_price: this.toNumberOrNull(pick(source.unit_price, source.unitPrice)),
+      discount_percent: this.toNumberOrNull(pick(source.discount_percent, source.discountPercent)),
+      quantity: this.toNumberOrNull(source.quantity),
+      notes: this.normalizeText(pick(source.notes, source.note, source.description, source.item_description, source.catalog_note, source.catalog_description, source.internal_note)),
+      description: this.normalizeText(pick(source.description, source.item_description, source.note, source.notes, source.catalog_note, source.catalog_description)),
+      sort_order: this.toNumberOrNull(pick(source.sort_order, source.sortOrder))
+    };
+  },
+  extractRows(response) {
+    const candidates = [
+      response,
+      response?.items,
+      response?.rows,
+      response?.data,
+      response?.result,
+      response?.payload,
+      response?.data?.items
+    ];
+    for (const candidate of candidates) {
+      if (Array.isArray(candidate)) return candidate;
+    }
+    return [];
+  },
+  extractListResult(response) {
+    if (response && typeof response === 'object' && Array.isArray(response.rows)) {
+      const total = Number(response.total ?? response.rows.length) || response.rows.length;
+      const returned = Number(response.returned ?? response.rows.length) || response.rows.length;
+      const limit = Number(response.limit || this.state.limit || 50);
+      const page = Number(response.page || this.state.page || 1);
+      const offset = Number(response.offset ?? Math.max(0, (page - 1) * limit));
+      const hasMore = response.hasMore !== undefined
+        ? Boolean(response.hasMore)
+        : response.has_more !== undefined
+          ? Boolean(response.has_more)
+          : offset + returned < total;
+      return { rows: response.rows, total, returned, hasMore, page, limit, offset };
+    }
+    const rows = this.extractRows(response);
+    const limit = Number(this.state.limit || 50);
+    const page = Number(this.state.page || 1);
+    const returned = rows.length;
+    const offset = Math.max(0, (page - 1) * limit);
+    return {
+      rows,
+      total: rows.length,
+      returned,
+      hasMore: false,
+      page,
+      limit,
+      offset
+    };
+  },
+  async listProposalCatalogItems(options = {}) {
+    const sortMode = String(options.sortMode || this.state.sort || 'updated_desc').trim();
+    const sortMap = {
+      updated_desc: { sort_by: 'updated_at', sort_dir: 'desc' },
+      created_desc: { sort_by: 'created_at', sort_dir: 'desc' },
+      sort_order_asc: { sort_by: 'sort_order', sort_dir: 'asc' }
+    };
+    const sort = sortMap[sortMode] || sortMap.updated_desc;
+    const sectionFilter = String(options.section ?? this.state.section ?? 'All').trim();
+    const activeFilter = String(options.active ?? this.state.active ?? 'All').trim().toLowerCase();
+    const filters = {};
+    if (sectionFilter && sectionFilter !== 'All') filters.section = sectionFilter;
+    if (activeFilter === 'active') filters.is_active = true;
+    if (activeFilter === 'inactive') filters.is_active = false;
+    return Api.listProposalCatalogItems({
+      limit: Number(options.limit || this.state.limit || 50),
+      page: Number(options.page || this.state.page || 1),
+      sort_by: options.sort_by || options.sortBy || sort.sort_by,
+      sort_dir: options.sort_dir || options.sortDir || sort.sort_dir,
+      search: options.search !== undefined ? options.search : this.state.search || '',
+      ...filters,
+      summary_only: options.summary_only !== false,
+      forceRefresh: options.forceRefresh === true
+    });
+  },
+  upsertLocalRow(row) {
+    const normalized = this.normalizeItem(row);
+    const idx = this.state.rows.findIndex(item => item.id === normalized.id);
+    if (idx === -1) this.state.rows.unshift(normalized);
+    else this.state.rows[idx] = { ...this.state.rows[idx], ...normalized };
+    this.applyFilters();
+    this.renderSummary();
+    this.render();
+  },
+  removeLocalRow(id) {
+    this.state.rows = this.state.rows.filter(item => item.id !== id);
+    this.applyFilters();
+    this.renderSummary();
+    this.render();
+  },
+  async getProposalCatalogItem(catalogItemUuid) {
+    return Api.getProposalCatalogItem(catalogItemUuid);
+  },
+  async createProposalCatalogItem(item) {
+    return Api.createProposalCatalogItem(item);
+  },
+  async updateProposalCatalogItem(catalogItemUuid, updates) {
+    return Api.updateProposalCatalogItem(catalogItemUuid, updates);
+  },
+  async deactivateProposalCatalogItem(catalogItemUuid) {
+    return Api.deactivateProposalCatalogItem(catalogItemUuid);
+  },
+  async reactivateProposalCatalogItem(catalogItemUuid) {
+    return Api.reactivateProposalCatalogItem(catalogItemUuid);
+  },
+  async deleteProposalCatalogItem(catalogItemUuid) {
+    return this.deactivateProposalCatalogItem(catalogItemUuid);
+  },
+  canManageCatalogStatus() {
+    return Permissions.canUpdateProposalCatalogItem() || Permissions.can('proposal_catalog','manage') || Permissions.can('proposal_catalog_items','update');
+  },
+  applyFilters() {
+    this.state.filteredRows = (Array.isArray(this.state.rows) ? this.state.rows : []).filter(item => !item.is_capability);
+  },
+  renderSummary() {
+    if (!E.proposalCatalogSummary) return;
+    const rows = this.state.filteredRows;
+    const activeRows = rows.filter(item => item.is_active);
+    const countBySection = section => rows.filter(item => item.section === section).length;
+    const cards = [
+      { label: 'Total Items', value: rows.length, sub: 'All catalog items', icon: '▱', tone: 'violet' },
+      { label: 'Active Items', value: activeRows.length, sub: 'Currently active', icon: '✓', tone: 'green' },
+      { label: 'Annual SaaS Items', value: countBySection('annual_saas'), sub: 'Annual recurring items', icon: '♛', tone: 'blue' },
+      { label: 'One-Time Fee Items', value: countBySection('one_time_fee'), sub: 'One-time fee items', icon: '◆', tone: 'amber' },
+      { label: 'Hardware Items', value: countBySection('hardware'), sub: 'Hardware items', icon: '▦', tone: 'indigo' }
+    ];
+
+    E.proposalCatalogSummary.className = 'catalog-kpi-grid';
+    E.proposalCatalogSummary.innerHTML = cards
+      .map(
+        card => `<div class="catalog-kpi-card catalog-kpi-card--${U.escapeAttr(card.tone)}">
+          <div class="catalog-kpi-icon" aria-hidden="true">${U.escapeHtml(card.icon)}</div>
+          <div>
+            <div class="label">${U.escapeHtml(card.label)}</div>
+            <div class="value">${U.escapeHtml(String(card.value))}</div>
+            <div class="sub">${U.escapeHtml(card.sub)}</div>
+          </div>
+        </div>`
+      )
+      .join('');
+  },
+  formatNumber(value) {
+    if (value === null || value === undefined || value === '') return '—';
+    const num = Number(value);
+    if (!Number.isFinite(num)) return '—';
+    return num.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  },
+  formatMoney(value) {
+    if (value === null || value === undefined || value === '') return '—';
+    const num = Number(value);
+    if (!Number.isFinite(num)) return '—';
+    return `$${num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  },
+  formatDateTime(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '—';
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return raw;
+    return date.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  },
+  prettySection(value) {
+    const key = String(value || '').trim().toLowerCase();
+    if (key === 'annual_saas') return 'Annual SaaS';
+    if (key === 'one_time_fee') return 'One-time Fee';
+    if (key === 'hardware') return 'Hardware';
+    return this.normalizeText(value) || '—';
+  },
+  render() {
+    if (!E.proposalCatalogState || !E.proposalCatalogTbody) return;
+    this.renderPagination();
+
+    if (this.state.loading) {
+      E.proposalCatalogState.textContent = 'Loading proposal catalog items…';
+      E.proposalCatalogTbody.innerHTML =
+        '<tr><td colspan="12" class="muted" style="text-align:center;">Loading proposal catalog items…</td></tr>';
+      return;
+    }
+
+    if (this.state.loadError) {
+      E.proposalCatalogState.textContent = this.state.loadError;
+      E.proposalCatalogTbody.innerHTML = `<tr><td colspan="12" class="muted" style="text-align:center;color:#ffb4b4;">${U.escapeHtml(
+        this.state.loadError
+      )}</td></tr>`;
+      return;
+    }
+
+    const rows = this.state.filteredRows;
+    E.proposalCatalogState.textContent = `${rows.length} item(s) • Page ${this.state.page}`;
+    if (!rows.length) {
+      E.proposalCatalogTbody.innerHTML =
+        '<tr><td colspan="12" class="muted" style="text-align:center;">No catalog items found.</td></tr>';
+      return;
+    }
+
+    const textCell = value => U.escapeHtml(this.normalizeText(value) || '—');
+    const activeCell = value =>
+      value
+        ? '<span class="catalog-chip catalog-chip--active">Active</span>'
+        : '<span class="catalog-chip catalog-chip--inactive">Inactive</span>';
+    const sectionCell = value => {
+      const normalized = String(value || '').trim().toLowerCase();
+      const tone = normalized === 'annual_saas' ? 'blue' : normalized === 'one_time_fee' ? 'amber' : normalized === 'hardware' ? 'indigo' : 'neutral';
+      return `<span class="catalog-chip catalog-chip--${tone}">${U.escapeHtml(this.prettySection(value))}</span>`;
+    };
+
+    E.proposalCatalogTbody.innerHTML = rows
+      .map(row => {
+        const id = U.escapeAttr(row.id || '');
+        const initials = this.prettySection(row.section).slice(0, 2).toUpperCase();
+        const canManage = this.canManageCatalogStatus();
+        return `<tr>
+          <td class="catalog-id-cell">${textCell(row.catalog_item_id)}</td>
+          <td>${activeCell(row.is_active)}</td>
+          <td>${sectionCell(row.section)}</td>
+          <td>${textCell(row.category)}</td>
+          <td class="catalog-item-cell"><div class="catalog-item-wrap"><span class="catalog-avatar" aria-hidden="true">${U.escapeHtml(initials)}</span><span>${textCell(row.item_name)}</span></div></td>
+          <td>${textCell(row.default_location_name)}</td>
+          <td class="catalog-money-cell">${this.formatMoney(row.unit_price)}</td>
+          <td>${this.formatNumber(row.discount_percent)}%</td>
+          <td>${this.formatNumber(row.quantity)}</td>
+          <td>${this.formatNumber(row.sort_order)}</td>
+          <td><div class="catalog-date-cell">${U.escapeHtml(this.formatDateTime(row.updated_at))}<span>by system</span></div></td>
+          <td>
+            <div class="catalog-actions">
+              ${canManage ? `<button class="catalog-action-btn catalog-action-btn--edit" type="button" data-proposal-catalog-edit="${id}">Edit</button>` : ''}
+              ${canManage ? `<button class="catalog-action-btn" type="button" data-proposal-catalog-status="${id}" data-next-active="${row.is_active ? 'false' : 'true'}">${row.is_active ? 'Deactivate' : 'Reactivate'}</button>` : ''}
+            </div>
+          </td>
+        </tr>`;
+      })
+      .join('');
+  },
+  renderFilters() {
+    if (E.proposalCatalogSearchInput) E.proposalCatalogSearchInput.value = this.state.search;
+    if (E.proposalCatalogSectionFilter) E.proposalCatalogSectionFilter.value = this.state.section;
+    if (E.proposalCatalogActiveFilter) E.proposalCatalogActiveFilter.value = this.state.active;
+    if (E.proposalCatalogSortFilter) E.proposalCatalogSortFilter.value = this.state.sort;
+  },
+  async loadAndRefresh({ force = false } = {}) {
+    if (!Session.isAuthenticated()) return;
+    if (this.state.loading && !force) return;
+    const hasWarmCache = this.state.loaded && Date.now() - this.state.lastLoadedAt <= this.state.cacheTtlMs;
+    if (hasWarmCache && !force) {
+      this.applyFilters();
+      this.renderSummary();
+      this.renderFilters();
+      this.renderPagination();
+      this.render();
+      return;
+    }
+
+    this.state.loading = true;
+    this.state.loadError = '';
+    this.render();
+
+    try {
+      const response = await this.listProposalCatalogItems({
+        forceRefresh: force,
+        limit: this.state.limit,
+        page: this.state.page
+      });
+      const normalized = this.extractListResult(response);
+      this.state.rows = normalized.rows.map(item => this.normalizeItem(item)).filter(item => !item.is_capability);
+      this.state.total = normalized.total;
+      this.state.returned = normalized.returned;
+      this.state.hasMore = normalized.hasMore;
+      this.state.page = normalized.page;
+      this.state.limit = normalized.limit;
+      this.state.offset = normalized.offset;
+      this.state.loaded = true;
+      this.state.lastLoadedAt = Date.now();
+      this.applyFilters();
+      this.renderSummary();
+      this.renderFilters();
+      this.renderPagination();
+      this.render();
+    } catch (error) {
+      if (typeof isAuthError === 'function' && isAuthError(error)) {
+        handleExpiredSession('Session expired. Please log in again.');
+        return;
+      }
+      this.state.rows = [];
+      this.state.filteredRows = [];
+      this.state.loadError = String(error?.message || '').trim() || 'Unable to load proposal catalog.';
+      this.renderSummary();
+      this.renderPagination();
+      this.render();
+      UI.toast(this.state.loadError);
+    } finally {
+      this.state.loading = false;
+      this.renderPagination();
+      this.render();
+    }
+  },
+  renderPagination() {
+    const host = U.ensurePaginationHost({
+      hostId: 'proposalCatalogPagination',
+      anchor: E.proposalCatalogState?.closest?.('.catalog-table-panel') || E.proposalCatalogState?.closest?.('.card')
+    });
+    U.renderPaginationControls({
+      host,
+      moduleKey: 'proposal-catalog',
+      page: this.state.page,
+      pageSize: this.state.limit,
+      hasMore: this.state.hasMore,
+      returned: this.state.returned,
+      loading: this.state.loading,
+      pageSizeOptions: [25, 50, 100],
+      countText: this.state.total ? `${this.state.total} total` : '',
+      onPageChange: nextPage => {
+        this.state.page = U.normalizePageNumber(nextPage, this.state.page);
+        this.loadAndRefresh({ force: true });
+      },
+      onPageSizeChange: nextSize => {
+        this.state.limit = U.normalizePageSize(nextSize, 50, 200);
+        this.state.page = 1;
+        this.loadAndRefresh({ force: true });
+      }
+    });
+  },
+  async ensureLookupLoaded({ force = false } = {}) {
+    const hasWarmCache = this.state.lookupRows.length && Date.now() - this.state.lookupLoadedAt <= this.state.lookupTtlMs;
+    if (!force && hasWarmCache) return this.state.lookupRows;
+    if (this.state.lookupLoadingPromise && !force) return this.state.lookupLoadingPromise;
+    const loadPromise = (async () => {
+      const response = await Api.listProposalCatalogItems({
+        limit: Number(this.state.lookupLimit || 500),
+        page: 1,
+        is_active: true,
+        summary_only: true,
+        sort_by: 'sort_order',
+        sort_dir: 'asc',
+        fields: [
+          'id',
+          'catalog_item_id',
+          'is_active',
+          'section',
+          'category',
+          'item_name',
+          'default_location_name',
+          'unit_price',
+          'discount_percent',
+          'quantity',
+          'notes',
+          'sort_order'
+        ]
+      });
+      this.state.lookupRows = this.extractListResult(response).rows.map(item => this.normalizeItem(item)).filter(item => !item.is_capability);
+      this.state.lookupLoadedAt = Date.now();
+      return this.state.lookupRows;
+    })();
+    this.state.lookupLoadingPromise = loadPromise;
+    try {
+      return await loadPromise;
+    } finally {
+      this.state.lookupLoadingPromise = null;
+    }
+  },
+  invalidateLookupCache() {
+    this.state.lookupRows = [];
+    this.state.lookupLoadedAt = 0;
+    this.state.lookupLoadingPromise = null;
+    window.dispatchEvent(new CustomEvent('proposal-catalog-lookup-invalidated'));
+  },
+  getValue(el) {
+    return String(el?.value || '').trim();
+  },
+  openForm(item = null) {
+    if (!E.proposalCatalogFormModal || !E.proposalCatalogForm) return;
+    const normalized = item ? this.normalizeItem(item) : this.normalizeItem({});
+    const mode = normalized.id ? 'edit' : 'create';
+    this.state.formMode = mode;
+    this.state.currentId = normalized.id || '';
+
+    E.proposalCatalogForm.dataset.mode = mode;
+    E.proposalCatalogForm.dataset.id = normalized.id || '';
+    if (E.proposalCatalogFormTitle)
+      E.proposalCatalogFormTitle.textContent = mode === 'edit' ? 'Edit Catalog Item' : 'Create Catalog Item';
+    const subtitleEl = document.getElementById('proposalCatalogFormSubtitle');
+    if (subtitleEl)
+      subtitleEl.textContent =
+        mode === 'edit' ? 'Update catalog item details.' : 'Add a new item to the proposal catalog.';
+    if (E.proposalCatalogFormItemId) E.proposalCatalogFormItemId.value = normalized.catalog_item_id || '';
+    if (E.proposalCatalogFormIsActive) E.proposalCatalogFormIsActive.value = normalized.is_active ? 'true' : 'false';
+    if (E.proposalCatalogFormSection) E.proposalCatalogFormSection.value = normalized.section || 'annual_saas';
+    if (E.proposalCatalogFormCategory) E.proposalCatalogFormCategory.value = normalized.category || '';
+    if (E.proposalCatalogFormItemName) E.proposalCatalogFormItemName.value = normalized.item_name || '';
+    if (E.proposalCatalogFormLocation)
+      E.proposalCatalogFormLocation.value = normalized.default_location_name || '';
+    if (E.proposalCatalogFormUnitPrice) E.proposalCatalogFormUnitPrice.value = normalized.unit_price ?? '';
+    if (E.proposalCatalogFormDiscountPercent)
+      E.proposalCatalogFormDiscountPercent.value = normalized.discount_percent ?? '';
+    if (E.proposalCatalogFormQuantity) E.proposalCatalogFormQuantity.value = normalized.quantity ?? '';
+    if (E.proposalCatalogFormSortOrder) E.proposalCatalogFormSortOrder.value = normalized.sort_order ?? '';
+    if (E.proposalCatalogFormNotes) E.proposalCatalogFormNotes.value = normalized.notes || '';
+    this.updateNotesCounter();
+    if (E.proposalCatalogFormDeleteBtn) {
+      E.proposalCatalogFormDeleteBtn.setAttribute('data-permission-resource', 'proposal_catalog');
+      E.proposalCatalogFormDeleteBtn.setAttribute('data-permission-action', 'update');
+      E.proposalCatalogFormDeleteBtn.textContent = normalized.is_active ? 'Deactivate' : 'Reactivate';
+      E.proposalCatalogFormDeleteBtn.style.display = mode === 'edit' && this.canManageCatalogStatus() ? '' : 'none';
+    }
+    if (E.proposalCatalogFormSaveBtn) {
+      const canSave = mode === 'edit' ? (Permissions.canUpdateProposalCatalogItem() || Permissions.can('proposal_catalog','manage') || Permissions.can('proposal_catalog_items','update')) : (Permissions.canCreateProposalCatalogItem() || Permissions.can('proposal_catalog','manage') || Permissions.can('proposal_catalog_items','create'));
+      E.proposalCatalogFormSaveBtn.setAttribute('data-permission-resource', 'proposal_catalog');
+      E.proposalCatalogFormSaveBtn.setAttribute('data-permission-action', mode === 'edit' ? 'update' : 'create');
+      E.proposalCatalogFormSaveBtn.style.display = canSave ? '' : 'none';
+      E.proposalCatalogFormSaveBtn.textContent = mode === 'edit' ? '💾 Update Item' : '💾 Save Item';
+    }
+
+    E.proposalCatalogFormModal.style.display = 'flex';
+    E.proposalCatalogFormModal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('modal-open');
+  },
+  closeForm() {
+    if (!E.proposalCatalogFormModal || !E.proposalCatalogForm) return;
+    E.proposalCatalogFormModal.style.display = 'none';
+    E.proposalCatalogFormModal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('modal-open');
+    E.proposalCatalogForm.reset();
+    this.updateNotesCounter();
+  },
+  collectFormPayload() {
+    const section = this.getValue(E.proposalCatalogFormSection) || 'annual_saas';
+    return {
+      is_active: this.toBool(this.getValue(E.proposalCatalogFormIsActive), true),
+      section: this.sectionValues.includes(section) ? section : 'annual_saas',
+      category: this.getValue(E.proposalCatalogFormCategory),
+      item_name: this.getValue(E.proposalCatalogFormItemName),
+      default_location_name: this.getValue(E.proposalCatalogFormLocation),
+      unit_price: this.toNumberOrNull(this.getValue(E.proposalCatalogFormUnitPrice)),
+      discount_percent: this.toNumberOrNull(this.getValue(E.proposalCatalogFormDiscountPercent)),
+      quantity: this.toNumberOrNull(this.getValue(E.proposalCatalogFormQuantity)),
+      notes: this.getValue(E.proposalCatalogFormNotes),
+      sort_order: this.toNumberOrNull(this.getValue(E.proposalCatalogFormSortOrder))
+    };
+  },
+  sanitizePayload(payload) {
+    const out = { ...payload };
+    Object.keys(out).forEach(key => {
+      if (out[key] === null) delete out[key];
+      if (typeof out[key] === 'string') out[key] = out[key].trim();
+    });
+    return out;
+  },
+  updateNotesCounter() {
+    const counterEl = document.getElementById('proposalCatalogNotesCounter');
+    if (!counterEl || !E.proposalCatalogFormNotes) return;
+    counterEl.textContent = `${String(E.proposalCatalogFormNotes.value || '').length}/500`;
+  },
+  getSaveButtonLabel() {
+    const mode = String(E.proposalCatalogForm?.dataset.mode || 'create');
+    return mode === 'edit' ? '💾 Update Item' : '💾 Save Item';
+  },
+  setFormBusy(value) {
+    const busy = !!value;
+    if (E.proposalCatalogFormSaveBtn) {
+      E.proposalCatalogFormSaveBtn.disabled = busy;
+      E.proposalCatalogFormSaveBtn.textContent = busy ? 'Saving…' : this.getSaveButtonLabel();
+    }
+    if (E.proposalCatalogFormDeleteBtn) E.proposalCatalogFormDeleteBtn.disabled = busy;
+  },
+  async submitForm() {
+    const mode = String(E.proposalCatalogForm?.dataset.mode || 'create');
+    if (mode === 'edit' && !(Permissions.canUpdateProposalCatalogItem() || Permissions.can('proposal_catalog','manage') || Permissions.can('proposal_catalog_items','update'))) {
+      UI.toast('You do not have permission to update proposal catalog items.');
+      return;
+    }
+    if (mode !== 'edit' && !(Permissions.canCreateProposalCatalogItem() || Permissions.can('proposal_catalog','manage') || Permissions.can('proposal_catalog_items','create'))) {
+      UI.toast('Login is required to manage proposal catalog items.');
+      return;
+    }
+    const recordId = String(E.proposalCatalogForm?.dataset.id || '').trim();
+    const payload = this.sanitizePayload(this.collectFormPayload());
+
+    if (!payload.item_name && !payload.category) {
+      UI.toast('Please enter at least an item name or category.');
+      return;
+    }
+
+    this.setFormBusy(true);
+    try {
+      if (mode === 'edit' && recordId) {
+        const response = await this.updateProposalCatalogItem(recordId, payload);
+        this.upsertLocalRow(response?.item || response?.data?.item || response || { ...payload, id: recordId });
+        this.invalidateLookupCache();
+        UI.toast('Catalog item updated.');
+      } else {
+        const response = await this.createProposalCatalogItem(payload);
+        this.upsertLocalRow(response?.item || response?.data?.item || response || payload);
+        this.invalidateLookupCache();
+        UI.toast('Catalog item created.');
+      }
+      this.closeForm();
+    } catch (error) {
+      if (typeof isAuthError === 'function' && isAuthError(error)) {
+        handleExpiredSession('Session expired. Please log in again.');
+        return;
+      }
+      UI.toast('Unable to save catalog item: ' + (error?.message || 'Unknown error'));
+    } finally {
+      this.setFormBusy(false);
+    }
+  },
+  async openFormById(catalogItemUuid) {
+    const local = this.state.rows.find(item => item.id === catalogItemUuid);
+    if (local) {
+      this.openForm(local);
+      return;
+    }
+    try {
+      const response = await this.getProposalCatalogItem(catalogItemUuid);
+      const source =
+        response?.item ||
+        response?.data?.item ||
+        (Array.isArray(response?.data) ? response.data[0] : null) ||
+        (Array.isArray(response) ? response[0] : null) ||
+        response;
+      this.openForm(this.normalizeItem(source || {}));
+    } catch (error) {
+      UI.toast('Unable to load catalog item: ' + (error?.message || 'Unknown error'));
+    }
+  },
+  async setActiveById(catalogItemUuid, isActive) {
+    if (!this.canManageCatalogStatus()) {
+      UI.toast('You do not have permission to manage catalog item status.');
+      return;
+    }
+    if (!catalogItemUuid) return;
+    const row = this.state.rows.find(item => item.id === catalogItemUuid);
+    const label = row?.catalog_item_id || row?.item_name || catalogItemUuid;
+    const actionLabel = isActive ? 'reactivate' : 'deactivate';
+    const confirmed = window.confirm(`${isActive ? 'Reactivate' : 'Deactivate'} catalog item ${label}? Historical proposal, agreement, invoice, and receipt rows will keep their saved values.`);
+    if (!confirmed) return;
+
+    try {
+      const response = isActive
+        ? await this.reactivateProposalCatalogItem(catalogItemUuid)
+        : await this.deactivateProposalCatalogItem(catalogItemUuid);
+      this.upsertLocalRow(response?.item || response?.data?.item || response?.data || response || { ...row, id: catalogItemUuid, is_active: isActive });
+      this.invalidateLookupCache();
+      UI.toast(`Catalog item ${isActive ? 'reactivated' : 'deactivated'}.`);
+      this.closeForm();
+    } catch (error) {
+      if (typeof isAuthError === 'function' && isAuthError(error)) {
+        handleExpiredSession('Session expired. Please log in again.');
+        return;
+      }
+      UI.toast(`Unable to ${actionLabel} catalog item: ` + (error?.message || 'Unknown error'));
+    }
+  },
+  async deleteById(catalogItemUuid) {
+    return this.setActiveById(catalogItemUuid, false);
+  },
+  getActiveCatalogItems(section = '') {
+    const normalizedSection = String(section || '').trim().toLowerCase();
+    return this.state.lookupRows.filter(item => {
+      if (!item.is_active) return false;
+      if (!normalizedSection) return true;
+      return item.section === normalizedSection;
+    });
+  },
+  wire() {
+    if (this.state.initialized) return;
+
+    const bindState = (el, key) => {
+      if (!el) return;
+      const sync = () => {
+        this.state[key] = String(el.value || '').trim();
+        this.state.page = 1;
+        this.loadAndRefresh({ force: true });
+      };
+      if (el.tagName === 'INPUT') el.addEventListener('input', debounce(sync, 250));
+      el.addEventListener('change', sync);
+    };
+
+    bindState(E.proposalCatalogSearchInput, 'search');
+    bindState(E.proposalCatalogSectionFilter, 'section');
+    bindState(E.proposalCatalogActiveFilter, 'active');
+    bindState(E.proposalCatalogSortFilter, 'sort');
+
+    if (E.proposalCatalogRefreshBtn)
+      E.proposalCatalogRefreshBtn.addEventListener('click', () => this.loadAndRefresh({ force: true }));
+    if (E.proposalCatalogCreateBtn) {
+      const canCreateCatalogItem = (Permissions.canCreateProposalCatalogItem() || Permissions.can('proposal_catalog','manage') || Permissions.can('proposal_catalog_items','create'));
+      E.proposalCatalogCreateBtn.setAttribute('data-permission-resource', 'proposal_catalog');
+      E.proposalCatalogCreateBtn.setAttribute('data-permission-action', 'create');
+      E.proposalCatalogCreateBtn.style.display = canCreateCatalogItem ? '' : 'none';
+      E.proposalCatalogCreateBtn.disabled = !canCreateCatalogItem;
+      E.proposalCatalogCreateBtn.addEventListener('click', () => {
+      if (!(Permissions.canCreateProposalCatalogItem() || Permissions.can('proposal_catalog','manage') || Permissions.can('proposal_catalog_items','create'))) return UI.toast('You do not have permission to add catalog items.');
+      this.openForm();
+    });
+    }
+
+    if (E.proposalCatalogTbody) {
+      E.proposalCatalogTbody.addEventListener('click', event => {
+        const target = event.target;
+        const editButton = target?.closest?.('[data-proposal-catalog-edit]');
+        const editId = editButton?.getAttribute('data-proposal-catalog-edit');
+        if (editId) {
+          this.openFormById(editId);
+          return;
+        }
+        const statusButton = target?.closest?.('[data-proposal-catalog-status]');
+        const statusId = statusButton?.getAttribute('data-proposal-catalog-status');
+        if (statusId) {
+          this.setActiveById(statusId, statusButton?.getAttribute('data-next-active') === 'true');
+          return;
+        }
+        const deleteButton = target?.closest?.('[data-proposal-catalog-delete]');
+        const deleteId = deleteButton?.getAttribute('data-proposal-catalog-delete');
+        if (deleteId) this.deleteById(deleteId);
+      });
+    }
+
+    if (E.proposalCatalogForm) {
+      E.proposalCatalogForm.addEventListener('submit', event => {
+        event.preventDefault();
+        this.submitForm();
+      });
+    }
+    if (E.proposalCatalogFormNotes)
+      E.proposalCatalogFormNotes.addEventListener('input', () => this.updateNotesCounter());
+    if (E.proposalCatalogFormCloseBtn)
+      E.proposalCatalogFormCloseBtn.addEventListener('click', () => this.closeForm());
+    if (E.proposalCatalogFormCancelBtn)
+      E.proposalCatalogFormCancelBtn.addEventListener('click', () => this.closeForm());
+    if (E.proposalCatalogFormDeleteBtn) {
+      E.proposalCatalogFormDeleteBtn.addEventListener('click', () => {
+        const id = String(E.proposalCatalogForm?.dataset.id || '').trim();
+        if (id) {
+          const row = this.state.rows.find(item => item.id === id);
+          this.setActiveById(id, row?.is_active === false);
+        }
+      });
+    }
+    if (E.proposalCatalogFormModal) {
+      E.proposalCatalogFormModal.addEventListener('click', event => {
+        if (event.target === E.proposalCatalogFormModal) this.closeForm();
+      });
+    }
+
+    this.state.initialized = true;
+  }
+};
+
+window.ProposalCatalog = ProposalCatalog;
