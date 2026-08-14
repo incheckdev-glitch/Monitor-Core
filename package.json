@@ -8,7 +8,11 @@
     "check:syntax": "node scripts/check-js-syntax.js",
     "check:migrations": "node scripts/validate-sql-migrations.js",
     "check": "npm run check:syntax && npm run check:migrations && npm test",
-    "ci": "npm run check"
+    "ci": "npm run check",
+    "test:smoke": "node scripts/smoke-test.js",
+    "test:contract": "node scripts/deployment-contract-test.js",
+    "test:production": "node scripts/production-readonly-test.js",
+    "test:all": "node scripts/full-system-test.js"
   },
   "keywords": [
     "ticketing",
