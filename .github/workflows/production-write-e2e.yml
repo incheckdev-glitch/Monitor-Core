@@ -14,6 +14,8 @@ on:
       - 'scripts/production-write-e2e.js'
       - 'scripts/production-write-e2e-runner.js'
       - '.github/workflows/production-write-e2e.yml'
+      - 'database/bootstrap/10_concurrent_business_ids_and_note_log_compatibility.sql'
+      - 'database/bootstrap/11_payment_forecast_rpc_restore.sql'
       - 'package.json'
 
 permissions:
