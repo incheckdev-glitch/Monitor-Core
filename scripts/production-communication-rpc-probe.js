@@ -18,6 +18,74 @@ async function rest(table, query = '') {
   try { return JSON.parse(text || '[]'); } catch { return []; }
 }
 
+function missingColumnFrom(message = '') {
+  return message.match(/Could not find the '([^']+)' column/i)?.[1]
+    || message.match(/column [^.]+\.([a-zA-Z0-9_]+) does not exist/i)?.[1]
+    || null;
+}
+
+async function probeParticipantInsert(conversationId) {
+  const profiles = await rest('profiles', 'select=id,role_key&is_active=eq.true&limit=1');
+  const profile = Array.isArray(profiles) ? profiles[0] : null;
+  if (!profile?.id) throw new Error('No active profile is available for participant schema probing.');
+
+  const participantId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const payload = {
+    id: participantId,
+    conversation_id: conversationId,
+    user_id: profile.id,
+    user_role: profile.role_key || 'admin',
+    is_active: true,
+    is_muted: false,
+    joined_at: now,
+    last_read_at: now,
+    created_at: now,
+    updated_at: now,
+  };
+
+  try {
+    for (let attempt = 1; attempt <= 15; attempt += 1) {
+      const response = await fetch(`${supabaseUrl}/rest/v1/communication_centre_participants`, {
+        method: 'POST',
+        headers: { ...headers, Prefer: 'return=representation' },
+        body: JSON.stringify(payload),
+      });
+      const text = await response.text();
+      let body = null;
+      try { body = JSON.parse(text || 'null'); } catch { body = text; }
+      if (response.ok) {
+        const row = Array.isArray(body) ? body[0] : body;
+        console.log('\n=== accepted participant insert shape ===');
+        console.log(`accepted_input_columns=${Object.keys(payload).sort().join(',')}`);
+        console.log(`returned_columns=${Object.keys(row || {}).sort().join(',')}`);
+        console.log(JSON.stringify({
+          user_role: row?.user_role || '',
+          is_muted: row?.is_muted,
+          has_joined_at: Boolean(row?.joined_at),
+          has_last_read_at: Boolean(row?.last_read_at),
+        }));
+        return;
+      }
+
+      const message = String(body?.message || text || '');
+      const missingColumn = missingColumnFrom(message);
+      if (missingColumn && Object.prototype.hasOwnProperty.call(payload, missingColumn)) {
+        console.log(`participant probe attempt ${attempt}: dropping unavailable column ${missingColumn}`);
+        delete payload[missingColumn];
+        continue;
+      }
+      throw new Error(`Unable to establish participant insert shape: ${text.slice(0, 500)}`);
+    }
+    throw new Error('Participant insert probe exhausted retry budget.');
+  } finally {
+    await fetch(`${supabaseUrl}/rest/v1/communication_centre_participants?id=eq.${encodeURIComponent(participantId)}`, {
+      method: 'DELETE',
+      headers,
+    });
+  }
+}
+
 async function probeConversationInsert() {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
@@ -46,21 +114,16 @@ async function probeConversationInsert() {
     updated_at: now,
   };
 
-  const tryInsert = async () => {
-    const response = await fetch(`${supabaseUrl}/rest/v1/communication_centre_conversations`, {
-      method: 'POST',
-      headers: { ...headers, Prefer: 'return=representation' },
-      body: JSON.stringify(payload),
-    });
-    const text = await response.text();
-    let body = null;
-    try { body = JSON.parse(text || 'null'); } catch { body = text; }
-    return { response, text, body };
-  };
-
   try {
     for (let attempt = 1; attempt <= 20; attempt += 1) {
-      const { response, text, body } = await tryInsert();
+      const response = await fetch(`${supabaseUrl}/rest/v1/communication_centre_conversations`, {
+        method: 'POST',
+        headers: { ...headers, Prefer: 'return=representation' },
+        body: JSON.stringify(payload),
+      });
+      const text = await response.text();
+      let body = null;
+      try { body = JSON.parse(text || 'null'); } catch { body = text; }
       if (response.ok) {
         const row = Array.isArray(body) ? body[0] : body;
         console.log('\n=== accepted conversation insert shape ===');
@@ -80,30 +143,25 @@ async function probeConversationInsert() {
           follow_up_status: row?.follow_up_status || '',
           is_escalated: row?.is_escalated,
         }));
+        await probeParticipantInsert(id);
         return;
       }
 
       const message = String(body?.message || text || '');
-      const missingColumn =
-        message.match(/Could not find the '([^']+)' column/i)?.[1] ||
-        message.match(/column [^.]+\.([a-zA-Z0-9_]+) does not exist/i)?.[1];
+      const missingColumn = missingColumnFrom(message);
       if (missingColumn && Object.prototype.hasOwnProperty.call(payload, missingColumn)) {
-        console.log(`probe attempt ${attempt}: dropping unavailable column ${missingColumn}`);
+        console.log(`conversation probe attempt ${attempt}: dropping unavailable column ${missingColumn}`);
         delete payload[missingColumn];
         continue;
       }
-
-      console.log(`probe attempt ${attempt} failed: ${text.slice(0, 800)}`);
       throw new Error(`Unable to establish conversation insert shape: ${text.slice(0, 500)}`);
     }
     throw new Error('Conversation insert probe exhausted retry budget.');
   } finally {
-    const cleanup = await fetch(`${supabaseUrl}/rest/v1/communication_centre_conversations?id=eq.${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-      headers,
-    });
+    await fetch(`${supabaseUrl}/rest/v1/communication_centre_participants?conversation_id=eq.${encodeURIComponent(id)}`, { method: 'DELETE', headers });
+    const cleanup = await fetch(`${supabaseUrl}/rest/v1/communication_centre_conversations?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE', headers });
     if (!cleanup.ok) console.warn(`Conversation probe cleanup HTTP ${cleanup.status}: ${(await cleanup.text()).slice(0, 300)}`);
-    else console.log('temporary conversation probe row removed');
+    else console.log('temporary Communication Centre probe rows removed');
   }
 }
 
@@ -122,19 +180,8 @@ async function probeConversationInsert() {
     console.log(`\n=== ${name} ===`);
     const post = paths[name]?.post || paths[name] || {};
     const params = Array.isArray(post.parameters) ? post.parameters : [];
-    for (const param of params) {
-      console.log(`param ${param.name || '(unnamed)'} in=${param.in || ''} required=${Boolean(param.required)} schema=${JSON.stringify(param.schema || {})}`);
-    }
+    for (const param of params) console.log(`param ${param.name || '(unnamed)'} in=${param.in || ''} required=${Boolean(param.required)} schema=${JSON.stringify(param.schema || {})}`);
   }
-
-  console.log('\n=== actual conversation row shape (PII-free) ===');
-  const conversations = await rest('communication_centre_conversations', 'select=*&order=created_at.desc&limit=3');
-  if (Array.isArray(conversations) && conversations.length) {
-    for (const row of conversations) console.log(`columns=${Object.keys(row).sort().join(',')}`);
-  } else {
-    console.log('No live conversations available for structural sampling.');
-  }
-
   await probeConversationInsert();
 })().catch(error => {
   console.error(error);
