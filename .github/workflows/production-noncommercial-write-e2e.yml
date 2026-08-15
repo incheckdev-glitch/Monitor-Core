@@ -19,6 +19,8 @@ on:
       - 'communication-centre.js'
       - 'supabase-data.js'
       - 'permissions.js'
+      - 'database/bootstrap/15_communication_centre_create_conversation_rpc.sql'
+      - 'tests/communication-centre-create-contract.test.js'
       - 'database/seeds/01_roles_and_permissions.sql'
       - 'package.json'
 
