@@ -14,6 +14,7 @@
     "test:production": "node scripts/production-readonly-test.js",
     "test:production:resources": "node scripts/production-resource-coverage-test.js",
     "test:production:write": "node scripts/production-write-e2e-runner.js",
+    "test:production:financial": "node scripts/production-financial-e2e-runner.js",
     "test:all": "node scripts/full-system-test.js"
   },
   "keywords": [
