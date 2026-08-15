@@ -23,6 +23,10 @@
       record.invoice_id ||
       record.receipt_number ||
       record.receipt_id ||
+      record.credit_note_number ||
+      record.credit_note_no ||
+      record.credit_note_ref ||
+      record.credit_note_id ||
       record.onboarding_number ||
       record.technical_request_number ||
       record.conversation_number ||
