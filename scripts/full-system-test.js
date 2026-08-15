@@ -8,6 +8,7 @@ const steps = [
   { name: 'ERP regression suite', cmd: process.execPath, args: ['scripts/run-tests.js'] },
   { name: 'Deployment contract', cmd: process.execPath, args: ['scripts/deployment-contract-test.js'] },
   { name: 'Production read-only checks', cmd: process.execPath, args: ['scripts/production-readonly-test.js'] },
+  { name: 'Production financial schema', cmd: process.execPath, args: ['scripts/production-financial-schema-test.js'] },
   { name: 'Production resource coverage', cmd: process.execPath, args: ['scripts/production-resource-coverage-test.js'] },
 ];
 
