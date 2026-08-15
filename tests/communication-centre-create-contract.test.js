@@ -1,0 +1,29 @@
+const assert = require('assert');
+const fs = require('fs');
+
+const ui = fs.readFileSync('communication-centre.js', 'utf8');
+const sql = fs.readFileSync('database/bootstrap/15_communication_centre_create_conversation_rpc.sql', 'utf8');
+
+assert.match(
+  ui,
+  /rpc\('create_communication_centre_conversation'[\s\S]*p_title[\s\S]*p_description[\s\S]*p_category[\s\S]*p_priority[\s\S]*p_assigned_user_ids[\s\S]*p_assigned_role[\s\S]*p_related_resource[\s\S]*p_related_record_id/,
+  'Communication Centre UI must call the secured create RPC with the expected argument contract',
+);
+
+assert.match(
+  sql,
+  /create or replace function public\.create_communication_centre_conversation\(\s*p_title text,\s*p_description text default null,\s*p_category text default 'General',\s*p_priority text default 'Normal',\s*p_assigned_user_ids uuid\[\] default array\[\]::uuid\[\],\s*p_assigned_role text default null,\s*p_related_resource text default null,\s*p_related_record_id text default null\s*\)/i,
+  'migration must expose the exact UI RPC signature',
+);
+
+assert.match(sql, /public\.cc_has_permission\('manage'\)/, 'create RPC must enforce Communication Centre manage permission');
+assert.match(sql, /public\.cc_normalize_role_key\(p_assigned_role\)/, 'assigned roles must use the live role normalizer');
+assert.match(sql, /insert into public\.communication_centre_participants/i, 'assignment must persist through participant rows');
+assert.match(sql, /select v_actor/, 'conversation creator must remain a participant');
+assert.match(sql, /participant_count = v_participant_count/i, 'conversation participant count must be synchronized');
+assert.doesNotMatch(sql, /insert into public\.communication_centre_conversations[\s\S]{0,1500}assigned_user_ids/i, 'migration must not write stale assigned_user_ids conversation column');
+assert.doesNotMatch(sql, /related_record_ref|related_record_title/i, 'migration must not write stale related-record columns rejected by production');
+assert.match(sql, /grant execute on function public\.create_communication_centre_conversation/i, 'authenticated users must receive RPC execute permission');
+assert.match(sql, /notify pgrst, 'reload schema'/i, 'migration must reload PostgREST schema');
+
+console.log('Communication Centre create RPC contract checks passed.');
