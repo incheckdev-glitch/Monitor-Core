@@ -90,6 +90,41 @@ const replacements = [
   pass('Persist Contact ↔ Company assignment', 'canonical assignment + CRM compatibility bridge');`
   ],
   [
+    "  pass('Save Proposal commercial terms/items', '1 Annual SaaS item');",
+`  const persistedProposalCommercialResponse = await userClient
+    .from('proposals')
+    .select('id,payment_term,payment_terms,billing_frequency,grand_total,status')
+    .eq('id', created.proposal.id)
+    .single();
+  if (persistedProposalCommercialResponse.error) throw persistedProposalCommercialResponse.error;
+  const persistedProposalCommercial = persistedProposalCommercialResponse.data || {};
+  created.proposal = { ...created.proposal, ...persistedProposalCommercial };
+  const persistedProposalPaymentTerm = String(persistedProposalCommercial.payment_term || persistedProposalCommercial.payment_terms || '').trim();
+  if (persistedProposalPaymentTerm !== process.env.E2E_PAYMENT_TERM) {
+    throw new Error(\`Proposal payment term persistence mismatch: expected ${'${process.env.E2E_PAYMENT_TERM}'}, received \${persistedProposalPaymentTerm || '(blank)'}.\`);
+  }
+  pass('Persist Proposal payment term', \`${'${persistedProposalPaymentTerm}'} · ${'${persistedProposalCommercial.billing_frequency || "Annual"}'}\`);
+  pass('Save Proposal commercial terms/items', '1 Annual SaaS item');`
+  ],
+  [
+    "  pass('Convert Proposal → Agreement', created.agreement.agreement_id || created.agreement.agreement_number || created.agreement.id);",
+`  pass('Convert Proposal → Agreement', created.agreement.agreement_id || created.agreement.agreement_number || created.agreement.id);
+
+  const persistedAgreementCommercialResponse = await userClient
+    .from('agreements')
+    .select('id,payment_term,payment_terms,billing_frequency,status')
+    .eq('id', created.agreement.id)
+    .single();
+  if (persistedAgreementCommercialResponse.error) throw persistedAgreementCommercialResponse.error;
+  const persistedAgreementCommercial = persistedAgreementCommercialResponse.data || {};
+  created.agreement = { ...created.agreement, ...persistedAgreementCommercial };
+  const persistedAgreementPaymentTerm = String(persistedAgreementCommercial.payment_term || persistedAgreementCommercial.payment_terms || '').trim();
+  if (persistedAgreementPaymentTerm !== process.env.E2E_PAYMENT_TERM) {
+    throw new Error(\`Agreement payment term propagation mismatch: expected ${'${process.env.E2E_PAYMENT_TERM}'}, received \${persistedAgreementPaymentTerm || '(blank)'}.\`);
+  }
+  pass('Propagate payment term Proposal → Agreement', \`${'${persistedAgreementPaymentTerm}'} · ${'${persistedAgreementCommercial.billing_frequency || "Annual"}'}\`);`
+  ],
+  [
     "  pass('Create Invoice from Agreement', created.invoice.invoice_number || created.invoice.invoice_id || created.invoice.id);",
 `  pass('Create Invoice from Agreement', created.invoice.invoice_number || created.invoice.invoice_id || created.invoice.id);
 
@@ -100,6 +135,10 @@ const replacements = [
     .single();
   if (persistedInvoiceResponse.error) throw persistedInvoiceResponse.error;
   const persistedInvoice = persistedInvoiceResponse.data || {};
+  const invoicePaymentTerm = String(persistedInvoice.payment_term || persistedInvoice.payment_terms || '').trim();
+  if (invoicePaymentTerm !== process.env.E2E_PAYMENT_TERM) {
+    throw new Error(\`Invoice payment term propagation mismatch: expected ${'${process.env.E2E_PAYMENT_TERM}'}, received \${invoicePaymentTerm || '(blank)'}.\`);
+  }
   const invoiceTotal = Number(persistedInvoice.invoice_total ?? persistedInvoice.grand_total ?? persistedInvoice.total_amount ?? 0);
   const expectedProposalTotal = Number(created.proposal.grand_total ?? 0);
   if (!(invoiceTotal > 0)) throw new Error(\`Invoice was created with a non-positive total: USD \${invoiceTotal.toFixed(2)}.\`);
@@ -107,6 +146,7 @@ const replacements = [
     throw new Error(\`Invoice total mismatch: invoice USD \${invoiceTotal.toFixed(2)} vs accepted proposal USD \${expectedProposalTotal.toFixed(2)}.\`);
   }
   created.invoice = { ...created.invoice, ...persistedInvoice };
+  pass('Propagate payment term Agreement → Invoice', invoicePaymentTerm);
 
   const invoiceScheduleResponse = await userClient
     .from('invoice_payment_schedule')
