@@ -1,0 +1,40 @@
+name: InCheck360 Communication Diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type RUN to execute the production Communication Centre diagnostic'
+        required: true
+        default: 'RUN'
+  push:
+    branches:
+      - main
+    paths:
+      - 'scripts/production-communication-diagnostic.js'
+      - '.github/workflows/production-communication-diagnostic.yml'
+      - 'communication-centre.js'
+      - 'database/bootstrap/15_communication_centre_create_conversation_rpc.sql'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      E2E_WRITE_CONFIRM: RUN
+      TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+      TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+      TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+      TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node scripts/production-communication-diagnostic.js
