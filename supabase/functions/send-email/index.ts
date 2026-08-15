@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import nodemailer from "npm:nodemailer";
+import nodemailer from "npm:nodemailer@9.0.5";
 
 type Recipient = { email: string; name?: string };
 type EmailRequest = {
