@@ -26,35 +26,6 @@ const fail = (name, error) => results.push(result('FAIL', name, errorMessage(err
 let userClient;
 let serviceClient;
 let authUser;
-let openApiDefinitions = null;
-
-async function loadOpenApiDefinitions() {
-  if (openApiDefinitions) return openApiDefinitions;
-  const response = await fetch(`${supabaseUrl}/rest/v1/`, {
-    headers: {
-      apikey: serviceKey,
-      Authorization: `Bearer ${serviceKey}`,
-      Accept: 'application/openapi+json',
-    },
-  });
-  if (!response.ok) throw new Error(`OpenAPI schema HTTP ${response.status}: ${(await response.text()).slice(0, 300)}`);
-  const spec = await response.json();
-  openApiDefinitions = spec.definitions || spec.components?.schemas || {};
-  return openApiDefinitions;
-}
-
-async function printSchemaContract(table) {
-  const defs = await loadOpenApiDefinitions();
-  const def = defs[table] || {};
-  const properties = def.properties || {};
-  const required = Array.isArray(def.required) ? def.required : [];
-  const columns = Object.keys(properties).sort();
-  const requiredTypes = required.map(key => `${key}:${properties[key]?.type || properties[key]?.format || 'unknown'}${properties[key]?.format ? `(${properties[key].format})` : ''}`);
-  process.stdout.write(`${table}: columns=${columns.join(',')}\n`);
-  process.stdout.write(`${table}: required=${required.join(',') || '(none declared)'}\n`);
-  process.stdout.write(`${table}: required_types=${requiredTypes.join(',')}\n`);
-  return { columns, required, properties };
-}
 
 async function createReadUpdate({ table, label, row, updates, verify }) {
   const id = row.id;
@@ -81,14 +52,119 @@ async function createReadUpdate({ table, label, row, updates, verify }) {
   }
 }
 
+async function cleanupConversation(conversationId) {
+  const errors = [];
+  for (const table of ['communication_centre_messages', 'communication_centre_participants']) {
+    const response = await serviceClient.from(table).delete().eq('conversation_id', conversationId);
+    if (response.error) errors.push(`${table}: ${errorMessage(response.error)}`);
+  }
+  const conversationDelete = await serviceClient.from('communication_centre_conversations').delete().eq('id', conversationId);
+  if (conversationDelete.error) errors.push(`communication_centre_conversations: ${errorMessage(conversationDelete.error)}`);
+  if (errors.length) throw new Error(errors.join(' | '));
+}
+
 async function cleanup() {
   const errors = [];
   for (const item of [...created].reverse()) {
-    const response = await serviceClient.from(item.table).delete().eq('id', item.id);
-    if (response.error) errors.push(`${item.table}/${item.id}: ${errorMessage(response.error)}`);
+    try {
+      if (item.kind === 'communication_conversation') {
+        await cleanupConversation(item.id);
+        continue;
+      }
+      const response = await serviceClient.from(item.table).delete().eq('id', item.id);
+      if (response.error) throw response.error;
+    } catch (error) {
+      errors.push(`${item.table}/${item.id}: ${errorMessage(error)}`);
+    }
   }
   if (errors.length) fail('Cleanup non-commercial E2E data', errors.join(' | '));
-  else pass('Cleanup non-commercial E2E data', `${created.length} temporary row(s) removed`);
+  else pass('Cleanup non-commercial E2E data', `${created.length} temporary root row(s) removed`);
+}
+
+async function testCommunicationCentre(profile) {
+  try {
+    const access = await userClient.rpc('cc_has_permission', { p_action: 'manage' });
+    if (access.error) throw access.error;
+    if (access.data !== true) throw new Error('Authenticated admin does not have Communication Centre manage permission in the database.');
+    pass('Communication Centre: manage permission', 'cc_has_permission(manage) = true');
+
+    const createResponse = await userClient.rpc('create_communication_centre_conversation', {
+      p_title: `${marker} Conversation`,
+      p_description: marker,
+      p_category: 'General',
+      p_priority: 'Normal',
+      p_assigned_user_ids: [authUser.id],
+      p_assigned_role: null,
+      p_related_resource: null,
+      p_related_record_id: null,
+    });
+    if (createResponse.error) throw createResponse.error;
+    const conversation = Array.isArray(createResponse.data) ? createResponse.data[0] : createResponse.data;
+    if (!conversation?.id) throw new Error(`Conversation RPC did not return a record: ${JSON.stringify(createResponse.data)}`);
+    const conversationId = conversation.id;
+    created.push({ table: 'communication_centre_conversations', id: conversationId, kind: 'communication_conversation' });
+    pass('Communication Centre: secure conversation create', conversation.conversation_no || conversationId);
+
+    const conversationRead = await userClient.from('communication_centre_conversations').select('*').eq('id', conversationId).single();
+    if (conversationRead.error) throw conversationRead.error;
+    pass('Communication Centre: authenticated conversation read', conversationId);
+
+    const participantRead = await userClient
+      .from('communication_centre_participants')
+      .select('*')
+      .eq('conversation_id', conversationId);
+    if (participantRead.error) throw participantRead.error;
+    const participant = (participantRead.data || []).find(row => String(row.user_id || '') === String(authUser.id));
+    if (!participant) throw new Error('Conversation creation did not persist the assigned admin participant.');
+    pass('Communication Centre: participant assignment', profile.email || authUser.id);
+
+    const replyResponse = await userClient.rpc('add_communication_centre_reply_secure', {
+      p_conversation_id: conversationId,
+      p_message_body: marker,
+      p_message_type: 'message',
+      p_reply_to_message_id: null,
+    });
+    if (replyResponse.error) throw replyResponse.error;
+    const rawMessage = Array.isArray(replyResponse.data) ? replyResponse.data[0] : replyResponse.data;
+    const messageId = rawMessage?.message_id || rawMessage?.id || rawMessage;
+    if (!messageId) throw new Error(`Reply RPC did not return a message ID: ${JSON.stringify(replyResponse.data)}`);
+    pass('Communication Centre: secure reply create', String(messageId));
+
+    const secureMessages = await userClient.rpc('list_communication_centre_messages_secure', { p_conversation_id: conversationId });
+    if (secureMessages.error) throw secureMessages.error;
+    const message = (Array.isArray(secureMessages.data) ? secureMessages.data : []).find(row => String(row.id || row.message_id || '') === String(messageId))
+      || (Array.isArray(secureMessages.data) ? secureMessages.data : []).find(row => String(row.message_body || row.message || '') === marker);
+    if (!message) throw new Error('Secure message list did not return the newly created reply.');
+    const persistedMessageId = message.id || message.message_id || messageId;
+    pass('Communication Centre: secure reply read', String(persistedMessageId));
+
+    const editedBody = `${marker} updated`;
+    const editResponse = await userClient
+      .from('communication_centre_messages')
+      .update({ message_body: editedBody, edited_at: new Date().toISOString() })
+      .eq('id', persistedMessageId)
+      .select('*')
+      .single();
+    if (editResponse.error) throw editResponse.error;
+    if (editResponse.data?.message_body !== editedBody) throw new Error('Communication Centre message edit did not persist expected text.');
+    pass('Communication Centre: authenticated message edit', String(persistedMessageId));
+
+    const closeResponse = await userClient.rpc('close_communication_centre_conversation', { p_conversation_id: conversationId });
+    if (closeResponse.error) throw closeResponse.error;
+    const closed = await userClient.from('communication_centre_conversations').select('id,status').eq('id', conversationId).single();
+    if (closed.error) throw closed.error;
+    if (String(closed.data?.status || '').trim().toLowerCase() !== 'closed') throw new Error(`Close RPC returned but status is ${closed.data?.status || '(blank)'}.`);
+    pass('Communication Centre: close conversation', 'Closed');
+
+    const reopenResponse = await userClient.rpc('reopen_communication_centre_conversation', { p_conversation_id: conversationId });
+    if (reopenResponse.error) throw reopenResponse.error;
+    const reopened = await userClient.from('communication_centre_conversations').select('id,status').eq('id', conversationId).single();
+    if (reopened.error) throw reopened.error;
+    if (String(reopened.data?.status || '').trim().toLowerCase() !== 'open') throw new Error(`Reopen RPC returned but status is ${reopened.data?.status || '(blank)'}.`);
+    pass('Communication Centre: reopen conversation', 'Open');
+  } catch (error) {
+    fail('Communication Centre: secure write lifecycle', error);
+  }
 }
 
 async function main() {
@@ -190,31 +266,7 @@ async function main() {
     },
   });
 
-  await printSchemaContract('communication_centre_conversations');
-  await printSchemaContract('communication_centre_participants');
-  await printSchemaContract('communication_centre_messages');
-
-  const conversationId = crypto.randomUUID();
-  await createReadUpdate({
-    table: 'communication_centre_messages',
-    label: 'Communication Centre',
-    row: {
-      id: crypto.randomUUID(),
-      conversation_id: conversationId,
-      message_type: 'text',
-      is_system_message: false,
-      is_deleted: false,
-      message_body: marker,
-      sender_id: auth.user.id,
-      sender_name: 'E2E Test User',
-      created_at: now,
-      updated_at: now,
-    },
-    updates: { message_body: `${marker} updated`, edited_at: new Date().toISOString(), edited_by: auth.user.id },
-    verify: row => {
-      if (row.message_body !== `${marker} updated` || !row.edited_at) throw new Error('Communication Centre edit did not persist.');
-    },
-  });
+  await testCommunicationCentre(profile);
 }
 
 (async () => {
