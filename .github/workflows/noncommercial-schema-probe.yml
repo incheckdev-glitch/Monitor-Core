@@ -36,9 +36,11 @@ jobs:
           const defs = spec.definitions || spec.components?.schemas || {};
           for (const table of ['tickets','events','csm_activities','communication_centre_messages']) {
             const def = defs[table] || {};
-            const props = Object.keys(def.properties || {}).sort();
+            const properties = def.properties || {};
+            const props = Object.keys(properties).sort();
             const required = Array.isArray(def.required) ? def.required : [];
             console.log(`${table}: columns=${props.join(',')}`);
             console.log(`${table}: required=${required.join(',') || '(none declared)'}`);
+            console.log(`${table}: required_types=${required.map(key => `${key}:${properties[key]?.type || properties[key]?.format || 'unknown'}${properties[key]?.format ? `(${properties[key].format})` : ''}`).join(',')}`);
           }
           NODE
