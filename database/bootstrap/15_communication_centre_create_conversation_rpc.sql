@@ -4,7 +4,9 @@
 -- while the current production database exposes the other secure Communication
 -- Centre RPCs but not this create function. The live conversation table stores
 -- assignment through communication_centre_participants; assigned_user_ids is not
--- a live column and must not be written.
+-- a live column and must not be written. The live participant table accepts the
+-- canonical id/conversation_id/user_id/created_at fields; older participant
+-- metadata columns advertised by stale OpenAPI output are intentionally omitted.
 --
 -- Safe to re-run. Existing conversations and messages are not modified.
 
@@ -57,8 +59,6 @@ begin
     else public.cc_normalize_role_key(p_assigned_role)
   end;
 
-  -- Serialize business-number allocation so concurrent conversation creates
-  -- cannot choose the same readable reference.
   perform pg_advisory_xact_lock(
     hashtext('incheck360:communication-centre-conversation-number'),
     extract(year from current_date)::integer
@@ -122,9 +122,6 @@ begin
   )
   returning * into v_conversation;
 
-  -- Persist one canonical participant row per assigned user. The creator is
-  -- always included so a newly created conversation remains visible to its
-  -- author even when it is assigned to another user or role.
   with requested_users as (
     select distinct user_id
       from (
@@ -144,32 +141,20 @@ begin
     id,
     conversation_id,
     user_id,
-    user_role,
-    is_active,
-    is_muted,
-    joined_at,
-    created_at,
-    updated_at
+    created_at
   )
   select
     gen_random_uuid(),
     v_id,
     ru.user_id,
-    p.role_key,
-    true,
-    false,
-    now(),
-    now(),
     now()
   from requested_users ru
-  left join public.profiles p on p.id = ru.user_id
   on conflict do nothing;
 
   select count(*)::integer
     into v_participant_count
     from public.communication_centre_participants
-   where conversation_id = v_id
-     and coalesce(is_active, true);
+   where conversation_id = v_id;
 
   update public.communication_centre_conversations
      set participant_count = v_participant_count,
