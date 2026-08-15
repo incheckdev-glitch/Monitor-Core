@@ -21,12 +21,20 @@ for (const status of ['invoiced', 'invoice_created', 'issued', 'paid', 'partiall
 }
 
 const signedAgreement = { id: 'agreement-uuid', status: 'Signed', invoice_created: false, has_invoice: 'false', invoice_status: 'pending' };
+const unsignedAgreement = { ...signedAgreement, status: 'Draft' };
 const cleanItems = [{ id: 'item-1', agreement_id: 'agreement-uuid', invoice_status: 'not_invoiced', invoiced: false }];
 assert.strictEqual(gate.canCreateInvoiceForAgreement(signedAgreement, cleanItems, []), true, 'clean signed agreement must allow invoice creation');
 assert.strictEqual(gate.canCreateInvoiceForAgreement(signedAgreement, cleanItems, [{ id: 'old-zero', status: 'deleted', total: 0 }]), true, 'deleted zero invoice must not block creation');
 assert.strictEqual(gate.canCreateInvoiceForAgreement(signedAgreement, cleanItems, [{ id: 'active', status: 'Draft', total: 0 }]), false, 'active linked invoice must block creation');
 assert.strictEqual(gate.canCreateInvoiceForAgreement(signedAgreement, [{ invoice_status: 'paid' }], []), false, 'real invoiced item status must block creation');
 assert.strictEqual(gate.canCreateInvoiceForAgreement({ ...signedAgreement, invoice_created: true }, cleanItems, []), false, 'truthy agreement header flag must block creation');
+
+// Only the explicit admin override may invoice before agreement signature.
+gate.canUseAdminOverride = () => false;
+assert.strictEqual(gate.canCreateInvoiceForAgreement(unsignedAgreement, cleanItems, []), false, 'unsigned agreement must remain blocked without admin override');
+gate.canUseAdminOverride = () => true;
+assert.strictEqual(gate.canCreateInvoiceForAgreement(unsignedAgreement, cleanItems, []), true, 'admin override must allow invoice creation before agreement signature');
+assert.strictEqual(gate.canCreateInvoiceForAgreement(unsignedAgreement, cleanItems, [{ id: 'active', status: 'Issued' }]), false, 'admin override must not bypass duplicate-invoice protection');
 
 assert.match(agreementsSource, /reloadAgreementInvoiceGateData\(agreementId\)[\s\S]*from\('agreements'\)[\s\S]*from\('agreement_items'\)[\s\S]*from\('invoices'\)/, 'fresh gate reload must query agreements, agreement_items, and invoices');
 assert.match(invoicesSource, /clearInvoiceCachesAfterDelete\(id\)[\s\S]*reloadAgreementInvoiceGateData\(agreementUuid\)[\s\S]*this\.refresh\(true\)/, 'delete flow must remove cached invoice state and reload fresh data');
