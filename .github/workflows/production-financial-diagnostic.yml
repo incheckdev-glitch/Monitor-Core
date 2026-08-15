@@ -13,6 +13,7 @@ on:
     paths:
       - 'scripts/production-financial-diagnostic-runner.js'
       - 'scripts/production-financial-e2e-runner.js'
+      - 'notification-template-helpers.js'
       - '.github/workflows/production-financial-diagnostic.yml'
 
 permissions:
