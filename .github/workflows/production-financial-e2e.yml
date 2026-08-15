@@ -12,6 +12,13 @@ on:
       - main
     paths:
       - 'scripts/production-financial-e2e-runner.js'
+      - 'scripts/production-write-e2e.js'
+      - 'credit-notes.js'
+      - 'supabase-data.js'
+      - 'notification-template-helpers.js'
+      - 'database/bootstrap/13_financial_integrity_credit_note_and_overpayment.sql'
+      - 'database/bootstrap/14_credit_note_rls_financial_roles.sql'
+      - 'database/seeds/01_roles_and_permissions.sql'
       - '.github/workflows/production-financial-e2e.yml'
       - 'package.json'
 
