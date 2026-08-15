@@ -27,16 +27,18 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Regenerate lockfile
-        run: npm install --package-lock-only --ignore-scripts
+      - name: Regenerate and audit-fix lockfile
+        run: |
+          npm install --package-lock-only --ignore-scripts
+          npm audit fix --package-lock-only --ignore-scripts
 
       - name: Validate install
         run: npm ci --ignore-scripts
 
-      - name: Show dependency versions
+      - name: Show dependency versions and audit
         run: |
-          npm ls nodemailer jws --all
-          npm audit --audit-level=high || true
+          npm ls nodemailer jws ws --all
+          npm audit --audit-level=high
 
       - name: Commit generated lockfile
         run: |
@@ -47,5 +49,5 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add package-lock.json
-          git commit -m 'chore: regenerate lockfile for Nodemailer 9'
+          git commit -m 'chore: refresh secure dependency lockfile'
           git push origin HEAD:security/nodemailer9
