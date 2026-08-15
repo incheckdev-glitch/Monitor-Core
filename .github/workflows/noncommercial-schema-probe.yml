@@ -34,7 +34,10 @@ jobs:
           if (!response.ok) throw new Error(`OpenAPI schema HTTP ${response.status}: ${(await response.text()).slice(0, 300)}`);
           const spec = await response.json();
           const defs = spec.definitions || spec.components?.schemas || {};
-          for (const table of ['tickets','events','csm_activities','communication_centre_messages']) {
+          for (const table of [
+            'tickets','events','csm_activities',
+            'communication_centre_conversations','communication_centre_participants','communication_centre_messages'
+          ]) {
             const def = defs[table] || {};
             const properties = def.properties || {};
             const props = Object.keys(properties).sort();
