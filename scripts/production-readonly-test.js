@@ -28,6 +28,7 @@ const requiredTables = [
   'operations_onboarding', 'technical_admin_requests',
   'tickets', 'events', 'csm_activities',
   'notifications', 'notification_delivery_queue',
+  'user_push_subscriptions', 'push_subscriptions', 'crm_contact_company_links',
 ];
 
 const functions = [
@@ -96,6 +97,65 @@ async function checkDatabase() {
       results.push(result(response.ok ? 'PASS' : 'FAIL', `DB table: ${table}`, response.ok ? 'reachable' : `${response.status} ${body.slice(0, 180)}`));
     } catch (error) {
       results.push(result('FAIL', `DB table: ${table}`, error.message));
+    }
+  }
+}
+
+
+async function checkRuntimeDatabaseCompatibility() {
+  const names = [
+    'RPC: crm_search_companies_for_select',
+    'Push columns: user_push_subscriptions',
+    'Push columns: push_subscriptions',
+  ];
+
+  if (!supabaseUrl || !serviceKey) {
+    for (const name of names) results.push(result('SKIP', name, 'service-role test secrets not configured'));
+    return;
+  }
+
+  try {
+    const response = await fetchWithTimeout(`${supabaseUrl}/rest/v1/rpc/crm_search_companies_for_select`, {
+      method: 'POST',
+      headers: {
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ p_search: '', p_limit: 1 }),
+    });
+    const body = response.ok ? '' : await response.text();
+    results.push(result(
+      response.ok ? 'PASS' : 'FAIL',
+      'RPC: crm_search_companies_for_select',
+      response.ok ? 'reachable' : `${response.status} ${body.slice(0, 220)}`,
+    ));
+  } catch (error) {
+    results.push(result('FAIL', 'RPC: crm_search_companies_for_select', error.message));
+  }
+
+  const select = 'id,user_id,auth_user_id,recipient_user_id,profile_id,is_active,last_seen_at';
+  for (const table of ['user_push_subscriptions', 'push_subscriptions']) {
+    try {
+      const response = await fetchWithTimeout(
+        `${supabaseUrl}/rest/v1/${table}?select=${encodeURIComponent(select)}&limit=0`,
+        {
+          headers: {
+            apikey: serviceKey,
+            Authorization: `Bearer ${serviceKey}`,
+            Accept: 'application/json',
+          },
+        },
+      );
+      const body = response.ok ? '' : await response.text();
+      results.push(result(
+        response.ok ? 'PASS' : 'FAIL',
+        `Push columns: ${table}`,
+        response.ok ? 'user-id compatibility columns reachable' : `${response.status} ${body.slice(0, 220)}`,
+      ));
+    } catch (error) {
+      results.push(result('FAIL', `Push columns: ${table}`, error.message));
     }
   }
 }
@@ -176,6 +236,7 @@ async function checkFunctions() {
   process.stdout.write(`Live test configuration: app=${appUrl || '(skip)'} supabase=${supabaseUrl || '(skip)'} anon=${anonKey ? mask(anonKey) : '(skip)'} service=${serviceKey ? mask(serviceKey) : '(skip)'}\n`);
   await checkApp();
   await checkDatabase();
+  await checkRuntimeDatabaseCompatibility();
   await checkAuth();
   await checkFunctions();
 

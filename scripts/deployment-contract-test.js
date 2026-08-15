@@ -83,6 +83,23 @@ if (exists('database/seeds/01_roles_and_permissions.sql')) {
   results.push(result('WARN', 'Baseline roles source', 'database/seeds/01_roles_and_permissions.sql not found'));
 }
 
+
+requirePath('database/bootstrap/02_runtime_compatibility.sql', 'Runtime DB compatibility patch');
+if (exists('database/bootstrap/02_runtime_compatibility.sql')) {
+  const sql = read('database/bootstrap/02_runtime_compatibility.sql').toLowerCase();
+  const checks = [
+    ['crm_search_companies_for_select', 'CRM company selector RPC contract'],
+    ['crm_resolve_company_uuid', 'CRM company resolver RPC contract'],
+    ['crm_get_contacts_for_company', 'CRM contact selector RPC contract'],
+    ['recipient_user_id', 'Push recipient_user_id compatibility'],
+    ['profile_id', 'Push profile_id compatibility'],
+    ["notify pgrst, 'reload schema'", 'PostgREST schema reload'],
+  ];
+  for (const [needle, label] of checks) {
+    results.push(result(sql.includes(needle) ? 'PASS' : 'FAIL', label));
+  }
+}
+
 if (exists('tests')) {
   const count = fs.readdirSync(path.join(root, 'tests')).filter(name => name.endsWith('.test.js')).length;
   results.push(result(count >= 32 ? 'PASS' : 'FAIL', 'Regression test inventory', `${count} tests found; expected at least 32`));
