@@ -17,8 +17,9 @@ const Module = require('module');
 // scenario talks directly to the data dispatcher, so inject those UI-equivalent
 // writes here before validating the relationship.
 //
-// Invoice creation is also expected to create its payment schedule. Assert that
-// explicitly so a schema-cache warning cannot produce a false-green workflow.
+// Invoice creation is also expected to create a non-zero payment schedule that
+// exactly matches the persisted invoice total. Assert that explicitly so schema
+// or conversion defects cannot produce a false-green workflow.
 const filename = path.join(__dirname, 'production-write-e2e.js');
 let source = fs.readFileSync(filename, 'utf8');
 
@@ -77,6 +78,21 @@ const replacements = [
     "  pass('Create Invoice from Agreement', created.invoice.invoice_number || created.invoice.invoice_id || created.invoice.id);",
 `  pass('Create Invoice from Agreement', created.invoice.invoice_number || created.invoice.invoice_id || created.invoice.id);
 
+  const persistedInvoiceResponse = await userClient
+    .from('invoices')
+    .select('id,invoice_id,invoice_number,invoice_total,grand_total,total_amount,subtotal_locations,subtotal_one_time,due_date,status')
+    .eq('id', created.invoice.id)
+    .single();
+  if (persistedInvoiceResponse.error) throw persistedInvoiceResponse.error;
+  const persistedInvoice = persistedInvoiceResponse.data || {};
+  const invoiceTotal = Number(persistedInvoice.invoice_total ?? persistedInvoice.grand_total ?? persistedInvoice.total_amount ?? 0);
+  const expectedProposalTotal = Number(created.proposal.grand_total ?? 0);
+  if (!(invoiceTotal > 0)) throw new Error(\`Invoice was created with a non-positive total: USD \${invoiceTotal.toFixed(2)}.\`);
+  if (expectedProposalTotal > 0 && Math.abs(invoiceTotal - expectedProposalTotal) > 0.01) {
+    throw new Error(\`Invoice total mismatch: invoice USD \${invoiceTotal.toFixed(2)} vs accepted proposal USD \${expectedProposalTotal.toFixed(2)}.\`);
+  }
+  created.invoice = { ...created.invoice, ...persistedInvoice };
+
   const invoiceScheduleResponse = await userClient
     .from('invoice_payment_schedule')
     .select('id,schedule_no,due_date,scheduled_amount,schedule_label,status')
@@ -85,12 +101,38 @@ const replacements = [
   if (invoiceScheduleResponse.error) throw invoiceScheduleResponse.error;
   const invoiceScheduleRows = Array.isArray(invoiceScheduleResponse.data) ? invoiceScheduleResponse.data : [];
   if (!invoiceScheduleRows.length) throw new Error('Invoice payment schedule was not created.');
-  const invoiceTotal = Number(created.invoice.invoice_total ?? created.invoice.grand_total ?? created.invoice.total_amount ?? 0);
   const scheduledTotal = invoiceScheduleRows.reduce((sum, row) => sum + Number(row.scheduled_amount || 0), 0);
   if (Math.abs(scheduledTotal - invoiceTotal) > 0.01) {
     throw new Error(\`Invoice payment schedule total mismatch: scheduled \${scheduledTotal.toFixed(2)} vs invoice \${invoiceTotal.toFixed(2)}.\`);
   }
   pass('Create Invoice payment schedule', \`${'${invoiceScheduleRows.length}'} installment(s) · USD ${'${scheduledTotal.toFixed(2)}'}\`);`
+  ],
+  [
+`  const relationshipCheck = await userClient
+    .from('crm_contact_company_links')
+    .select('contact_id,company_id')
+    .eq('contact_id', created.contact.id)
+    .eq('company_id', created.company.id)
+    .limit(1);
+  if (relationshipCheck.error) throw relationshipCheck.error;
+  if (!Array.isArray(relationshipCheck.data) || !relationshipCheck.data.length) throw new Error('Contact-company relationship bridge was not created.');
+  pass('Verify Contact ↔ Company relationship', 'crm_contact_company_links');`,
+`  const relationshipRpc = await userClient.rpc('crm_contact_belongs_to_company', {
+    p_contact_key: created.contact.id,
+    p_company_key: created.company.id,
+  });
+  if (relationshipRpc.error) throw relationshipRpc.error;
+  if (relationshipRpc.data !== true) throw new Error('CRM contact/company ownership RPC did not confirm the relationship.');
+
+  const relationshipCheck = await serviceClient
+    .from('crm_contact_company_links')
+    .select('contact_id,company_id,source')
+    .eq('contact_id', created.contact.id)
+    .eq('company_id', created.company.id)
+    .limit(1);
+  if (relationshipCheck.error) throw relationshipCheck.error;
+  if (!Array.isArray(relationshipCheck.data) || !relationshipCheck.data.length) throw new Error('Contact-company compatibility bridge row was not persisted.');
+  pass('Verify Contact ↔ Company relationship', 'ownership RPC + persisted CRM bridge');`
   ],
   ['${slug}.txt', '${slug}.pdf'],
   [
