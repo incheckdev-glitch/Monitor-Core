@@ -17,13 +17,13 @@ const Module = require('module');
 // scenario talks directly to the data dispatcher, so inject those UI-equivalent
 // writes here before validating the relationship.
 //
+// Proposal/agreement status transitions in the UI are full-form saves. Preserve
+// their already-selected commercial fields in this fixture so the E2E mirrors the
+// production UI rather than exercising a synthetic status-only mutation.
+//
 // Invoice creation is also expected to create a non-zero payment schedule that
 // exactly matches the persisted invoice total. Assert that explicitly so schema
 // or conversion defects cannot produce a false-green workflow.
-//
-// The dedicated workflow runs this same real production journey for every supported
-// payment schedule. This avoids four copies of the large scenario while proving
-// Annual / Semi-Annual / Quarterly / Monthly installment generation end to end.
 const filename = path.join(__dirname, 'production-write-e2e.js');
 let source = fs.readFileSync(filename, 'utf8');
 
@@ -41,6 +41,18 @@ const replacements = [
   ["contentType: 'text/plain'", "contentType: 'application/pdf'"],
   ["file_mime_type: 'text/plain'", "file_mime_type: 'application/pdf'"],
   ["payment_term: 'Net 30'", `payment_term: '${paymentTerm}'`],
+  [
+    "    updates: { status: 'Sent' },",
+    `    updates: { status: 'Sent', payment_term: '${paymentTerm}', payment_terms: '${paymentTerm}', billing_frequency: 'Annual' },`
+  ],
+  [
+    "      status: 'Accepted',\n      accepted_at: new Date().toISOString(),",
+    `      status: 'Accepted',\n      payment_term: '${paymentTerm}',\n      payment_terms: '${paymentTerm}',\n      billing_frequency: 'Annual',\n      accepted_at: new Date().toISOString(),`
+  ],
+  [
+    "      status: 'Signed',\n      signed_date: isoDate(0),",
+    `      status: 'Signed',\n      payment_term: '${paymentTerm}',\n      payment_terms: '${paymentTerm}',\n      billing_frequency: 'Annual',\n      signed_date: isoDate(0),`
+  ],
   [
 `  created.proposal = asRow(await dispatch('proposals', 'update', {
     id: created.proposal.id,
