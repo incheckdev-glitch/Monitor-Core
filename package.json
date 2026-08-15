@@ -12,6 +12,7 @@
     "test:smoke": "node scripts/smoke-test.js",
     "test:contract": "node scripts/deployment-contract-test.js",
     "test:production": "node scripts/production-readonly-test.js",
+    "test:production:resources": "node scripts/production-resource-coverage-test.js",
     "test:production:write": "node scripts/production-write-e2e-runner.js",
     "test:all": "node scripts/full-system-test.js"
   },
