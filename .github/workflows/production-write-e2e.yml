@@ -16,6 +16,7 @@ on:
       - '.github/workflows/production-write-e2e.yml'
       - 'database/bootstrap/10_concurrent_business_ids_and_note_log_compatibility.sql'
       - 'database/bootstrap/11_payment_forecast_rpc_restore.sql'
+      - 'database/bootstrap/12_gap_safe_business_id_allocation.sql'
       - 'package.json'
 
 permissions:
@@ -32,25 +33,20 @@ jobs:
       matrix:
         include:
           - scenario: annual
-            billing_frequency: 'Annual'
             payment_term: 'Net 30'
             installments: 1
           - scenario: semi-annual
-            billing_frequency: 'Semi-Annually'
             payment_term: 'Net 21'
             installments: 2
           - scenario: quarterly
-            billing_frequency: 'Quarterly'
             payment_term: 'Net 14'
             installments: 4
           - scenario: monthly
-            billing_frequency: 'Monthly'
             payment_term: 'Net 7'
             installments: 12
 
     env:
       E2E_WRITE_CONFIRM: RUN
-      E2E_BILLING_FREQUENCY: ${{ matrix.billing_frequency }}
       E2E_PAYMENT_TERM: ${{ matrix.payment_term }}
       E2E_EXPECTED_INSTALLMENTS: ${{ matrix.installments }}
       TEST_APP_URL: ${{ secrets.TEST_APP_URL }}
@@ -72,30 +68,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Prepare billing scenario diagnostics
-        run: |
-          python - <<'PY'
-          import os
-          from pathlib import Path
-
-          frequency = os.environ['E2E_BILLING_FREQUENCY']
-          scenario = Path('scripts/production-write-e2e.js')
-          source = scenario.read_text()
-          billing_marker = "billing_frequency: 'Annual',"
-          if billing_marker not in source:
-              raise SystemExit('E2E billing-frequency fixture marker is missing')
-          source = source.replace(billing_marker, f"billing_frequency: '{frequency}',")
-          scenario.write_text(source)
-
-          runner = Path('scripts/production-write-e2e-runner.js')
-          runner_source = runner.read_text()
-          schedule_marker = "  const invoiceScheduleRows = Array.isArray(invoiceScheduleResponse.data) ? invoiceScheduleResponse.data : [];"
-          if schedule_marker not in runner_source:
-              raise SystemExit('E2E payment-schedule diagnostic marker is missing')
-          diagnostic = schedule_marker + "\n  console.log('[E2E payment propagation]', JSON.stringify({ proposal_payment_term: created.proposal?.payment_term, proposal_billing_frequency: created.proposal?.billing_frequency, agreement_payment_term: created.agreement?.payment_term, agreement_billing_frequency: created.agreement?.billing_frequency, invoice_payment_term: persistedInvoice.payment_term, invoice_payment_terms: persistedInvoice.payment_terms, schedule_count: invoiceScheduleRows.length }));"
-          runner.write_text(runner_source.replace(schedule_marker, diagnostic))
-          PY
 
       - name: Run production write E2E
         run: npm run test:production:write
