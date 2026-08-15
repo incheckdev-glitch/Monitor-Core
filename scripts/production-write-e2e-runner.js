@@ -13,6 +13,10 @@ const replacements = [
   ["contentType: 'text/plain'", "contentType: 'application/pdf'"],
   ["file_mime_type: 'text/plain'", "file_mime_type: 'application/pdf'"],
   ['${slug}.txt', '${slug}.pdf'],
+  [
+    "      customer_sign_date: isoDate(0),",
+    "      customer_sign_date: isoDate(0),\n      provider_signatory_name: 'InCheck360 E2E Provider',\n      provider_signatory_title: 'Provider',\n      provider_sign_date: isoDate(0),"
+  ],
 ];
 
 for (const [from, to] of replacements) {
