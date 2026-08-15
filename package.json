@@ -27,7 +27,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2",
     "@vercel/analytics": "^2.0.1",
-    "nodemailer": "^8.0.7",
+    "nodemailer": "^9.0.3",
     "web-push": "^3.6.7"
   }
 }
