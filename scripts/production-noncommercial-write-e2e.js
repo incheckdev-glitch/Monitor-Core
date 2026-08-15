@@ -14,11 +14,47 @@ const confirmation = env('E2E_WRITE_CONFIRM');
 const marker = `IC360-NONCOMM-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
 
 const pass = (name, details = '') => results.push(result('PASS', name, details));
-const fail = (name, error) => results.push(result('FAIL', name, error instanceof Error ? error.message : String(error || 'Unknown error')));
+function errorMessage(error) {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object') {
+    return String(error.message || error.details || error.hint || error.code || JSON.stringify(error));
+  }
+  return String(error || 'Unknown error');
+}
+const fail = (name, error) => results.push(result('FAIL', name, errorMessage(error)));
 
 let userClient;
 let serviceClient;
 let authUser;
+let openApiDefinitions = null;
+
+async function loadOpenApiDefinitions() {
+  if (openApiDefinitions) return openApiDefinitions;
+  const response = await fetch(`${supabaseUrl}/rest/v1/`, {
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      Accept: 'application/openapi+json',
+    },
+  });
+  if (!response.ok) throw new Error(`OpenAPI schema HTTP ${response.status}: ${(await response.text()).slice(0, 300)}`);
+  const spec = await response.json();
+  openApiDefinitions = spec.definitions || spec.components?.schemas || {};
+  return openApiDefinitions;
+}
+
+async function printSchemaContract(table) {
+  const defs = await loadOpenApiDefinitions();
+  const def = defs[table] || {};
+  const properties = def.properties || {};
+  const required = Array.isArray(def.required) ? def.required : [];
+  const columns = Object.keys(properties).sort();
+  const requiredTypes = required.map(key => `${key}:${properties[key]?.type || properties[key]?.format || 'unknown'}${properties[key]?.format ? `(${properties[key].format})` : ''}`);
+  process.stdout.write(`${table}: columns=${columns.join(',')}\n`);
+  process.stdout.write(`${table}: required=${required.join(',') || '(none declared)'}\n`);
+  process.stdout.write(`${table}: required_types=${requiredTypes.join(',')}\n`);
+  return { columns, required, properties };
+}
 
 async function createReadUpdate({ table, label, row, updates, verify }) {
   const id = row.id;
@@ -49,7 +85,7 @@ async function cleanup() {
   const errors = [];
   for (const item of [...created].reverse()) {
     const response = await serviceClient.from(item.table).delete().eq('id', item.id);
-    if (response.error) errors.push(`${item.table}/${item.id}: ${response.error.message}`);
+    if (response.error) errors.push(`${item.table}/${item.id}: ${errorMessage(response.error)}`);
   }
   if (errors.length) fail('Cleanup non-commercial E2E data', errors.join(' | '));
   else pass('Cleanup non-commercial E2E data', `${created.length} temporary row(s) removed`);
@@ -153,6 +189,10 @@ async function main() {
       if (Number(row.time_spent_minutes) !== 2 || row.support_channel !== 'Automated E2E') throw new Error('CSM Activity update did not persist expected duration/channel.');
     },
   });
+
+  await printSchemaContract('communication_centre_conversations');
+  await printSchemaContract('communication_centre_participants');
+  await printSchemaContract('communication_centre_messages');
 
   const conversationId = crypto.randomUUID();
   await createReadUpdate({
