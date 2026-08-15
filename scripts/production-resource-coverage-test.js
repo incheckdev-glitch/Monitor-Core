@@ -113,14 +113,33 @@ async function main() {
     }
   }
 
+  // Mirror PaymentForecast.rpcFilters(). The production UI sends every filter key
+  // (including null/false values), so the live RPC coverage must exercise the same
+  // PostgREST overload signature rather than incorrectly calling the RPC with {}.
+  const forecastFilters = {
+    p_search: null,
+    p_status: null,
+    p_client: null,
+    p_payment_term: null,
+    p_currency: null,
+    p_date_from: null,
+    p_date_to: null,
+    p_overdue_only: false,
+    p_due_this_week: false,
+    p_due_this_month: false,
+    p_only_unpaid: false,
+    p_follow_up_status: null,
+    p_view: 'all',
+  };
+
   const specialChecks = [
     ['workflow:list_rules', { resource: 'workflow', action: 'list_rules', page: 1, pageSize: 2 }],
     ['workflow:list_pending_approvals', { resource: 'workflow', action: 'list_pending_approvals', page: 1, pageSize: 2 }],
     ['workflow:list_audit', { resource: 'workflow', action: 'list_audit', page: 1, pageSize: 2 }],
-    ['payment_forecast:summary', { resource: 'payment_forecast', action: 'summary' }],
-    ['payment_forecast:page', { resource: 'payment_forecast', action: 'page', page: 1, page_size: 2, limit: 2 }],
-    ['payment_forecast:monthly_summary', { resource: 'payment_forecast', action: 'monthly_summary' }],
-    ['payment_forecast:client_distribution', { resource: 'payment_forecast', action: 'client_distribution' }],
+    ['payment_forecast:summary', { resource: 'payment_forecast', action: 'summary', ...forecastFilters }],
+    ['payment_forecast:page', { resource: 'payment_forecast', action: 'page', ...forecastFilters, p_page: 1, p_page_size: 2 }],
+    ['payment_forecast:monthly_summary', { resource: 'payment_forecast', action: 'monthly_summary', ...forecastFilters, p_page: 1, p_page_size: 2 }],
+    ['payment_forecast:client_distribution', { resource: 'payment_forecast', action: 'client_distribution', ...forecastFilters, p_page: 1, p_page_size: 2 }],
     ['lifecycle_status_logs:history', {
       resource: 'lifecycle_status_logs',
       action: 'history',
