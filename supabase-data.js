@@ -963,7 +963,7 @@ IN WITNESS WHEREOF, the parties have caused this Agreement to be executed by the
   const AGREEMENT_COLUMNS = new Set([
     'agreement_id','proposal_id','agreement_number','sequence_number','company_id','company_name','contact_id','contact_name','contact_email','contact_phone','contact_mobile','customer_name','customer_legal_name','customer_address','customer_contact_name','customer_contact_mobile','customer_contact_email','customer_contact_phone','provider_name','provider_legal_name','provider_address','provider_contact_name','provider_contact_mobile',
     'provider_contact_email','service_start_date','service_end_date','agreement_date','effective_date','contract_term','account_number','billing_frequency',
-    'payment_term','payment_terms','po_number','terms_conditions','customer_official_signatory_name','customer_official_signatory_title','customer_official_sign_date','customer_signatory_Name','customer_signatory_name','customer_signatory_title','customer_signatory_email','customer_signatory_phone',
+    'payment_term','payment_terms','po_number','terms_conditions','customer_official_signatory_name','customer_official_signatory_title','customer_official_sign_date','customer_signatory_name','customer_signatory_title','customer_signatory_email','customer_signatory_phone',
     'customer_sign_date','provider_official_signatory_1_name','provider_official_signatory_1_title','provider_official_signatory_1_sign_date','provider_official_signatory_2_name','provider_official_signatory_2_title','provider_official_signatory_2_sign_date','provider_signatory_name','provider_signatory_title','provider_signatory_email','provider_signatory_secondary','provider_signatory_name_secondary','provider_signatory_title_secondary','provider_primary_signatory_name','provider_primary_signatory_title','provider_secondary_signatory_name','provider_secondary_signatory_title','provider_sign_date','gm_signed',
     'financial_controller_signed','signed_date','status','subtotal_locations','subtotal_one_time','total_discount',
     'grand_total','is_poc','poc_location_count','poc_license_count','poc_license_months','poc_service_start_date','poc_service_end_date','poc_success_kpis','poc_conversion_commitment','generated_by','created_by','updated_by','currency','created_at','updated_at','customer_legal_name','provider_legal_name','provider_name',
@@ -3878,7 +3878,6 @@ IN WITNESS WHEREOF, the parties have caused this Agreement to be executed by the
     sanitized.provider_name = 'InCheck 360 Holding BV';
     sanitized.provider_address = 'Pyrmontstraat 5, 7513 BN, Enschede, The Netherlands';
     sanitized.customer_signatory_name = sanitized.customer_official_signatory_name || sanitized.customer_signatory_name;
-    sanitized.customer_signatory_Name = sanitized.customer_signatory_name;
     sanitized.customer_signatory_title = sanitized.customer_official_signatory_title || sanitized.customer_signatory_title;
     sanitized.customer_sign_date = sanitized.customer_official_sign_date || sanitized.customer_sign_date;
     sanitized.provider_official_signatory_1_name = 'Simon Moujaly';
