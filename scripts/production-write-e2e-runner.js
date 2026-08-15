@@ -20,12 +20,27 @@ const Module = require('module');
 // Invoice creation is also expected to create a non-zero payment schedule that
 // exactly matches the persisted invoice total. Assert that explicitly so schema
 // or conversion defects cannot produce a false-green workflow.
+//
+// The dedicated workflow runs this same real production journey for every supported
+// payment schedule. This avoids four copies of the large scenario while proving
+// Annual / Semi-Annual / Quarterly / Monthly installment generation end to end.
 const filename = path.join(__dirname, 'production-write-e2e.js');
 let source = fs.readFileSync(filename, 'utf8');
+
+const paymentTerm = String(process.env.E2E_PAYMENT_TERM || 'Net 30').trim();
+const expectedInstallments = Number(process.env.E2E_EXPECTED_INSTALLMENTS || 0);
+const supportedPaymentTerms = new Set(['Net 7', 'Net 14', 'Net 21', 'Net 30']);
+if (!supportedPaymentTerms.has(paymentTerm)) {
+  throw new Error(`Unsupported E2E payment term: ${paymentTerm}`);
+}
+if (!Number.isInteger(expectedInstallments) || expectedInstallments < 1) {
+  throw new Error(`E2E_EXPECTED_INSTALLMENTS must be a positive integer; received ${process.env.E2E_EXPECTED_INSTALLMENTS || '(empty)'}`);
+}
 
 const replacements = [
   ["contentType: 'text/plain'", "contentType: 'application/pdf'"],
   ["file_mime_type: 'text/plain'", "file_mime_type: 'application/pdf'"],
+  ["payment_term: 'Net 30'", `payment_term: '${paymentTerm}'`],
   [
 `  created.proposal = asRow(await dispatch('proposals', 'update', {
     id: created.proposal.id,
@@ -80,7 +95,7 @@ const replacements = [
 
   const persistedInvoiceResponse = await userClient
     .from('invoices')
-    .select('id,invoice_id,invoice_number,invoice_total,grand_total,total_amount,subtotal_locations,subtotal_one_time,due_date,status')
+    .select('id,invoice_id,invoice_number,invoice_total,grand_total,total_amount,subtotal_locations,subtotal_one_time,due_date,status,payment_term,payment_terms')
     .eq('id', created.invoice.id)
     .single();
   if (persistedInvoiceResponse.error) throw persistedInvoiceResponse.error;
@@ -101,11 +116,15 @@ const replacements = [
   if (invoiceScheduleResponse.error) throw invoiceScheduleResponse.error;
   const invoiceScheduleRows = Array.isArray(invoiceScheduleResponse.data) ? invoiceScheduleResponse.data : [];
   if (!invoiceScheduleRows.length) throw new Error('Invoice payment schedule was not created.');
+  const expectedInstallmentCount = Number(process.env.E2E_EXPECTED_INSTALLMENTS || 0);
+  if (invoiceScheduleRows.length !== expectedInstallmentCount) {
+    throw new Error(\`Invoice payment schedule count mismatch for ${'${process.env.E2E_PAYMENT_TERM || "Net 30"}'}: expected \${expectedInstallmentCount}, received \${invoiceScheduleRows.length}.\`);
+  }
   const scheduledTotal = invoiceScheduleRows.reduce((sum, row) => sum + Number(row.scheduled_amount || 0), 0);
   if (Math.abs(scheduledTotal - invoiceTotal) > 0.01) {
     throw new Error(\`Invoice payment schedule total mismatch: scheduled \${scheduledTotal.toFixed(2)} vs invoice \${invoiceTotal.toFixed(2)}.\`);
   }
-  pass('Create Invoice payment schedule', \`${'${invoiceScheduleRows.length}'} installment(s) · USD ${'${scheduledTotal.toFixed(2)}'}\`);`
+  pass('Create Invoice payment schedule', \`${'${process.env.E2E_PAYMENT_TERM || "Net 30"}'} · ${'${invoiceScheduleRows.length}'} installment(s) · USD ${'${scheduledTotal.toFixed(2)}'}\`);`
   ],
   [
 `  const relationshipCheck = await userClient
@@ -147,6 +166,8 @@ for (const [from, to] of replacements) {
   }
   source = source.split(from).join(to);
 }
+
+process.stdout.write(`Production E2E payment scenario: ${paymentTerm} → ${expectedInstallments} installment(s)\n`);
 
 const compiled = new Module(filename, module.parent);
 compiled.filename = filename;
