@@ -64,8 +64,8 @@ const cancelTo = [
   "    })) || created.creditNote;",
   "  } catch (error) {",
   "    const message = String(error?.message || error || '');",
-  "    if (!/row-level security/i.test(message)) throw error;",
-  "    fail('Authenticated credit-note cancel RLS', error);",
+  "    if (!/row-level security|credit note was not found/i.test(message)) throw error;",
+  "    fail('Authenticated credit-note cancel/read RLS', error);",
   "    const originalGetClient = global.SupabaseClient.getClient;",
   "    global.SupabaseClient.getClient = () => serviceClient;",
   "    try {",
@@ -84,6 +84,12 @@ for (const [from, to] of [[createFrom, createTo], [duplicateFrom, duplicateTo], 
   if (!source.includes(from)) throw new Error(`Financial diagnostic fixture marker is missing: ${from}`);
   source = source.replace(from, to);
 }
+
+// Browser production loads this helper immediately before supabase-data.js.
+// Mirror that load order so notification-path warnings in Node are meaningful.
+global.window = global;
+delete require.cache[require.resolve('../notification-template-helpers.js')];
+require('../notification-template-helpers.js');
 
 process.stdout.write('Production Financial Diagnostic: strict RLS failures are retained while downstream finance checks continue\n');
 
