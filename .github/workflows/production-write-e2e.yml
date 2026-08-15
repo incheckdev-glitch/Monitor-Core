@@ -21,13 +21,31 @@ permissions:
 
 jobs:
   production-write-e2e:
-    name: Production write E2E
+    name: Production write E2E (${{ matrix.scenario }})
     if: github.event_name == 'push' || github.event.inputs.confirm == 'RUN'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - scenario: annual
+            payment_term: 'Net 30'
+            installments: 1
+          - scenario: semi-annual
+            payment_term: 'Net 21'
+            installments: 2
+          - scenario: quarterly
+            payment_term: 'Net 14'
+            installments: 4
+          - scenario: monthly
+            payment_term: 'Net 7'
+            installments: 12
 
     env:
       E2E_WRITE_CONFIRM: RUN
+      E2E_PAYMENT_TERM: ${{ matrix.payment_term }}
+      E2E_EXPECTED_INSTALLMENTS: ${{ matrix.installments }}
       TEST_APP_URL: ${{ secrets.TEST_APP_URL }}
       TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
       TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
@@ -55,7 +73,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: incheck360-production-write-e2e-${{ github.run_number }}
+          name: incheck360-production-write-e2e-${{ matrix.scenario }}-${{ github.run_number }}
           path: test-results/production-write-e2e.json
           if-no-files-found: warn
           retention-days: 14
