@@ -138,6 +138,20 @@ async function main() {
     ['workflow:list_audit', { resource: 'workflow', action: 'list_audit', page: 1, pageSize: 2 }],
     ['payment_forecast:summary', { resource: 'payment_forecast', action: 'summary', ...forecastFilters }],
     ['payment_forecast:page', { resource: 'payment_forecast', action: 'page', ...forecastFilters, p_page: 1, p_page_size: 2 }],
+    ['payment_forecast:followups_page', {
+      resource: 'payment_forecast',
+      action: 'followups_page',
+      ...forecastFilters,
+      p_page: 1,
+      p_page_size: 2,
+      p_view: 'collection_follow_up',
+      p_only_unpaid: true,
+    }],
+    ['payment_forecast:followup_logs', {
+      resource: 'payment_forecast',
+      action: 'followup_logs',
+      followup_id: '00000000-0000-4000-8000-000000000001',
+    }],
     ['payment_forecast:monthly_summary', { resource: 'payment_forecast', action: 'monthly_summary', ...forecastFilters, p_page: 1, p_page_size: 2 }],
     ['payment_forecast:client_distribution', { resource: 'payment_forecast', action: 'client_distribution', ...forecastFilters, p_page: 1, p_page_size: 2 }],
     ['lifecycle_status_logs:history', {
