@@ -198,7 +198,7 @@ const replacements = [
     invoice_id: created.invoice.id,
     invoice_number: created.invoice.invoice_number || created.invoice.invoice_id,
     agreement_uuid: created.agreement.id,
-    agreement_id: created.agreement.agreement_id || created.agreement.id,
+    agreement_id: created.agreement.id,
     agreement_number: created.agreement.agreement_number || created.agreement.agreement_id,
     client_id: created.invoice.client_id || null,
     company_id: /^[0-9a-f-]{36}$/i.test(String(created.invoice.company_id || '')) ? created.invoice.company_id : null,
