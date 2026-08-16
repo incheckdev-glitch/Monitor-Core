@@ -1,0 +1,78 @@
+name: One-time Proposal Catalog Create Fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/one-time-fix-proposal-catalog-create.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - name: Fix proposal catalog product creation and persistent errors
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'proposal-catalog.js';
+          let s = fs.readFileSync(path, 'utf8');
+
+          const normalizeNeedle = `  normalizeText(value) {\n    return String(value ?? '').trim();\n  },`;
+          const normalizeReplacement = `  normalizeText(value) {\n    return String(value ?? '').trim();\n  },\n  generateCatalogItemId() {\n    const now = new Date();\n    const date = [\n      now.getFullYear(),\n      String(now.getMonth() + 1).padStart(2, '0'),\n      String(now.getDate()).padStart(2, '0')\n    ].join('');\n    const token = String(\n      globalThis.crypto?.randomUUID?.().replace(/-/g, '').slice(0, 8) ||\n      Math.random().toString(36).slice(2, 10)\n    ).toUpperCase();\n    return \`CAT-\${date}-\${token}\`;\n  },`;
+          if (!s.includes(normalizeNeedle)) throw new Error('normalizeText insertion point not found');
+          s = s.replace(normalizeNeedle, normalizeReplacement);
+
+          const getValueNeedle = `  getValue(el) {\n    return String(el?.value || '').trim();\n  },`;
+          const getValueReplacement = `  getValue(el) {\n    return String(el?.value || '').trim();\n  },\n  ensureFormErrorBox() {\n    if (!E.proposalCatalogForm) return null;\n    let box = document.getElementById('proposalCatalogFormError');\n    if (box) return box;\n\n    box = document.createElement('div');\n    box.id = 'proposalCatalogFormError';\n    box.setAttribute('role', 'alert');\n    box.setAttribute('aria-live', 'assertive');\n    box.style.cssText = 'display:none;margin:16px 20px 0;padding:14px 16px;border:1px solid #fecaca;border-radius:12px;background:#fef2f2;color:#991b1b;white-space:normal;overflow-wrap:anywhere;';\n\n    const head = document.createElement('div');\n    head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;';\n    const title = document.createElement('strong');\n    title.textContent = 'Unable to save catalog item';\n    const copy = document.createElement('button');\n    copy.type = 'button';\n    copy.id = 'proposalCatalogCopyErrorBtn';\n    copy.className = 'btn ghost sm';\n    copy.textContent = 'Copy Error';\n    copy.addEventListener('click', async () => {\n      const message = String(document.getElementById('proposalCatalogFormErrorMessage')?.textContent || '').trim();\n      if (!message) return;\n      try {\n        await navigator.clipboard.writeText(message);\n        UI.toast('Error copied.');\n      } catch {\n        const range = document.createRange();\n        const textNode = document.getElementById('proposalCatalogFormErrorMessage');\n        if (textNode && window.getSelection) {\n          range.selectNodeContents(textNode);\n          const selection = window.getSelection();\n          selection.removeAllRanges();\n          selection.addRange(range);\n        }\n        UI.toast('Error selected. Press Ctrl+C to copy.');\n      }\n    });\n    const message = document.createElement('div');\n    message.id = 'proposalCatalogFormErrorMessage';\n    message.style.cssText = 'font-size:13px;line-height:1.5;user-select:text;';\n    head.append(title, copy);\n    box.append(head, message);\n\n    const body = E.proposalCatalogForm.querySelector('.modal-body');\n    if (body) E.proposalCatalogForm.insertBefore(box, body);\n    else E.proposalCatalogForm.prepend(box);\n    return box;\n  },\n  clearFormError() {\n    const box = this.ensureFormErrorBox();\n    if (!box) return;\n    const message = document.getElementById('proposalCatalogFormErrorMessage');\n    if (message) message.textContent = '';\n    box.style.display = 'none';\n  },\n  showFormError(errorMessage = '') {\n    const messageText = String(errorMessage || 'Unknown error').trim();\n    const box = this.ensureFormErrorBox();\n    const message = document.getElementById('proposalCatalogFormErrorMessage');\n    if (message) message.textContent = messageText;\n    if (box) {\n      box.style.display = 'block';\n      box.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });\n    }\n    return messageText;\n  },`;
+          if (!s.includes(getValueNeedle)) throw new Error('getValue insertion point not found');
+          s = s.replace(getValueNeedle, getValueReplacement);
+
+          const modeNeedle = `    const mode = normalized.id ? 'edit' : 'create';\n    this.state.formMode = mode;`;
+          const modeReplacement = `    const mode = normalized.id ? 'edit' : 'create';\n    if (mode === 'create' && !normalized.catalog_item_id) normalized.catalog_item_id = this.generateCatalogItemId();\n    this.clearFormError();\n    this.state.formMode = mode;`;
+          if (!s.includes(modeNeedle)) throw new Error('openForm mode insertion point not found');
+          s = s.replace(modeNeedle, modeReplacement);
+
+          const payloadNeedle = `    return {\n      is_active: this.toBool(this.getValue(E.proposalCatalogFormIsActive), true),`;
+          const payloadReplacement = `    return {\n      catalog_item_id: this.getValue(E.proposalCatalogFormItemId) || this.generateCatalogItemId(),\n      is_active: this.toBool(this.getValue(E.proposalCatalogFormIsActive), true),`;
+          if (!s.includes(payloadNeedle)) throw new Error('collectFormPayload insertion point not found');
+          s = s.replace(payloadNeedle, payloadReplacement);
+
+          const validationNeedle = `    if (!payload.item_name && !payload.category) {\n      UI.toast('Please enter at least an item name or category.');\n      return;\n    }\n\n    this.setFormBusy(true);`;
+          const validationReplacement = `    if (!payload.item_name) {\n      const message = 'Item name is required.';\n      this.showFormError(message);\n      UI.toast(message);\n      return;\n    }\n    if (!payload.catalog_item_id) {\n      const message = 'Catalog Item ID could not be generated. Please close and reopen the form.';\n      this.showFormError(message);\n      UI.toast(message);\n      return;\n    }\n\n    this.clearFormError();\n    this.setFormBusy(true);`;
+          if (!s.includes(validationNeedle)) throw new Error('submit validation block not found');
+          s = s.replace(validationNeedle, validationReplacement);
+
+          const catchNeedle = `      UI.toast('Unable to save catalog item: ' + (error?.message || 'Unknown error'));`;
+          const catchReplacement = `      const message = 'Unable to save catalog item: ' + (error?.message || 'Unknown error');\n      this.showFormError(message);\n      UI.toast(message);`;
+          if (!s.includes(catchNeedle)) throw new Error('catalog error catch not found');
+          s = s.replace(catchNeedle, catchReplacement);
+
+          fs.writeFileSync(path, s);
+
+          const test = `const assert = require('assert');\nconst fs = require('fs');\nconst source = fs.readFileSync('proposal-catalog.js', 'utf8');\n\nassert.match(source, /generateCatalogItemId\\(\\)[\\s\\S]*CAT-\\$\\{date\\}-\\$\\{token\\}/, 'catalog create must generate a business item id');\nassert.match(source, /catalog_item_id:\\s*this\\.getValue\\(E\\.proposalCatalogFormItemId\\) \\|\\| this\\.generateCatalogItemId\\(\\)/, 'catalog create payload must include catalog_item_id');\nassert.match(source, /mode === 'create'[\\s\\S]*normalized\\.catalog_item_id = this\\.generateCatalogItemId\\(\\)/, 'new product form must prefill generated catalog id');\nassert.match(source, /if \\(!payload\\.item_name\\)[\\s\\S]*Item name is required/, 'item name must be required before database insert');\nassert.match(source, /proposalCatalogFormErrorMessage[\\s\\S]*Copy Error/, 'catalog errors must remain visible and copyable');\nassert.match(source, /catch \\(error\\)[\\s\\S]*Unable to save catalog item:[\\s\\S]*this\\.showFormError\\(message\\)/, 'save errors must be persisted in the form');\nconsole.log('proposal catalog create regression tests passed');\n`;
+          fs.writeFileSync('tests/proposal-catalog-create.test.js', test);
+          NODE
+      - name: Validate fix
+        run: |
+          node --check proposal-catalog.js
+          node tests/proposal-catalog-create.test.js
+          npm ci
+          npm run check
+      - name: Commit fix
+        run: |
+          git config user.name "incheckdev-glitch"
+          git config user.email "incheckdev@gmail.com"
+          git add proposal-catalog.js tests/proposal-catalog-create.test.js
+          git commit -m "fix: create proposal catalog products reliably"
+          git push origin main
