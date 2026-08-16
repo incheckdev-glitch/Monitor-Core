@@ -53,8 +53,6 @@ async function main() {
   if (permission.data !== true) throw new Error('Admin manage permission is not active.');
   pass('Communication manage permission', 'true');
 
-  // Record the production create-RPC gap, but continue with a service-role seed
-  // that mirrors migration 15 so downstream secure behavior can be tested now.
   const missingCreate = await userClient.rpc('create_communication_centre_conversation', {
     p_title: `${marker} missing-RPC check`,
     p_description: marker,
@@ -97,15 +95,10 @@ async function main() {
     id: participantId,
     conversation_id: conversationId,
     user_id: user.id,
-    user_role: profile.role_key,
-    is_active: true,
-    is_muted: false,
-    joined_at: now,
     created_at: now,
-    updated_at: now,
   });
   if (participant.error) throw participant.error;
-  pass('Service-role diagnostic parent seed', 'conversation + admin participant');
+  pass('Service-role diagnostic parent seed', 'conversation + live-shape admin participant');
 
   const canView = await userClient.rpc('can_view_communication_centre_conversation', { p_conversation_id: conversationId });
   if (canView.error) throw canView.error;
@@ -163,5 +156,4 @@ async function main() {
   finally { await cleanup(); }
   const counts = printResults('InCheck360 Production Communication Diagnostic', results);
   if (counts.FAIL > 1) process.exit(1);
-  // One expected FAIL is the known missing create RPC. Downstream diagnostics must pass.
 })();
