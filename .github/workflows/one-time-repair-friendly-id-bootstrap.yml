@@ -1,0 +1,80 @@
+name: One-time Repair Friendly ID Bootstrap
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/one-time-repair-friendly-id-bootstrap.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Restore and safely update bootstrap source
+        run: |
+          git show 0c8d2dd692aeb54e88b164033b1b773587bb1894:database/bootstrap/12_gap_safe_business_id_allocation.sql > database/bootstrap/12_gap_safe_business_id_allocation.sql
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('database/bootstrap/12_gap_safe_business_id_allocation.sql')
+          src = path.read_text()
+          old = """-- Lead -> Deal: DEAL/YYYY/NNNN"""
+          new = """-- Lead -> Deal: Deal#NNNNN"""
+          assert old in src
+          src = src.replace(old, new, 1)
+
+          old = """  v_code text;
+  v_year text := to_char(current_date, 'YYYY');
+  v_seq bigint;"""
+          new = """  v_code text;
+  v_seq bigint;"""
+          assert old in src
+          src = src.replace(old, new, 1)
+
+          old = """  select coalesce(max((regexp_match(deal_id, '^DEAL/' || v_year || '/([0-9]+)$', 'i'))[1]::bigint), 0) + 1
+    into v_seq
+    from public.deals
+   where deal_id ~* ('^DEAL/' || v_year || '/[0-9]+$');
+
+  v_code := 'DEAL/' || v_year || '/' || lpad(v_seq::text, 4, '0');"""
+          new = """  select coalesce(max((regexp_match(deal_id, '^Deal#([0-9]+)$', 'i'))[1]::bigint), 0) + 1
+    into v_seq
+    from public.deals
+   where deal_id ~* '^Deal#[0-9]+$';
+
+  v_code := 'Deal#' || lpad(v_seq::text, 5, '0');"""
+          assert old in src
+          src = src.replace(old, new, 1)
+          path.write_text(src)
+          PY
+
+      - name: Validate repaired source
+        run: |
+          test "$(wc -l < database/bootstrap/12_gap_safe_business_id_allocation.sql)" -lt 450
+          grep -Fq "v_code := 'Deal#' || lpad(v_seq::text, 5, '0');" database/bootstrap/12_gap_safe_business_id_allocation.sql
+          grep -Fq "v_id := 'Proposal#' || lpad(v_seq::text, 5, '0');" database/bootstrap/12_gap_safe_business_id_allocation.sql
+          ! grep -Fq "v_code := 'DEAL/' || v_year" database/bootstrap/12_gap_safe_business_id_allocation.sql
+          node scripts/validate-sql-migrations.js
+          node tests/friendly-commercial-ids.test.js
+          npm ci
+          npm run check
+          git diff --check
+
+      - name: Commit repair
+        run: |
+          git config user.name "incheckdev-glitch"
+          git config user.email "incheckdev@gmail.com"
+          git add database/bootstrap/12_gap_safe_business_id_allocation.sql
+          git commit -m "fix: repair friendly ID bootstrap source"
+          git push origin main
