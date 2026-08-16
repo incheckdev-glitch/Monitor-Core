@@ -1,0 +1,12 @@
+const assert = require('assert');
+const fs = require('fs');
+const css = fs.readFileSync('styles.css','utf8');
+const html = fs.readFileSync('index.html','utf8');
+assert(css.includes('/* Leads responsive hardening - 2026-08-16 */'));
+assert.match(css, /#leadsView \.leads-page-shell \{[\s\S]*overflow-x:hidden/);
+assert.match(css, /#leadsView \.leads-analytics-grid \{[\s\S]*auto-fit[\s\S]*220px/);
+assert.match(css, /#leadsView \.leads-filter-grid \{[\s\S]*auto-fit[\s\S]*210px/);
+assert.match(css, /#leadsView \.leads-table-wrap \{[\s\S]*overflow-x:auto/);
+assert.match(css, /@media \(max-width:640px\)[\s\S]*#leadFormModal[\s\S]*100dvh/);
+assert(html.includes('/styles.css?v=20260816-leads-responsive-v1'));
+console.log('Leads responsive regression tests passed');

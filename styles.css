@@ -9311,3 +9311,151 @@ body.modal-open { overflow: hidden; }
   .statement-schedule-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .statement-schedule-installment { grid-column: 1 / -1; }
 }
+
+
+/* Leads responsive hardening - 2026-08-16 */
+/* Keep every Leads workspace child constrained to the available CRM content width. */
+#leadsView,
+#leadsView .leads-page-shell,
+#leadsView .leads-page-header,
+#leadsView .leads-analytics,
+#leadsView .leads-filter-card,
+#leadsView .leads-status-card,
+#leadsView .leads-table-panel,
+#leadsView .leads-table-toolbar,
+#leadsView .leads-table-toolbar-left {
+  min-width:0;
+  max-width:100%;
+}
+#leadsView .leads-page-shell {
+  width:100%;
+  overflow-x:hidden;
+}
+#leadsView .leads-page-header > *,
+#leadsView .leads-header-actions,
+#leadsView .leads-filter-field,
+#leadsView .leads-status-row > * {
+  min-width:0;
+}
+
+/* Fluid cards avoid tablet squeeze caused by viewport-only breakpoints. */
+#leadsView .leads-analytics-grid {
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));
+}
+#leadsView .leads-filter-grid {
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));
+}
+#leadsView .leads-filter-clear {
+  min-width:0;
+}
+
+/* Status distribution may shrink without pushing the whole page sideways. */
+#leadsView .leads-status-bars {
+  min-width:0;
+}
+#leadsView .leads-status-row {
+  grid-template-columns:minmax(120px,170px) minmax(34px,42px) minmax(90px,1fr) minmax(42px,52px);
+}
+
+/* The table itself stays wide, but scrolling is isolated to the table card. */
+#leadsView .leads-table-panel {
+  overflow:hidden;
+}
+#leadsView .leads-table-wrap {
+  width:calc(100% - 24px);
+  max-width:calc(100% - 24px);
+  overflow-x:auto;
+  overflow-y:visible;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior-inline:contain;
+  touch-action:pan-x pan-y;
+}
+#leadsView .leads-table-wrap table {
+  max-width:none;
+}
+#leadsView #leadsPaginationControls {
+  min-width:0;
+  max-width:100%;
+}
+#leadsView #leadsPaginationControls > .pagination {
+  max-width:100%;
+}
+
+/* Lead create/edit dialog: keep header, body and footer usable on tablets and phones. */
+#leadFormModal .modern-crm-modal-content {
+  max-width:min(1180px,calc(100vw - 24px))!important;
+}
+#leadFormModal .modern-crm-header-left,
+#leadFormModal .modern-crm-header-left > div,
+#leadFormModal .modern-crm-scroll-body,
+#leadFormModal .modern-crm-section-card {
+  min-width:0;
+  max-width:100%;
+}
+#leadFormModal .modern-crm-modal-title,
+#leadFormModal .modern-crm-modal-subtitle,
+#leadFormModal .crm-field {
+  overflow-wrap:anywhere;
+}
+
+@media (max-width:900px) {
+  #leadsView .leads-page-shell { padding:18px; gap:14px; }
+  #leadsView .leads-status-bars { grid-template-columns:1fr; gap:10px; }
+  #leadsView .leads-table-toolbar-left { gap:10px; }
+  #leadsView #leadsPaginationControls { margin-left:0; width:100%; }
+  #leadsView #leadsPaginationControls > .pagination { justify-content:flex-start; }
+}
+
+@media (max-width:640px) {
+  #leadsView .leads-page-shell { padding:10px; gap:12px; }
+  #leadsView .leads-page-header h1 { font-size:26px; }
+  #leadsView .leads-header-actions { display:grid; grid-template-columns:1fr; width:100%; }
+  #leadsView .leads-header-actions > * { width:100%; }
+  #leadsView .leads-filter-card,
+  #leadsView .leads-status-card { padding:14px; border-radius:14px; }
+  #leadsView .leads-kpi-card { min-height:96px; padding:14px; gap:12px; }
+  #leadsView .leads-kpi-icon { width:48px; height:48px; flex-basis:48px; font-size:22px; }
+  #leadsView .leads-kpi-card .value { font-size:24px; }
+  #leadsView .leads-status-row {
+    grid-template-columns:minmax(0,1fr) auto;
+    gap:6px 10px;
+  }
+  #leadsView .leads-status-track { grid-column:1 / -1; grid-row:2; }
+  #leadsView .leads-status-count { text-align:right; }
+  #leadsView .leads-status-meta { grid-column:1 / -1; text-align:left; }
+  #leadsView .leads-table-toolbar { padding:12px 10px 8px; }
+  #leadsView .leads-table-wrap { margin:0 8px 8px; width:calc(100% - 16px); max-width:calc(100% - 16px); }
+  #leadsView #leadsPaginationControls > .pagination { gap:6px; }
+  #leadsView #leadsPaginationControls .chip-btn { flex:1 1 auto; min-width:0; padding:0 8px; }
+  #leadsView #leadsPaginationControls .input { max-width:100%; }
+
+  #leadFormModal.modern-crm-modal { padding:0; align-items:stretch; }
+  #leadFormModal .modern-crm-modal-content {
+    width:100vw;
+    max-width:100vw!important;
+    height:100dvh;
+    max-height:100dvh;
+    border-radius:0;
+    border-left:0;
+    border-right:0;
+  }
+  #leadFormModal .modern-crm-form { max-height:none; min-height:0; flex:1; }
+  #leadFormModal .modern-crm-modal-header { padding:14px; gap:10px; }
+  #leadFormModal .modern-crm-modal-icon { width:42px; height:42px; flex:0 0 42px; border-radius:12px; font-size:20px; }
+  #leadFormModal .modern-crm-modal-title { font-size:20px; }
+  #leadFormModal .modern-crm-modal-subtitle { font-size:12px; }
+  #leadFormModal .modern-crm-close { flex:0 0 40px; }
+  #leadFormModal .modern-crm-scroll-body { padding:12px; gap:12px; }
+  #leadFormModal .modern-crm-section-card,
+  #leadFormModal .modern-crm-readonly-card,
+  #leadFormModal .form-section { padding:14px; border-radius:14px; }
+  #leadFormModal .modern-crm-modal-footer { padding:10px 12px calc(10px + env(safe-area-inset-bottom)); }
+  #leadFormModal .modern-crm-footer-actions { display:grid; grid-template-columns:1fr; gap:8px; }
+  #leadFormModal .modern-crm-footer-actions .btn { width:100%; }
+}
+
+@media (max-width:380px) {
+  #leadsView .leads-kpi-card { align-items:flex-start; }
+  #leadsView .leads-table-wrap table { min-width:1320px; }
+  #leadFormModal .modern-crm-modal-icon { display:none; }
+}
