@@ -565,8 +565,12 @@ const Leads = {
   },
   async createLead(lead) {
     const userId = await this.getCurrentUserId();
+    const leadWithBusinessId = {
+      ...(lead && typeof lead === 'object' ? lead : {}),
+      lead_id: String(lead?.lead_id || '').trim() || this.generateLeadId()
+    };
     const payload = this.cleanLeadUuidPayload({
-      ...this.backendLead(lead),
+      ...this.backendLead(leadWithBusinessId),
       created_by: this.isUuid(userId) ? userId : undefined,
       updated_by: this.isUuid(userId) ? userId : undefined
     });
@@ -1903,7 +1907,8 @@ const Leads = {
           await this.convertLeadById(leadId, { skipNoteGate: true });
         }
       } else {
-        const tempLeadId = this.generateLeadId();
+        const tempLeadId = String(lead.lead_id || '').trim() || this.generateLeadId();
+        lead.lead_id = tempLeadId;
         if (E.leadFormLeadId) E.leadFormLeadId.value = tempLeadId;
         const created = await this.createLead(lead);
         const createdId = String(created?.id || created?.row?.id || created?.data?.id || '').trim();
@@ -2567,7 +2572,7 @@ const Leads = {
     }
     this.setFormBusy(true);
     try {
-      const sourceLead = this.normalizeLead(await this.getLead(leadUuid));
+      let sourceLead = this.normalizeLead(await this.getLead(leadUuid));
       if (sourceLead.status !== 'qualified') {
         UI.toast('Lead must be qualified before converting to deal.');
         return;
@@ -2577,8 +2582,16 @@ const Leads = {
         return;
       }
       if (!String(sourceLead.lead_id || '').trim()) {
-        UI.toast('Unable to convert lead: missing business Lead ID.');
-        return;
+        const generatedLeadId = this.generateLeadId();
+        const repairedLeadResult = await this.updateLeadWithVerification(leadUuid, {
+          ...sourceLead,
+          lead_id: generatedLeadId
+        });
+        sourceLead = this.normalizeLead(repairedLeadResult?.row || await this.getLead(leadUuid));
+        if (!String(sourceLead.lead_id || '').trim()) {
+          throw new Error('Lead business ID could not be generated.');
+        }
+        this.upsertLocalRow(sourceLead);
       }
       console.log('[deal conversion] source lead', sourceLead);
       console.log('[deal conversion] existing deal check lead uuid', sourceLead.id);
