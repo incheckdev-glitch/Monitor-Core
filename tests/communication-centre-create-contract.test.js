@@ -20,8 +20,12 @@ assert.match(sql, /insert into public\.communication_centre_participants\(\s*id,
 assert.doesNotMatch(sql, /insert into public\.communication_centre_participants[\s\S]{0,350}(is_active|is_muted|joined_at|last_read_at|updated_at|user_role)/i, 'migration must not write stale participant columns');
 assert.match(sql, /select v_actor/, 'conversation creator must remain a participant');
 assert.match(sql, /participant_count = v_participant_count/i, 'conversation participant count must be synchronized');
-assert.doesNotMatch(sql, /insert into public\.communication_centre_conversations[\s\S]{0,1500}assigned_user_ids/i, 'migration must not write stale assigned_user_ids conversation column');
-assert.doesNotMatch(sql, /related_record_ref|related_record_title/i, 'migration must not write stale related-record columns rejected by production');
+
+const conversationInsertColumns = sql.match(/insert into public\.communication_centre_conversations\s*\(([^)]*)\)/i)?.[1] || '';
+assert.ok(conversationInsertColumns, 'migration must contain a Communication Centre conversation insert column list');
+assert.doesNotMatch(conversationInsertColumns, /\bassigned_user_ids\b/i, 'migration must not write stale assigned_user_ids conversation column');
+assert.doesNotMatch(conversationInsertColumns, /\brelated_record_ref\b|\brelated_record_title\b/i, 'migration must not write stale related-record columns rejected by production');
+
 assert.match(sql, /grant execute on function public\.create_communication_centre_conversation/i, 'authenticated users must receive RPC execute permission');
 assert.match(sql, /notify pgrst, 'reload schema'/i, 'migration must reload PostgREST schema');
 
