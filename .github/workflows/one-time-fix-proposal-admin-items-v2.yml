@@ -1,0 +1,48 @@
+name: One-time Fix Proposal Admin Items v2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/one-time-fix-proposal-admin-items-v2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - name: Apply corrected proposal patch
+        run: |
+          awk '/node <<'"'"'NODE'"'"'/{flag=1;next} flag && /^[[:space:]]*NODE[[:space:]]*$/{exit} flag{sub(/^          /,"");print}' .github/workflows/one-time-fix-proposal-admin-items.yml > /tmp/proposal-patch.js
+          node /tmp/proposal-patch.js
+          node - <<'NODE'
+          const fs = require('fs');
+          const path = 'database/bootstrap/17_admin_locked_proposal_rpc_and_items.sql';
+          let sql = fs.readFileSync(path, 'utf8');
+          sql = sql.replace('remove dependency on nonexistent jsonb_object_length(jsonb)', 'replace the incompatible JSON object-length check');
+          fs.writeFileSync(path, sql);
+          NODE
+      - name: Validate corrected patch
+        run: |
+          node --check proposals.js
+          node --check supabase-data.js
+          node tests/proposal-admin-item-persistence.test.js
+          npm ci
+          npm run check
+      - name: Commit fix
+        run: |
+          git config user.name "incheckdev-glitch"
+          git config user.email "incheckdev@gmail.com"
+          git add proposals.js supabase-data.js tests/proposal-admin-item-persistence.test.js database/bootstrap/17_admin_locked_proposal_rpc_and_items.sql
+          git commit -m "fix: persist proposal items and scope admin override"
+          git push origin main
