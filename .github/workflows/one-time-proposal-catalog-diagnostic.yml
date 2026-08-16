@@ -1,0 +1,89 @@
+name: One-time Proposal Catalog Diagnostic
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/one-time-proposal-catalog-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+      TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+      TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+      TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Inspect production proposal catalog contract (read-only)
+        run: |
+          node <<'NODE'
+          const { createClient } = require('@supabase/supabase-js');
+          const url = String(process.env.TEST_SUPABASE_URL || '').replace(/\/$/, '');
+          const anon = process.env.TEST_SUPABASE_ANON_KEY || '';
+          const email = process.env.TEST_USER_EMAIL || '';
+          const password = process.env.TEST_USER_PASSWORD || '';
+          if (!url || !anon || !email || !password) throw new Error('Required production test secrets are missing.');
+          const client = createClient(url, anon, { auth: { persistSession: false, autoRefreshToken: false } });
+          (async () => {
+            const { data: auth, error: authError } = await client.auth.signInWithPassword({ email, password });
+            if (authError) throw authError;
+            const token = auth?.session?.access_token;
+            const userId = auth?.user?.id || '';
+            console.log('authenticated user UUID:', userId ? 'present' : 'missing');
+
+            const { data: rows, error: rowsError } = await client
+              .from('proposal_catalog_items')
+              .select('id,catalog_item_id,is_active,section,category,item_name,unit_price,discount_percent,quantity,sort_order,created_by,updated_by,created_at,updated_at')
+              .limit(3);
+            if (rowsError) console.log('catalog select error:', JSON.stringify({ code: rowsError.code, message: rowsError.message, details: rowsError.details, hint: rowsError.hint }));
+            else console.log('sample catalog rows:', JSON.stringify((rows || []).map(r => ({
+              id: r.id,
+              catalog_item_id: r.catalog_item_id,
+              section: r.section,
+              item_name: r.item_name,
+              created_by: r.created_by,
+              updated_by: r.updated_by,
+              created_at: r.created_at
+            })), null, 2));
+
+            const response = await fetch(`${url}/rest/v1/`, {
+              headers: {
+                apikey: anon,
+                Authorization: `Bearer ${token}`,
+                Accept: 'application/openapi+json'
+              }
+            });
+            console.log('OpenAPI status:', response.status);
+            const spec = await response.json();
+            const defs = spec.definitions || spec.components?.schemas || {};
+            const schema = defs.proposal_catalog_items || defs['proposal_catalog_items'];
+            if (!schema) {
+              console.log('proposal_catalog_items OpenAPI schema not exposed. available matching definitions:', Object.keys(defs).filter(k => /catalog/i.test(k)));
+            } else {
+              const props = schema.properties || {};
+              const compact = {};
+              for (const [key, value] of Object.entries(props)) {
+                compact[key] = {
+                  type: value.type,
+                  format: value.format,
+                  nullable: value.nullable,
+                  default: value.default,
+                  description: value.description
+                };
+              }
+              console.log('proposal_catalog_items required:', JSON.stringify(schema.required || []));
+              console.log('proposal_catalog_items columns:', JSON.stringify(compact, null, 2));
+            }
+          })().catch(err => { console.error(err); process.exit(1); });
+          NODE
