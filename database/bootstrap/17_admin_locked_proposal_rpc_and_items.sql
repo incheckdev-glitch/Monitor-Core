@@ -19,6 +19,7 @@ declare
   v_set_clause text;
   v_result jsonb;
   v_item_count integer := 0;
+  v_existing_item_ids text[] := array[]::text[];
 begin
   if auth.uid() is null then
     raise exception 'Authentication required.';
@@ -85,6 +86,11 @@ begin
   end if;
 
   if v_items is not null then
+    select coalesce(array_agg(i.item_id) filter (where nullif(btrim(coalesce(i.item_id, '')), '') is not null), array[]::text[])
+      into v_existing_item_ids
+    from public.proposal_items i
+    where i.proposal_id = p_proposal_id;
+
     delete from public.proposal_items where proposal_id = p_proposal_id;
     if v_items <> '[]'::jsonb then
       insert into public.proposal_items (
@@ -93,7 +99,16 @@ begin
         line_total, service_start_date, service_end_date, capability_name, capability_value, notes
       )
       select
-        p_proposal_id, r.item_id, r.section, r.line_no, r.location_name, r.location_address, r.item_name,
+        p_proposal_id,
+        case
+          when nullif(btrim(coalesce(r.item_id, '')), '') is not null and r.item_id = any(v_existing_item_ids) then r.item_id
+          else concat(
+            'PITEM-', replace(p_proposal_id::text, '-', ''), '-',
+            regexp_replace(lower(coalesce(nullif(btrim(r.section), ''), 'item')), '[^a-z0-9]+', '-', 'g'), '-',
+            coalesce(r.line_no::text, '0')
+          )
+        end,
+        r.section, r.line_no, r.location_name, r.location_address, r.item_name,
         coalesce(r.unit_price, 0), coalesce(r.discount_percent, 0), coalesce(r.discounted_unit_price, 0),
         coalesce(r.quantity, 1), r.license_quantity, coalesce(r.line_total, 0), r.service_start_date,
         r.service_end_date, r.capability_name, r.capability_value, r.notes

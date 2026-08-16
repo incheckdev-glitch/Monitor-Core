@@ -3666,6 +3666,28 @@ IN WITNESS WHEREOF, the parties have caused this Agreement to be executed by the
     return sanitized;
   }
 
+  function buildProposalLineItemId(record = {}, proposalUuid = '') {
+    const parentUuid = String(normalizeNullableUuidValue(proposalUuid || firstDefined(record, ['proposal_id', 'proposalId'])) || '').trim();
+    const sourceParentUuid = String(normalizeNullableUuidValue(firstDefined(record, ['proposal_id', 'proposalId'])) || '').trim();
+    const incomingItemId = String(firstDefined(record, ['item_id', 'itemId']) || '').trim();
+
+    // A row loaded from this exact proposal may keep its existing proposal-line ID.
+    // Catalog/new rows must never reuse a catalog item_id in proposal_items because
+    // proposal_items.item_id is globally unique across all proposals.
+    if (parentUuid && sourceParentUuid === parentUuid && incomingItemId) return incomingItemId;
+
+    if (!parentUuid) return incomingItemId || null;
+    const section = String(firstDefined(record, ['section']) || 'item')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'item';
+    const lineNo = String(firstDefined(record, ['line_no', 'lineNo', 'line']) || '0')
+      .trim()
+      .replace(/[^a-z0-9.-]+/gi, '-') || '0';
+    return `PITEM-${parentUuid.replace(/-/g, '')}-${section}-${lineNo}`;
+  }
+
   function sanitizeProposalItemRecord(record = {}, proposalUuid = '') {
     const normalizedDiscountPercent = normalizeNumericValue(
       firstDefined(record, ['discount_percent', 'discountPercent', 'discount']),
@@ -3676,7 +3698,7 @@ IN WITNESS WHEREOF, the parties have caused this Agreement to be executed by the
       ? getAnnualSaasMonths(record)
       : firstDefined(record, ['quantity', 'qty']);
     const mapped = compactObject({
-      item_id: firstDefined(record, ['item_id', 'itemId']),
+      item_id: buildProposalLineItemId(record, proposalUuid),
       proposal_id: normalizeNullableUuidValue(proposalUuid || firstDefined(record, ['proposal_id', 'proposalId'])),
       section,
       line_no: firstDefined(record, ['line_no', 'lineNo', 'line']),
