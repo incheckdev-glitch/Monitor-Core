@@ -1,0 +1,53 @@
+name: One-time Leads responsive hardening
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/one-time-leads-responsive-hardening.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Harden Leads responsiveness
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const cssPath = 'styles.css';
+          let css = fs.readFileSync(cssPath, 'utf8');
+          const marker = '/* Leads responsive hardening - 2026-08-16 */';
+          if (!css.includes(marker)) {
+            css += `\n\n${marker}\n/* Keep every Leads workspace child constrained to the available CRM content width. */\n#leadsView,\n#leadsView .leads-page-shell,\n#leadsView .leads-page-header,\n#leadsView .leads-analytics,\n#leadsView .leads-filter-card,\n#leadsView .leads-status-card,\n#leadsView .leads-table-panel,\n#leadsView .leads-table-toolbar,\n#leadsView .leads-table-toolbar-left {\n  min-width:0;\n  max-width:100%;\n}\n#leadsView .leads-page-shell {\n  width:100%;\n  overflow-x:hidden;\n}\n#leadsView .leads-page-header > *,\n#leadsView .leads-header-actions,\n#leadsView .leads-filter-field,\n#leadsView .leads-status-row > * {\n  min-width:0;\n}\n\n/* Fluid cards avoid tablet squeeze caused by viewport-only breakpoints. */\n#leadsView .leads-analytics-grid {\n  grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));\n}\n#leadsView .leads-filter-grid {\n  grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));\n}\n#leadsView .leads-filter-clear {\n  min-width:0;\n}\n\n/* Status distribution may shrink without pushing the whole page sideways. */\n#leadsView .leads-status-bars {\n  min-width:0;\n}\n#leadsView .leads-status-row {\n  grid-template-columns:minmax(120px,170px) minmax(34px,42px) minmax(90px,1fr) minmax(42px,52px);\n}\n\n/* The table itself stays wide, but scrolling is isolated to the table card. */\n#leadsView .leads-table-panel {\n  overflow:hidden;\n}\n#leadsView .leads-table-wrap {\n  width:calc(100% - 24px);\n  max-width:calc(100% - 24px);\n  overflow-x:auto;\n  overflow-y:visible;\n  -webkit-overflow-scrolling:touch;\n  overscroll-behavior-inline:contain;\n  touch-action:pan-x pan-y;\n}\n#leadsView .leads-table-wrap table {\n  max-width:none;\n}\n#leadsView #leadsPaginationControls {\n  min-width:0;\n  max-width:100%;\n}\n#leadsView #leadsPaginationControls > .pagination {\n  max-width:100%;\n}\n\n/* Lead create/edit dialog: keep header, body and footer usable on tablets and phones. */\n#leadFormModal .modern-crm-modal-content {\n  max-width:min(1180px,calc(100vw - 24px))!important;\n}\n#leadFormModal .modern-crm-header-left,\n#leadFormModal .modern-crm-header-left > div,\n#leadFormModal .modern-crm-scroll-body,\n#leadFormModal .modern-crm-section-card {\n  min-width:0;\n  max-width:100%;\n}\n#leadFormModal .modern-crm-modal-title,\n#leadFormModal .modern-crm-modal-subtitle,\n#leadFormModal .crm-field {\n  overflow-wrap:anywhere;\n}\n\n@media (max-width:900px) {\n  #leadsView .leads-page-shell { padding:18px; gap:14px; }\n  #leadsView .leads-status-bars { grid-template-columns:1fr; gap:10px; }\n  #leadsView .leads-table-toolbar-left { gap:10px; }\n  #leadsView #leadsPaginationControls { margin-left:0; width:100%; }\n  #leadsView #leadsPaginationControls > .pagination { justify-content:flex-start; }\n}\n\n@media (max-width:640px) {\n  #leadsView .leads-page-shell { padding:10px; gap:12px; }\n  #leadsView .leads-page-header h1 { font-size:26px; }\n  #leadsView .leads-header-actions { display:grid; grid-template-columns:1fr; width:100%; }\n  #leadsView .leads-header-actions > * { width:100%; }\n  #leadsView .leads-filter-card,\n  #leadsView .leads-status-card { padding:14px; border-radius:14px; }\n  #leadsView .leads-kpi-card { min-height:96px; padding:14px; gap:12px; }\n  #leadsView .leads-kpi-icon { width:48px; height:48px; flex-basis:48px; font-size:22px; }\n  #leadsView .leads-kpi-card .value { font-size:24px; }\n  #leadsView .leads-status-row {\n    grid-template-columns:minmax(0,1fr) auto;\n    gap:6px 10px;\n  }\n  #leadsView .leads-status-track { grid-column:1 / -1; grid-row:2; }\n  #leadsView .leads-status-count { text-align:right; }\n  #leadsView .leads-status-meta { grid-column:1 / -1; text-align:left; }\n  #leadsView .leads-table-toolbar { padding:12px 10px 8px; }\n  #leadsView .leads-table-wrap { margin:0 8px 8px; width:calc(100% - 16px); max-width:calc(100% - 16px); }\n  #leadsView #leadsPaginationControls > .pagination { gap:6px; }\n  #leadsView #leadsPaginationControls .chip-btn { flex:1 1 auto; min-width:0; padding:0 8px; }\n  #leadsView #leadsPaginationControls .input { max-width:100%; }\n\n  #leadFormModal.modern-crm-modal { padding:0; align-items:stretch; }\n  #leadFormModal .modern-crm-modal-content {\n    width:100vw;\n    max-width:100vw!important;\n    height:100dvh;\n    max-height:100dvh;\n    border-radius:0;\n    border-left:0;\n    border-right:0;\n  }\n  #leadFormModal .modern-crm-form { max-height:none; min-height:0; flex:1; }\n  #leadFormModal .modern-crm-modal-header { padding:14px; gap:10px; }\n  #leadFormModal .modern-crm-modal-icon { width:42px; height:42px; flex:0 0 42px; border-radius:12px; font-size:20px; }\n  #leadFormModal .modern-crm-modal-title { font-size:20px; }\n  #leadFormModal .modern-crm-modal-subtitle { font-size:12px; }\n  #leadFormModal .modern-crm-close { flex:0 0 40px; }\n  #leadFormModal .modern-crm-scroll-body { padding:12px; gap:12px; }\n  #leadFormModal .modern-crm-section-card,\n  #leadFormModal .modern-crm-readonly-card,\n  #leadFormModal .form-section { padding:14px; border-radius:14px; }\n  #leadFormModal .modern-crm-modal-footer { padding:10px 12px calc(10px + env(safe-area-inset-bottom)); }\n  #leadFormModal .modern-crm-footer-actions { display:grid; grid-template-columns:1fr; gap:8px; }\n  #leadFormModal .modern-crm-footer-actions .btn { width:100%; }\n}\n\n@media (max-width:380px) {\n  #leadsView .leads-kpi-card { align-items:flex-start; }\n  #leadsView .leads-table-wrap table { min-width:1320px; }\n  #leadFormModal .modern-crm-modal-icon { display:none; }\n}\n`;
+            fs.writeFileSync(cssPath, css);
+          }
+
+          const indexPath = 'index.html';
+          let html = fs.readFileSync(indexPath, 'utf8');
+          html = html.replace(/\/styles\.css\?v=[^\"']+/, '/styles.css?v=20260816-leads-responsive-v1');
+          fs.writeFileSync(indexPath, html);
+
+          const testPath = 'tests/leads-responsive.test.js';
+          fs.writeFileSync(testPath, `const assert = require('assert');\nconst fs = require('fs');\nconst css = fs.readFileSync('styles.css','utf8');\nconst html = fs.readFileSync('index.html','utf8');\nassert(css.includes('/* Leads responsive hardening - 2026-08-16 */'));\nassert.match(css, /#leadsView \\.leads-page-shell \\{[\\s\\S]*overflow-x:hidden/);\nassert.match(css, /#leadsView \\.leads-analytics-grid \\{[\\s\\S]*auto-fit[\\s\\S]*220px/);\nassert.match(css, /#leadsView \\.leads-filter-grid \\{[\\s\\S]*auto-fit[\\s\\S]*210px/);\nassert.match(css, /#leadsView \\.leads-table-wrap \\{[\\s\\S]*overflow-x:auto/);\nassert.match(css, /@media \\(max-width:640px\\)[\\s\\S]*#leadFormModal[\\s\\S]*100dvh/);\nassert(html.includes('/styles.css?v=20260816-leads-responsive-v1'));\nconsole.log('Leads responsive regression tests passed');\n`);
+          NODE
+      - name: Validate
+        run: |
+          node tests/leads-responsive.test.js
+          npm ci
+          npm run check
+      - name: Commit responsive fix
+        run: |
+          git config user.name "incheckdev-glitch"
+          git config user.email "incheckdev@gmail.com"
+          git add styles.css index.html tests/leads-responsive.test.js
+          git commit -m "fix: harden Leads responsive layout"
+          git push origin main
