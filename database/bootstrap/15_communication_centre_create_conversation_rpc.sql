@@ -40,7 +40,6 @@ declare
   v_no text;
   v_conversation public.communication_centre_conversations;
   v_participant_count integer := 0;
-  v_first_message_id uuid;
 begin
   if v_actor is null then
     raise exception 'Authentication is required to create a conversation';
@@ -174,12 +173,12 @@ begin
   -- The create form treats p_description as the mandatory first message. Use
   -- the live secure reply RPC so sender identity, message policy/encryption and
   -- conversation message metadata stay aligned with every later reply.
-  select public.add_communication_centre_reply_secure(
+  perform public.add_communication_centre_reply_secure(
     v_id,
     btrim(p_description),
     'message',
     null
-  ) into v_first_message_id;
+  );
 
   return v_conversation;
 end;
