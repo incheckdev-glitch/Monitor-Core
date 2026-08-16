@@ -31,13 +31,14 @@ const expectedBuckets = [
   'ticket-attachments',
 ];
 
+// Intentionally retired resources such as Operations Onboarding and Technical
+// Admin Requests must not be treated as active production modules here.
 const genericListResources = [
   'users', 'roles', 'role_permissions',
   'tickets', 'events', 'csm',
   'leads', 'lead_note_logs', 'deal_note_logs', 'deals',
   'proposal_catalog', 'proposals', 'agreements',
   'clients', 'invoices', 'receipts', 'credit_notes',
-  'operations_onboarding', 'technical_admin_requests',
   'notifications', 'notification_settings',
   'companies', 'contacts', 'company_type_options', 'company_industry_options',
   'biners', 'communication_centre_messages',
@@ -47,7 +48,7 @@ function pass(name, details = '') {
   results.push(result('PASS', name, details));
 }
 function fail(name, error) {
-  results.push(result('FAIL', name, error instanceof Error ? error.message : String(error || 'Unknown error')));
+  results.push(result('FAIL', name, error instanceof Error ? error.message : String(error || 'Unknown error'));
 }
 function rowsFrom(value) {
   if (Array.isArray(value)) return value;
