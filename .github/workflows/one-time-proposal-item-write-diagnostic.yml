@@ -1,0 +1,105 @@
+name: One-time Proposal Item Write Diagnostic
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/one-time-proposal-item-write-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+      TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+      TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+      TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Reproduce authenticated proposal item persistence
+        run: |
+          node <<'NODE'
+          const { createClient } = require('@supabase/supabase-js');
+          const url = String(process.env.TEST_SUPABASE_URL || '').replace(/\/$/, '');
+          const anon = process.env.TEST_SUPABASE_ANON_KEY || '';
+          const service = process.env.TEST_SUPABASE_SERVICE_ROLE_KEY || '';
+          const email = process.env.TEST_USER_EMAIL || '';
+          const password = process.env.TEST_USER_PASSWORD || '';
+          if (!url || !anon || !service || !email || !password) throw new Error('Required production test secrets are missing.');
+          const userClient = createClient(url, anon, { auth: { persistSession:false, autoRefreshToken:false } });
+          const serviceClient = createClient(url, service, { auth: { persistSession:false, autoRefreshToken:false } });
+          const stamp = Date.now();
+          let proposalId = '';
+          (async () => {
+            const { data: auth, error: authError } = await userClient.auth.signInWithPassword({ email, password });
+            if (authError) throw authError;
+            const userId = auth?.user?.id || null;
+            const proposal = {
+              proposal_id: `E2E-PI-${stamp}`,
+              ref_number: `E2EPI${stamp}`,
+              proposal_title: 'E2E proposal item persistence diagnostic',
+              proposal_date: new Date().toISOString().slice(0,10),
+              currency: 'USD',
+              is_poc: false,
+              subtotal_locations: 825,
+              subtotal_one_time: 0,
+              total_discount: 0,
+              grand_total: 825,
+              status: 'draft',
+              accepted_after_expiry: false,
+              created_by: userId,
+              updated_by: userId
+            };
+            const parent = await userClient.from('proposals').insert(proposal).select('id,proposal_id,status').single();
+            if (parent.error) throw new Error(`parent insert failed: ${JSON.stringify(parent.error)}`);
+            proposalId = parent.data.id;
+            console.log('parent insert: success');
+
+            const line = {
+              proposal_id: proposalId,
+              item_id: `E2E-ITEM-${stamp}`,
+              section: 'annual_saas',
+              line_no: 1,
+              location_name: 'E2E Location',
+              item_name: 'E2E Annual SaaS',
+              unit_price: 825,
+              discount_percent: 0,
+              discounted_unit_price: 825,
+              quantity: 12,
+              license_quantity: 1,
+              line_total: 825,
+              service_start_date: new Date().toISOString().slice(0,10)
+            };
+            const child = await userClient.from('proposal_items').insert(line).select('*').single();
+            if (child.error) {
+              console.log('child insert error:', JSON.stringify({ code:child.error.code, message:child.error.message, details:child.error.details, hint:child.error.hint }));
+            } else {
+              console.log('child insert: success', JSON.stringify({ id:child.data.id, proposal_id:child.data.proposal_id, item_name:child.data.item_name }));
+            }
+
+            const read = await userClient.from('proposal_items').select('id,proposal_id,item_name,line_total').eq('proposal_id', proposalId);
+            console.log('authenticated child read:', read.error ? JSON.stringify(read.error) : JSON.stringify(read.data));
+            if (child.error) process.exitCode = 2;
+          })().catch(err => { console.error(err); process.exitCode = 1; }).finally(async () => {
+            try {
+              if (proposalId) {
+                await serviceClient.from('proposal_items').delete().eq('proposal_id', proposalId);
+                await serviceClient.from('proposals').delete().eq('id', proposalId);
+                console.log('fixture cleanup: complete');
+              }
+            } catch (cleanupError) {
+              console.error('fixture cleanup error:', cleanupError);
+              process.exitCode = process.exitCode || 3;
+            }
+          });
+          NODE
