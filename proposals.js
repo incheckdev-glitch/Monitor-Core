@@ -2469,8 +2469,12 @@ const Proposals = {
     });
     return response;
   },
+  requiresAdminOverrideForProposal(proposal = {}) {
+    const status = this.normalizeProposalStatus(proposal?.status);
+    return ['accepted', 'expired', 'rejected', 'converted', 'converted_to_agreement'].includes(status);
+  },
   async updateProposal(proposalId, updates, items) {
-    const adminOverride = this.canUseAdminOverride();
+    const adminOverride = this.canUseAdminOverride() && this.state.adminOverrideActive === true;
     const preparedUpdates = this.buildProposalForPersist(updates, items, {
       ensureBusinessProposalId: false,
       preserveStatus: adminOverride
@@ -2478,7 +2482,7 @@ const Proposals = {
     const preparedItems = (Array.isArray(items) ? items : []).map(item => this.normalizeProposalItemForSave(item));
     const preparedForSave = this.prepareProposalForSave(preparedUpdates);
     let response;
-    if (this.canUseAdminOverride()) {
+    if (adminOverride) {
       const client = this.getSupabaseClient();
       if (!client?.rpc) throw new Error('Supabase client is not available for Admin override.');
       const reason = String(this.state.adminOverrideReason || '').trim();
@@ -5209,6 +5213,7 @@ const Proposals = {
   async submitForm() {
     if (this.state.saveInFlight) return;
     const mode = E.proposalForm?.dataset.mode === 'edit' ? 'edit' : 'create';
+    this.state.adminOverrideActive = false;
     if (mode === 'edit' && !this.canEditProposal()) {
       UI.toast('You do not have permission to update proposals.');
       return;
@@ -5220,7 +5225,10 @@ const Proposals = {
     const proposalId = String(E.proposalForm?.dataset.id || '').trim();
     this.syncValidUntilFromProposalDate({ forceDefault: true });
     const proposal = this.collectProposalFormData();
-    if (mode === 'edit' && this.canUseAdminOverride()) {
+    const formRequiresAdminOverride = mode === 'edit' && this.canUseAdminOverride() && this.requiresAdminOverrideForProposal(
+      this.state.currentProposal || { status: E.proposalForm?.dataset?.originalStatus || '' }
+    );
+    if (formRequiresAdminOverride) {
       // Expiry/signature helpers normally derive a status while collecting the form.
       // In Admin Override Mode, keep the status selected by the Admin instead of
       // silently forcing an accepted historical proposal back to Expired.
@@ -5265,8 +5273,9 @@ const Proposals = {
     }
     if (!this.validatePocDetails(proposal)) return;
     const items = this.collectProposalItems();
-    if (!this.canUseAdminOverride() && !this.validateCommercialItems(items)) return;
+    if (!this.validateCommercialItems(items)) return;
     let currentRecord = {};
+    let adminOverrideRequired = false;
     let latestItems = this.state.currentItems;
     if (mode === 'edit' && proposalId) {
       try {
@@ -5283,12 +5292,14 @@ const Proposals = {
         UI.toast('Unable to verify proposal status before saving: ' + (error?.message || 'Unknown error'));
         return;
       }
-      if (this.isProposalAccepted(currentRecord) && !this.canUseAdminOverride()) {
+      adminOverrideRequired = this.canUseAdminOverride() && this.requiresAdminOverrideForProposal(currentRecord);
+      this.state.adminOverrideActive = adminOverrideRequired;
+      if (this.isProposalAccepted(currentRecord) && !adminOverrideRequired) {
         UI.toast('Accepted proposals are locked and cannot be edited.');
         this.openProposalForm(currentRecord, latestItems, { readOnly: true });
         return;
       }
-      if (this.canUseAdminOverride()) {
+      if (adminOverrideRequired) {
         const currentStatus = this.normalizeProposalStatus(currentRecord.status);
         const requestedStatus = this.normalizeProposalStatus(proposal.status);
         if (requestedStatus === currentStatus) delete proposal.status;
@@ -5316,7 +5327,7 @@ const Proposals = {
       : items.reduce((max, item) => Math.max(max, this.toNumberSafe(item.discount_percent)), 0);
     const currentStatus = this.normalizeProposalStatus(currentRecord?.status);
     const requestedStatus = this.normalizeProposalStatus(proposal.status);
-    if (currentStatus === 'pending_approval' && requestedStatus && requestedStatus !== 'pending_approval' && !this.canUseAdminOverride()) {
+    if (currentStatus === 'pending_approval' && requestedStatus && requestedStatus !== 'pending_approval' && this.state.adminOverrideActive !== true) {
       UI.toast('This proposal is already pending approval. Approval must be approved or rejected before changing to another status.');
       if (E.proposalFormStatus) E.proposalFormStatus.value = 'pending_approval';
       return;
@@ -5331,7 +5342,7 @@ const Proposals = {
       approvedGeneric: currentRecord?.approved_discount_percent,
       approvalStatus: currentRecord?.discount_approval_status
     });
-    const shouldValidateWorkflow = !this.canUseAdminOverride() && this.shouldValidateWorkflowBeforeSave({
+    const shouldValidateWorkflow = this.state.adminOverrideActive !== true && this.shouldValidateWorkflowBeforeSave({
       proposalId,
       currentStatus,
       requestedStatus,
@@ -5444,7 +5455,11 @@ const Proposals = {
       if (!savedUuid) {
         throw new Error('Proposal save failed because no internal proposal ID was returned.');
       }
-      if (mode === 'edit' && this.canUseAdminOverride()) this.logAdminOverride('proposal_update_override', currentRecord || null, savedProposal, this.state.adminOverrideReason);
+      const persistedItems = Array.isArray(parsed?.items) ? parsed.items : [];
+      if (persistedItems.length !== items.length) {
+        throw new Error(`Proposal header was saved, but proposal item persistence was not verified (expected ${items.length}, found ${persistedItems.length}). Please retry the save; do not continue to agreement/invoice until the items are visible.`);
+      }
+      if (mode === 'edit' && this.state.adminOverrideActive === true) this.logAdminOverride('proposal_update_override', currentRecord || null, savedProposal, this.state.adminOverrideReason);
       if (parsed?.proposal) {
         this.upsertLocalRow(parsed.proposal);
         this.setCachedDetail(parsed.proposal.id || proposalId, parsed.proposal, parsed.items);
@@ -5477,6 +5492,7 @@ const Proposals = {
       console.timeEnd('entity-save');
       this.state.saveInFlight = false;
       this.state.adminOverrideReason = '';
+      this.state.adminOverrideActive = false;
       this.setFormBusy(false);
     }
   },

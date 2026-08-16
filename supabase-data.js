@@ -9046,6 +9046,32 @@ IN WITNESS WHEREOF, the parties have caused this Agreement to be executed by the
       }
       if (!data) throw new Error(`Unable to create ${resource} record: Supabase returned no row.`);
       const created = normalizeRow(resource, data);
+      if (resource === 'proposals' && requestedItems.length) {
+        const parentId = String(created.id || '').trim();
+        if (!isUuid(parentId)) throw new Error('Proposal items were not saved because the proposal UUID is missing.');
+        const insertRows = requestedItems.map(item => sanitizeProposalItemRecord(item, parentId));
+        try {
+          const childResp = await insertSelectRowsWithSchemaRetry(client, 'proposal_items', insertRows, 'Unable to create proposal_items');
+          if (childResp.error) throw friendlyError('Unable to create proposal_items', childResp.error);
+          const verifyResp = await client
+            .from('proposal_items')
+            .select('id,proposal_id,item_id,section,line_no,item_name,line_total')
+            .eq('proposal_id', parentId);
+          if (verifyResp.error) throw friendlyError('Unable to verify proposal_items', verifyResp.error);
+          const persistedCount = Array.isArray(verifyResp.data) ? verifyResp.data.length : 0;
+          if (persistedCount !== requestedItems.length) {
+            throw new Error(`Proposal item persistence mismatch: expected ${requestedItems.length}, found ${persistedCount}.`);
+          }
+        } catch (itemError) {
+          const childCleanup = await client.from('proposal_items').delete().eq('proposal_id', parentId);
+          if (childCleanup.error) console.warn('[proposals:create] unable to clean partial proposal_items', childCleanup.error);
+          const headerRollback = await client.from('proposals').delete().eq('id', parentId);
+          if (headerRollback.error) {
+            throw new Error(`Proposal items could not be saved, and the partial proposal header could not be rolled back. Internal proposal ID: ${parentId}. Original error: ${itemError?.message || itemError}. Rollback error: ${headerRollback.error?.message || headerRollback.error}.`);
+          }
+          throw new Error(`Proposal was not saved because its line items could not be persisted. The partial header was rolled back. ${itemError?.message || itemError}`);
+        }
+      }
       if (resource === 'contacts') {
         await syncContactCompanyBridge(client, created, finalCreateRecord);
       }
@@ -9257,7 +9283,7 @@ IN WITNESS WHEREOF, the parties have caused this Agreement to be executed by the
       const items = requestedItems;
       const itemTable = ITEM_TABLES[resource];
       const fk = ITEM_FK[resource];
-      if (itemTable && items.length && (created[fk] || created.id)) {
+      if (resource !== 'proposals' && itemTable && items.length && (created[fk] || created.id)) {
         const parentId = resource === 'proposals'
           ? String(created.id || '').trim()
           : created.id || created[fk];
@@ -9735,7 +9761,8 @@ IN WITNESS WHEREOF, the parties have caused this Agreement to be executed by the
         if (resource === 'proposals' && !isUuid(parentId)) {
           throw new Error('Proposal items were not saved because the proposal UUID is missing.');
         }
-        await client.from(itemTable).delete().eq(fk, parentId);
+        const deleteResp = await client.from(itemTable).delete().eq(fk, parentId);
+        if (deleteResp.error) throw friendlyError(`Unable to replace ${itemTable}`, deleteResp.error);
         if (payload.items.length) {
           const insertRows = payload.items.map(item =>
             resource === 'proposals'
@@ -9753,6 +9780,17 @@ IN WITNESS WHEREOF, the parties have caused this Agreement to be executed by the
           }
           const childResp = await insertSelectRowsWithSchemaRetry(client, itemTable, insertRows, `Unable to update ${itemTable}`);
           if (childResp.error) throw friendlyError(`Unable to update ${itemTable}`, childResp.error);
+        }
+        if (resource === 'proposals') {
+          const verifyResp = await client
+            .from('proposal_items')
+            .select('id,proposal_id,item_id,section,line_no,item_name,line_total')
+            .eq('proposal_id', parentId);
+          if (verifyResp.error) throw friendlyError('Unable to verify proposal_items after update', verifyResp.error);
+          const persistedCount = Array.isArray(verifyResp.data) ? verifyResp.data.length : 0;
+          if (persistedCount !== payload.items.length) {
+            throw new Error(`Proposal item persistence mismatch after update: expected ${payload.items.length}, found ${persistedCount}.`);
+          }
         }
       }
       return { handled: true, data: await withItems(resource, data) };
