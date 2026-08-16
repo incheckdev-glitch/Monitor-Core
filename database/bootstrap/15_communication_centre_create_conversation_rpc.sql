@@ -8,6 +8,10 @@
 -- canonical id/conversation_id/user_id/created_at fields; older participant
 -- metadata columns advertised by stale OpenAPI output are intentionally omitted.
 --
+-- p_description is the UI's required first-message body. The first message is
+-- persisted through add_communication_centre_reply_secure after participants are
+-- created, so creation follows the same authorization/message path as replies.
+--
 -- Safe to re-run. Existing conversations and messages are not modified.
 
 begin;
@@ -36,6 +40,7 @@ declare
   v_no text;
   v_conversation public.communication_centre_conversations;
   v_participant_count integer := 0;
+  v_first_message_id uuid;
 begin
   if v_actor is null then
     raise exception 'Authentication is required to create a conversation';
@@ -47,6 +52,10 @@ begin
 
   if nullif(btrim(coalesce(p_title, '')), '') is null then
     raise exception 'Conversation title is required';
+  end if;
+
+  if nullif(btrim(coalesce(p_description, '')), '') is null then
+    raise exception 'First message is required';
   end if;
 
   if coalesce(cardinality(p_assigned_user_ids), 0) = 0
@@ -161,6 +170,16 @@ begin
          updated_at = now()
    where id = v_id
   returning * into v_conversation;
+
+  -- The create form treats p_description as the mandatory first message. Use
+  -- the live secure reply RPC so sender identity, message policy/encryption and
+  -- conversation message metadata stay aligned with every later reply.
+  select public.add_communication_centre_reply_secure(
+    v_id,
+    btrim(p_description),
+    'message',
+    null
+  ) into v_first_message_id;
 
   return v_conversation;
 end;
