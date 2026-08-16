@@ -1,0 +1,34 @@
+name: One-time Proposal Dispatcher Verify v3
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/one-time-proposal-dispatcher-verify-v3.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+      TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+      TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+      TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Run dispatcher verification from repository root
+        run: |
+          awk '/node <<'"'"'NODE'"'"'/{flag=1;next} flag && /^[[:space:]]*NODE[[:space:]]*$/{exit} flag{sub(/^          /,"");print}' .github/workflows/one-time-proposal-dispatcher-verify.yml > verify-proposal-dispatcher.tmp.js
+          sed -i "s#../../supabase-data.js#./supabase-data.js#g" verify-proposal-dispatcher.tmp.js
+          node verify-proposal-dispatcher.tmp.js
+          rm -f verify-proposal-dispatcher.tmp.js
