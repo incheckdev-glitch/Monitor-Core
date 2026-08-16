@@ -88,9 +88,11 @@ async function testCommunicationCentre(profile) {
     if (access.data !== true) throw new Error('Authenticated admin does not have Communication Centre manage permission in the database.');
     pass('Communication Centre: manage permission', 'cc_has_permission(manage) = true');
 
+    const initialMessageBody = `${marker} initial message`;
+    const replyMessageBody = `${marker} reply message`;
     const createResponse = await userClient.rpc('create_communication_centre_conversation', {
       p_title: `${marker} Conversation`,
-      p_description: marker,
+      p_description: initialMessageBody,
       p_category: 'General',
       p_priority: 'Normal',
       p_assigned_user_ids: [authUser.id],
@@ -118,9 +120,16 @@ async function testCommunicationCentre(profile) {
     if (!participant) throw new Error('Conversation creation did not persist the assigned admin participant.');
     pass('Communication Centre: participant assignment', profile.email || authUser.id);
 
+    const initialMessages = await userClient.rpc('list_communication_centre_messages_secure', { p_conversation_id: conversationId });
+    if (initialMessages.error) throw initialMessages.error;
+    const initialRows = Array.isArray(initialMessages.data) ? initialMessages.data : [];
+    const initialMessage = initialRows.find(row => String(row.message_body || row.message || row.body || '') === initialMessageBody);
+    if (!initialMessage) throw new Error('Conversation create RPC did not persist the required first message through the secure message path.');
+    pass('Communication Centre: initial message persisted', String(initialMessage.id || initialMessage.message_id || conversationId));
+
     const replyResponse = await userClient.rpc('add_communication_centre_reply_secure', {
       p_conversation_id: conversationId,
-      p_message_body: marker,
+      p_message_body: replyMessageBody,
       p_message_type: 'message',
       p_reply_to_message_id: null,
     });
@@ -133,7 +142,7 @@ async function testCommunicationCentre(profile) {
     const secureMessages = await userClient.rpc('list_communication_centre_messages_secure', { p_conversation_id: conversationId });
     if (secureMessages.error) throw secureMessages.error;
     const message = (Array.isArray(secureMessages.data) ? secureMessages.data : []).find(row => String(row.id || row.message_id || '') === String(messageId))
-      || (Array.isArray(secureMessages.data) ? secureMessages.data : []).find(row => String(row.message_body || row.message || '') === marker);
+      || (Array.isArray(secureMessages.data) ? secureMessages.data : []).find(row => String(row.message_body || row.message || row.body || '') === replyMessageBody);
     if (!message) throw new Error('Secure message list did not return the newly created reply.');
     const persistedMessageId = message.id || message.message_id || messageId;
     pass('Communication Centre: secure reply read', String(persistedMessageId));
