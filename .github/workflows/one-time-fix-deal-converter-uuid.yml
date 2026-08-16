@@ -1,0 +1,56 @@
+name: One-time deal converter UUID fix
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/one-time-fix-deal-converter-uuid.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Fix deal converter identity
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const target = 'leads.js';
+          let s = fs.readFileSync(target, 'utf8');
+
+          const oldIdentity = `  currentConverterIdentity() {\n    return String(Session.displayName() || Session.username() || Session.user()?.email || '').trim();\n  },`;
+          const newIdentity = `  currentConverterIdentity() {\n    const candidates = [\n      Session.userId?.(),\n      Session.user?.()?.user_id,\n      Session.user?.()?.id,\n      Session.user?.()?.user?.id,\n      Session.user?.()?.profile?.id,\n      Session.authContext?.()?.id,\n      Session.authContext?.()?.user?.id,\n      Session.authContext?.()?.profile?.id\n    ];\n    return candidates\n      .map(value => String(value || '').trim())\n      .find(value => this.isUuid(value)) || '';\n  },`;
+          if (!s.includes(oldIdentity)) throw new Error('Expected currentConverterIdentity block not found');
+          s = s.replace(oldIdentity, newIdentity);
+
+          const oldSanitizer = `    dropIfEmpty('source_lead_uuid');\n    dropIfEmpty('lead_id');\n\n    sanitized.created_at = normalizeTs(sanitized.created_at) || nowIso;`;
+          const newSanitizer = `    dropIfEmpty('source_lead_uuid');\n    dropIfEmpty('lead_id');\n\n    // Deal identity/audit foreign keys are UUID columns. Never send display names, usernames or emails.\n    ['lead_id', 'source_lead_uuid', 'company_id', 'contact_id', 'customer_contact_id', 'converted_by'].forEach(key => {\n      if (!Object.prototype.hasOwnProperty.call(sanitized, key)) return;\n      const value = String(sanitized[key] || '').trim();\n      if (!value || !this.isUuid(value)) delete sanitized[key];\n      else sanitized[key] = value;\n    });\n\n    sanitized.created_at = normalizeTs(sanitized.created_at) || nowIso;`;
+          if (!s.includes(oldSanitizer)) throw new Error('Expected deal conversion sanitizer block not found');
+          s = s.replace(oldSanitizer, newSanitizer);
+          fs.writeFileSync(target, s);
+
+          const test = `const assert = require('assert');\nconst fs = require('fs');\n\nconst leads = fs.readFileSync('leads.js', 'utf8');\nassert.match(leads, /currentConverterIdentity\\(\\)[\\s\\S]*Session\\.userId\\?\\.\\(\\)[\\s\\S]*find\\(value => this\\.isUuid\\(value\\)\\)/, 'converter identity must resolve an authenticated UUID');\nassert.doesNotMatch(leads, /currentConverterIdentity\\(\\) \\{\\s*return String\\(Session\\.displayName/, 'converter identity must not use display name');\nassert.match(leads, /\\['lead_id', 'source_lead_uuid', 'company_id', 'contact_id', 'customer_contact_id', 'converted_by'\\][\\s\\S]*!this\\.isUuid\\(value\\)[\\s\\S]*delete sanitized\\[key\\]/, 'deal conversion must strip non-UUID values from UUID-only fields');\nconsole.log('deal converter UUID regression tests passed');\n`;
+          fs.writeFileSync('tests/lead-deal-converter-uuid.test.js', test);
+          NODE
+      - name: Validate fix
+        run: |
+          node --check leads.js
+          node tests/lead-deal-converter-uuid.test.js
+          npm ci
+          npm run check
+      - name: Commit fix
+        run: |
+          git config user.name "incheckdev-glitch"
+          git config user.email "incheckdev@gmail.com"
+          git add leads.js tests/lead-deal-converter-uuid.test.js
+          git commit -m "fix: use user UUID for lead-to-deal conversion"
+          git push origin main
