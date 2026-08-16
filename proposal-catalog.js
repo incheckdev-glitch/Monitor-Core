@@ -30,6 +30,19 @@ const ProposalCatalog = {
   normalizeText(value) {
     return String(value ?? '').trim();
   },
+  generateCatalogItemId() {
+    const now = new Date();
+    const date = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0')
+    ].join('');
+    const token = String(
+      globalThis.crypto?.randomUUID?.().replace(/-/g, '').slice(0, 8) ||
+      Math.random().toString(36).slice(2, 10)
+    ).toUpperCase();
+    return `CAT-${date}-${token}`;
+  },
   toNumberOrNull(value) {
     if (value === null || value === undefined) return null;
     const raw = String(value).trim();
@@ -448,10 +461,79 @@ const ProposalCatalog = {
   getValue(el) {
     return String(el?.value || '').trim();
   },
+  ensureFormErrorBox() {
+    if (!E.proposalCatalogForm) return null;
+    let box = document.getElementById('proposalCatalogFormError');
+    if (box) return box;
+
+    box = document.createElement('div');
+    box.id = 'proposalCatalogFormError';
+    box.setAttribute('role', 'alert');
+    box.setAttribute('aria-live', 'assertive');
+    box.style.cssText = 'display:none;margin:16px 20px 0;padding:14px 16px;border:1px solid #fecaca;border-radius:12px;background:#fef2f2;color:#991b1b;white-space:normal;overflow-wrap:anywhere;';
+
+    const head = document.createElement('div');
+    head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;';
+    const title = document.createElement('strong');
+    title.textContent = 'Unable to save catalog item';
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.id = 'proposalCatalogCopyErrorBtn';
+    copy.className = 'btn ghost sm';
+    copy.textContent = 'Copy Error';
+    copy.addEventListener('click', async () => {
+      const message = String(document.getElementById('proposalCatalogFormErrorMessage')?.textContent || '').trim();
+      if (!message) return;
+      try {
+        await navigator.clipboard.writeText(message);
+        UI.toast('Error copied.');
+      } catch {
+        const range = document.createRange();
+        const textNode = document.getElementById('proposalCatalogFormErrorMessage');
+        if (textNode && window.getSelection) {
+          range.selectNodeContents(textNode);
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+        UI.toast('Error selected. Press Ctrl+C to copy.');
+      }
+    });
+    const message = document.createElement('div');
+    message.id = 'proposalCatalogFormErrorMessage';
+    message.style.cssText = 'font-size:13px;line-height:1.5;user-select:text;';
+    head.append(title, copy);
+    box.append(head, message);
+
+    const body = E.proposalCatalogForm.querySelector('.modal-body');
+    if (body) E.proposalCatalogForm.insertBefore(box, body);
+    else E.proposalCatalogForm.prepend(box);
+    return box;
+  },
+  clearFormError() {
+    const box = this.ensureFormErrorBox();
+    if (!box) return;
+    const message = document.getElementById('proposalCatalogFormErrorMessage');
+    if (message) message.textContent = '';
+    box.style.display = 'none';
+  },
+  showFormError(errorMessage = '') {
+    const messageText = String(errorMessage || 'Unknown error').trim();
+    const box = this.ensureFormErrorBox();
+    const message = document.getElementById('proposalCatalogFormErrorMessage');
+    if (message) message.textContent = messageText;
+    if (box) {
+      box.style.display = 'block';
+      box.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+    }
+    return messageText;
+  },
   openForm(item = null) {
     if (!E.proposalCatalogFormModal || !E.proposalCatalogForm) return;
     const normalized = item ? this.normalizeItem(item) : this.normalizeItem({});
     const mode = normalized.id ? 'edit' : 'create';
+    if (mode === 'create' && !normalized.catalog_item_id) normalized.catalog_item_id = this.generateCatalogItemId();
+    this.clearFormError();
     this.state.formMode = mode;
     this.state.currentId = normalized.id || '';
 
@@ -506,6 +588,7 @@ const ProposalCatalog = {
   collectFormPayload() {
     const section = this.getValue(E.proposalCatalogFormSection) || 'annual_saas';
     return {
+      catalog_item_id: this.getValue(E.proposalCatalogFormItemId) || this.generateCatalogItemId(),
       is_active: this.toBool(this.getValue(E.proposalCatalogFormIsActive), true),
       section: this.sectionValues.includes(section) ? section : 'annual_saas',
       category: this.getValue(E.proposalCatalogFormCategory),
@@ -556,11 +639,20 @@ const ProposalCatalog = {
     const recordId = String(E.proposalCatalogForm?.dataset.id || '').trim();
     const payload = this.sanitizePayload(this.collectFormPayload());
 
-    if (!payload.item_name && !payload.category) {
-      UI.toast('Please enter at least an item name or category.');
+    if (!payload.item_name) {
+      const message = 'Item name is required.';
+      this.showFormError(message);
+      UI.toast(message);
+      return;
+    }
+    if (!payload.catalog_item_id) {
+      const message = 'Catalog Item ID could not be generated. Please close and reopen the form.';
+      this.showFormError(message);
+      UI.toast(message);
       return;
     }
 
+    this.clearFormError();
     this.setFormBusy(true);
     try {
       if (mode === 'edit' && recordId) {
@@ -580,7 +672,9 @@ const ProposalCatalog = {
         handleExpiredSession('Session expired. Please log in again.');
         return;
       }
-      UI.toast('Unable to save catalog item: ' + (error?.message || 'Unknown error'));
+      const message = 'Unable to save catalog item: ' + (error?.message || 'Unknown error');
+      this.showFormError(message);
+      UI.toast(message);
     } finally {
       this.setFormBusy(false);
     }
