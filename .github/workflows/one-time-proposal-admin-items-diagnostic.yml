@@ -61,7 +61,7 @@ jobs:
 
             const { data: proposals, error: proposalError } = await serviceClient
               .from('proposals')
-              .select('id,proposal_id,ref_number,status,updated_at')
+              .select('id,proposal_id,ref_number,status,subtotal_locations,subtotal_one_time,total_discount,grand_total,updated_at')
               .order('updated_at', { ascending:false })
               .limit(8);
             if (proposalError) console.log('proposal sample error:', JSON.stringify(proposalError));
