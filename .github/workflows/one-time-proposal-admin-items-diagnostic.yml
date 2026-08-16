@@ -1,0 +1,86 @@
+name: One-time Proposal Admin Items Diagnostic
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/one-time-proposal-admin-items-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+      TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+      TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+      TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Inspect proposal admin RPC and item contract (read-only)
+        run: |
+          node <<'NODE'
+          const { createClient } = require('@supabase/supabase-js');
+          const url = String(process.env.TEST_SUPABASE_URL || '').replace(/\/$/, '');
+          const anon = process.env.TEST_SUPABASE_ANON_KEY || '';
+          const service = process.env.TEST_SUPABASE_SERVICE_ROLE_KEY || '';
+          const email = process.env.TEST_USER_EMAIL || '';
+          const password = process.env.TEST_USER_PASSWORD || '';
+          if (!url || !anon || !service || !email || !password) throw new Error('Required production test secrets are missing.');
+          const userClient = createClient(url, anon, { auth: { persistSession: false, autoRefreshToken: false } });
+          const serviceClient = createClient(url, service, { auth: { persistSession: false, autoRefreshToken: false } });
+          (async () => {
+            const { data: auth, error: authError } = await userClient.auth.signInWithPassword({ email, password });
+            if (authError) throw authError;
+            console.log('authenticated user UUID:', auth?.user?.id ? 'present' : 'missing');
+
+            const response = await fetch(`${url}/rest/v1/`, {
+              headers: { apikey: service, Authorization: `Bearer ${service}`, Accept: 'application/openapi+json' }
+            });
+            console.log('OpenAPI status:', response.status);
+            const spec = await response.json();
+            const defs = spec.definitions || spec.components?.schemas || {};
+            for (const table of ['proposals', 'proposal_items']) {
+              const schema = defs[table];
+              const props = schema?.properties || {};
+              console.log(`${table} required:`, JSON.stringify(schema?.required || []));
+              console.log(`${table} columns:`, JSON.stringify(Object.fromEntries(Object.entries(props).map(([k,v]) => [k, { type:v.type, format:v.format, default:v.default, description:v.description }])), null, 2));
+            }
+            const rpcPaths = Object.keys(spec.paths || {}).filter(path => path.includes('/rpc/'));
+            console.log('matching RPC paths:', rpcPaths.filter(path => /admin_update_locked_proposal|sql/i.test(path)));
+            console.log('admin RPC spec:', JSON.stringify(spec.paths?.['/rpc/admin_update_locked_proposal'] || null, null, 2));
+
+            const { data: proposals, error: proposalError } = await serviceClient
+              .from('proposals')
+              .select('id,proposal_id,ref_number,status,updated_at')
+              .order('updated_at', { ascending:false })
+              .limit(8);
+            if (proposalError) console.log('proposal sample error:', JSON.stringify(proposalError));
+            else console.log('proposal samples:', JSON.stringify(proposals || [], null, 2));
+
+            const proposalIds = (proposals || []).map(row => row.id).filter(Boolean);
+            if (proposalIds.length) {
+              const { data: items, error: itemError } = await serviceClient
+                .from('proposal_items')
+                .select('*')
+                .in('proposal_id', proposalIds)
+                .limit(100);
+              if (itemError) console.log('proposal item sample error:', JSON.stringify(itemError));
+              else console.log('proposal items by recent parent UUIDs:', JSON.stringify(items || [], null, 2));
+            }
+
+            const { count: itemCount, error: itemCountError } = await serviceClient
+              .from('proposal_items')
+              .select('*', { count:'exact', head:true });
+            console.log('proposal_items count:', itemCountError ? JSON.stringify(itemCountError) : itemCount);
+          })().catch(err => { console.error(err); process.exit(1); });
+          NODE
