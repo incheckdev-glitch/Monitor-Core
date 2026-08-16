@@ -992,19 +992,36 @@ const Proposals = {
     this.downloadCsv(filename, lines.join('\n'));
   },
   generateRefNumber() {
-    return `${Date.now()}${Math.floor(Math.random() * 1000)
-      .toString()
-      .padStart(3, '0')}`;
+    return this.generateProposalId();
   },
   generateProposalId() {
-    const date = new Date();
-    const stamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(
-      date.getDate()
-    ).padStart(2, '0')}`;
-    const suffix = Math.floor(Math.random() * 1000000)
-      .toString()
-      .padStart(6, '0');
-    return `PR-${stamp}-${suffix}`;
+    const maxLocal = (Array.isArray(this.state.rows) ? this.state.rows : []).reduce((max, row) => {
+      for (const value of [row?.proposal_id, row?.ref_number]) {
+        const match = String(value || '').trim().match(/^Proposal#(\d+)$/i);
+        if (match) max = Math.max(max, Number(match[1]) || 0);
+      }
+      return max;
+    }, 0);
+    return `Proposal#${String(maxLocal + 1).padStart(5, '0')}`;
+  },
+  async allocateProposalId() {
+    const client = this.getSupabaseClient?.() || window.SupabaseClient?.getClient?.();
+    if (!client) return this.generateProposalId();
+    let maxDb = 0;
+    for (const column of ['proposal_id', 'ref_number']) {
+      const { data, error } = await client
+        .from('proposals')
+        .select(column)
+        .ilike(column, 'Proposal#%')
+        .order(column, { ascending: false })
+        .limit(100);
+      if (error) throw new Error(`Unable to allocate Proposal ID: ${error.message || error}`);
+      for (const row of (Array.isArray(data) ? data : [])) {
+        const match = String(row?.[column] || '').trim().match(/^Proposal#(\d+)$/i);
+        if (match) maxDb = Math.max(maxDb, Number(match[1]) || 0);
+      }
+    }
+    return `Proposal#${String(maxDb + 1).padStart(5, '0')}`;
   },
 
   isUuid(value = '') {
@@ -2430,7 +2447,13 @@ const Proposals = {
     return Api.requestWithSession('proposals', 'get', { id: proposalId });
   },
   async createProposal(proposal, items) {
-    const preparedProposal = this.buildProposalForPersist(proposal, items, { ensureBusinessProposalId: true });
+    const friendlyId = await this.allocateProposalId();
+    const proposalWithBusinessId = {
+      ...(proposal && typeof proposal === 'object' ? proposal : {}),
+      proposal_id: friendlyId,
+      ref_number: friendlyId
+    };
+    const preparedProposal = this.buildProposalForPersist(proposalWithBusinessId, items, { ensureBusinessProposalId: true });
     const preparedItems = (Array.isArray(items) ? items : []).map(item => this.normalizeProposalItemForSave(item));
     const response = await Api.requestWithSession('proposals', 'create', {
       proposal: this.prepareProposalForSave(preparedProposal),

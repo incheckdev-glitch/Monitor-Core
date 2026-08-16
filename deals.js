@@ -217,12 +217,27 @@ const Deals = {
     };
   },
   generateDealId() {
-    const now = new Date();
-    const yyyy = String(now.getFullYear());
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
-    return `DEAL-${yyyy}${mm}${dd}-${rand}`;
+    const maxLocal = (Array.isArray(this.state.rows) ? this.state.rows : []).reduce((max, row) => {
+      const match = String(row?.deal_id || '').trim().match(/^Deal#(\d+)$/i);
+      return match ? Math.max(max, Number(match[1]) || 0) : max;
+    }, 0);
+    return `Deal#${String(maxLocal + 1).padStart(5, '0')}`;
+  },
+  async allocateDealId() {
+    const client = this.getClient();
+    if (!client) return this.generateDealId();
+    const { data, error } = await client
+      .from('deals')
+      .select('deal_id')
+      .ilike('deal_id', 'Deal#%')
+      .order('deal_id', { ascending: false })
+      .limit(100);
+    if (error) throw this.toSupabaseError ? this.toSupabaseError('Unable to allocate Deal ID', error) : error;
+    const maxDb = (Array.isArray(data) ? data : []).reduce((max, row) => {
+      const match = String(row?.deal_id || '').trim().match(/^Deal#(\d+)$/i);
+      return match ? Math.max(max, Number(match[1]) || 0) : max;
+    }, 0);
+    return `Deal#${String(maxDb + 1).padStart(5, '0')}`;
   },
   backendDeal(deal, { ensureDealId = false } = {}) {
     const hasOwn = key => Object.prototype.hasOwnProperty.call(deal || {}, key);
@@ -483,8 +498,12 @@ const Deals = {
   },
   async createDeal(deal) {
     const userId = await this.getCurrentUserId();
+    const dealWithBusinessId = {
+      ...(deal && typeof deal === 'object' ? deal : {}),
+      deal_id: String(deal?.deal_id || '').trim() || await this.allocateDealId()
+    };
     const payload = {
-      ...this.backendDeal(deal, { ensureDealId: true }),
+      ...this.backendDeal(dealWithBusinessId, { ensureDealId: false }),
       created_by: userId || undefined,
       updated_by: userId || undefined
     };

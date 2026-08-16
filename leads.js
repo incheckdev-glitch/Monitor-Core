@@ -289,12 +289,27 @@ const Leads = {
     };
   },
   generateLeadId() {
-    const now = new Date();
-    const yyyy = String(now.getFullYear());
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
-    return `LEAD-${yyyy}${mm}${dd}-${Date.now()}-${rand}`;
+    const maxLocal = (Array.isArray(this.state.rows) ? this.state.rows : []).reduce((max, row) => {
+      const match = String(row?.lead_id || '').trim().match(/^Lead#(\d+)$/i);
+      return match ? Math.max(max, Number(match[1]) || 0) : max;
+    }, 0);
+    return `Lead#${String(maxLocal + 1).padStart(5, '0')}`;
+  },
+  async allocateLeadId() {
+    const client = this.getClient();
+    if (!client) return this.generateLeadId();
+    const { data, error } = await client
+      .from('leads')
+      .select('lead_id')
+      .ilike('lead_id', 'Lead#%')
+      .order('lead_id', { ascending: false })
+      .limit(100);
+    if (error) throw this.toSupabaseError ? this.toSupabaseError('Unable to allocate Lead ID', error) : error;
+    const maxDb = (Array.isArray(data) ? data : []).reduce((max, row) => {
+      const match = String(row?.lead_id || '').trim().match(/^Lead#(\d+)$/i);
+      return match ? Math.max(max, Number(match[1]) || 0) : max;
+    }, 0);
+    return `Lead#${String(maxDb + 1).padStart(5, '0')}`;
   },
   backendLead(lead, { includeLeadId = true } = {}) {
     const leadIdValue = String(lead.lead_id || '').trim();
@@ -567,7 +582,7 @@ const Leads = {
     const userId = await this.getCurrentUserId();
     const leadWithBusinessId = {
       ...(lead && typeof lead === 'object' ? lead : {}),
-      lead_id: String(lead?.lead_id || '').trim() || this.generateLeadId()
+      lead_id: String(lead?.lead_id || '').trim() || await this.allocateLeadId()
     };
     const payload = this.cleanLeadUuidPayload({
       ...this.backendLead(leadWithBusinessId),
@@ -1927,7 +1942,7 @@ const Leads = {
           await this.convertLeadById(leadId, { skipNoteGate: true });
         }
       } else {
-        const tempLeadId = String(lead.lead_id || '').trim() || this.generateLeadId();
+        const tempLeadId = String(lead.lead_id || '').trim() || await this.allocateLeadId();
         lead.lead_id = tempLeadId;
         if (E.leadFormLeadId) E.leadFormLeadId.value = tempLeadId;
         const created = await this.createLead(lead);
