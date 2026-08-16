@@ -20,7 +20,9 @@ on:
       - 'supabase-data.js'
       - 'permissions.js'
       - 'database/bootstrap/15_communication_centre_create_conversation_rpc.sql'
+      - 'database/bootstrap/16_communication_centre_current_app_user_helper.sql'
       - 'tests/communication-centre-create-contract.test.js'
+      - 'tests/communication-centre-current-user-helper.test.js'
       - 'database/seeds/01_roles_and_permissions.sql'
       - 'package.json'
 
