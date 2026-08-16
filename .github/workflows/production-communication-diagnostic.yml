@@ -15,6 +15,7 @@ on:
       - '.github/workflows/production-communication-diagnostic.yml'
       - 'communication-centre.js'
       - 'database/bootstrap/15_communication_centre_create_conversation_rpc.sql'
+      - 'database/bootstrap/16_communication_centre_current_app_user_helper.sql'
 
 permissions:
   contents: read
