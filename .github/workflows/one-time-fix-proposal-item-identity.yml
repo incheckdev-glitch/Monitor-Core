@@ -1,0 +1,176 @@
+name: One-time Fix Proposal Item Identity
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/one-time-fix-proposal-item-identity.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+      TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+      TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+      TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Patch proposal line item identity
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+
+          const dataPath = 'supabase-data.js';
+          let src = fs.readFileSync(dataPath, 'utf8');
+
+          const marker = `  function sanitizeProposalItemRecord(record = {}, proposalUuid = '') {`;
+          if (!src.includes(marker)) throw new Error('sanitizeProposalItemRecord marker not found');
+          const helper = `  function buildProposalLineItemId(record = {}, proposalUuid = '') {\n    const parentUuid = String(normalizeNullableUuidValue(proposalUuid || firstDefined(record, ['proposal_id', 'proposalId'])) || '').trim();\n    const sourceParentUuid = String(normalizeNullableUuidValue(firstDefined(record, ['proposal_id', 'proposalId'])) || '').trim();\n    const incomingItemId = String(firstDefined(record, ['item_id', 'itemId']) || '').trim();\n\n    // A row loaded from this exact proposal may keep its existing proposal-line ID.\n    // Catalog/new rows must never reuse a catalog item_id in proposal_items because\n    // proposal_items.item_id is globally unique across all proposals.\n    if (parentUuid && sourceParentUuid === parentUuid && incomingItemId) return incomingItemId;\n\n    if (!parentUuid) return incomingItemId || null;\n    const section = String(firstDefined(record, ['section']) || 'item')\n      .trim()\n      .toLowerCase()\n      .replace(/[^a-z0-9]+/g, '-')\n      .replace(/^-+|-+$/g, '') || 'item';\n    const lineNo = String(firstDefined(record, ['line_no', 'lineNo', 'line']) || '0')\n      .trim()\n      .replace(/[^a-z0-9.-]+/gi, '-') || '0';\n    return \`PITEM-\${parentUuid.replace(/-/g, '')}-\${section}-\${lineNo}\`;\n  }\n\n`;
+          src = src.replace(marker, helper + marker);
+
+          const oldItemId = `      item_id: firstDefined(record, ['item_id', 'itemId']),`;
+          const newItemId = `      item_id: buildProposalLineItemId(record, proposalUuid),`;
+          if (!src.includes(oldItemId)) throw new Error('proposal item_id mapping marker not found');
+          src = src.replace(oldItemId, newItemId);
+          fs.writeFileSync(dataPath, src);
+
+          const migrationPath = 'database/bootstrap/17_admin_locked_proposal_rpc_and_items.sql';
+          let sql = fs.readFileSync(migrationPath, 'utf8');
+          const declareMarker = `  v_item_count integer := 0;`;
+          if (!sql.includes(declareMarker)) throw new Error('migration declare marker not found');
+          sql = sql.replace(declareMarker, `${declareMarker}\n  v_existing_item_ids text[] := array[]::text[];`);
+
+          const deleteMarker = `  if v_items is not null then\n    delete from public.proposal_items where proposal_id = p_proposal_id;`;
+          if (!sql.includes(deleteMarker)) throw new Error('migration delete marker not found');
+          sql = sql.replace(deleteMarker, `  if v_items is not null then\n    select coalesce(array_agg(i.item_id) filter (where nullif(btrim(coalesce(i.item_id, '')), '') is not null), array[]::text[])\n      into v_existing_item_ids\n    from public.proposal_items i\n    where i.proposal_id = p_proposal_id;\n\n    delete from public.proposal_items where proposal_id = p_proposal_id;`);
+
+          const selectMarker = `        p_proposal_id, r.item_id, r.section, r.line_no, r.location_name, r.location_address, r.item_name,`;
+          if (!sql.includes(selectMarker)) throw new Error('migration item select marker not found');
+          sql = sql.replace(selectMarker, `        p_proposal_id,\n        case\n          when nullif(btrim(coalesce(r.item_id, '')), '') is not null and r.item_id = any(v_existing_item_ids) then r.item_id\n          else concat(\n            'PITEM-', replace(p_proposal_id::text, '-', ''), '-',\n            regexp_replace(lower(coalesce(nullif(btrim(r.section), ''), 'item')), '[^a-z0-9]+', '-', 'g'), '-',\n            coalesce(r.line_no::text, '0')\n          )\n        end,\n        r.section, r.line_no, r.location_name, r.location_address, r.item_name,`);
+          fs.writeFileSync(migrationPath, sql);
+
+          const test = `const assert = require('assert');\nconst fs = require('fs');\n\nconst data = fs.readFileSync('supabase-data.js', 'utf8');\nconst migration = fs.readFileSync('database/bootstrap/17_admin_locked_proposal_rpc_and_items.sql', 'utf8');\n\nassert.match(data, /function buildProposalLineItemId[\\s\\S]*PITEM-/, 'proposal-scoped line ID generator must exist');\nassert.match(data, /sourceParentUuid === parentUuid && incomingItemId/, 'existing rows from the same proposal should preserve their line ID');\nassert.match(data, /item_id: buildProposalLineItemId\\(record, proposalUuid\\)/, 'proposal item sanitizer must use proposal-scoped IDs');\nassert.match(migration, /v_existing_item_ids text\\[\\]/, 'locked-proposal RPC must retain existing proposal-line identities');\nassert.match(migration, /PITEM-[\\s\\S]*replace\\(p_proposal_id::text/, 'locked-proposal RPC must generate proposal-scoped IDs for new lines');\nconsole.log('proposal item identity regressions passed');\n`;
+          fs.writeFileSync('tests/proposal-item-identity.test.js', test);
+          NODE
+
+      - name: Validate source fix
+        run: |
+          node --check supabase-data.js
+          node tests/proposal-item-identity.test.js
+          npm ci
+          npm run check
+
+      - name: Verify duplicate catalog identity in production dispatcher
+        run: |
+          node <<'NODE'
+          const { createClient } = require('@supabase/supabase-js');
+          const crypto = require('crypto');
+          const url = String(process.env.TEST_SUPABASE_URL || '').replace(/\/$/, '');
+          const anon = process.env.TEST_SUPABASE_ANON_KEY || '';
+          const service = process.env.TEST_SUPABASE_SERVICE_ROLE_KEY || '';
+          const email = process.env.TEST_USER_EMAIL || '';
+          const password = process.env.TEST_USER_PASSWORD || '';
+          if (!url || !anon || !service || !email || !password) throw new Error('Required production test secrets are missing.');
+
+          const userClient = createClient(url, anon, { auth:{ persistSession:false, autoRefreshToken:false, detectSessionInUrl:false } });
+          const serviceClient = createClient(url, service, { auth:{ persistSession:false, autoRefreshToken:false, detectSessionInUrl:false } });
+          const marker = `PITEM-COLLISION-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+          const createdIds = [];
+
+          (async () => {
+            const { data: auth, error: authError } = await userClient.auth.signInWithPassword({ email, password });
+            if (authError) throw authError;
+            const { data: profile, error: profileError } = await userClient.from('profiles').select('id,role_key,is_active').eq('id', auth.user.id).single();
+            if (profileError) throw profileError;
+            if (String(profile.role_key || '').toLowerCase() !== 'admin') throw new Error('Configured production test user is not admin.');
+
+            global.window = global;
+            global.location = { hostname:'github-actions', origin:'' };
+            global.navigator = { userAgent:'github-actions' };
+            global.RUNTIME_CONFIG = { SUPABASE_URL:url, SUPABASE_ANON_KEY:anon };
+            global.SupabaseClient = { getClient: () => userClient };
+            global.Session = {
+              role: () => profile.role_key,
+              userId: () => auth.user.id,
+              authContext: () => ({ role:profile.role_key, user:auth.user, profile, session:auth.session })
+            };
+            global.AdminOverride = { canOverride: () => true };
+            global.AppPermissions = { baseMatrix:{}, canPerformAction: () => true };
+            require('./supabase-data.js');
+
+            const dispatch = async (action, payload) => {
+              const out = await global.SupabaseData.dispatch({ resource:'proposals', action, ...payload });
+              if (!out?.handled) throw new Error(`Dispatcher did not handle proposals:${action}`);
+              return out.data;
+            };
+
+            const today = new Date().toISOString().slice(0, 10);
+            const end = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10);
+            const sharedIncomingItemId = `CATALOG-SHARED-${marker}`;
+            const storedLineIds = [];
+
+            for (let n = 1; n <= 2; n += 1) {
+              const proposal = await dispatch('create', {
+                proposal: {
+                  proposal_id:`PR-COLLISION-${Date.now()}-${n}`,
+                  ref_number:`COLLISION-${Date.now()}-${n}`,
+                  proposal_title:`${marker}-${n}`,
+                  proposal_date:today,
+                  valid_until:new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
+                  proposal_valid_until:new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
+                  currency:'USD', billing_frequency:'Annual', payment_term:'Net 30', status:'draft',
+                  subtotal_locations:825, subtotal_one_time:0, total_discount:0, grand_total:825
+                },
+                items:[{
+                  item_id:sharedIncomingItemId,
+                  catalog_item_id:sharedIncomingItemId,
+                  section:'annual_saas', line_no:1, location_name:`Test ${n}`, item_name:'Shared Catalog SaaS',
+                  unit_price:825, discount_percent:0, discounted_unit_price:825,
+                  quantity:12, license_quantity:1, line_total:825,
+                  service_start_date:today, service_end_date:end
+                }]
+              });
+              const proposalId = String(proposal?.id || proposal?.proposal?.id || '').trim();
+              if (!proposalId) throw new Error(`Proposal ${n} did not return UUID.`);
+              createdIds.push(proposalId);
+              const read = await userClient.from('proposal_items').select('item_id,proposal_id').eq('proposal_id', proposalId).single();
+              if (read.error) throw read.error;
+              storedLineIds.push(String(read.data.item_id || ''));
+            }
+
+            if (!storedLineIds.every(id => id.startsWith('PITEM-'))) throw new Error(`Expected PITEM IDs, got ${JSON.stringify(storedLineIds)}`);
+            if (storedLineIds[0] === storedLineIds[1]) throw new Error('Two proposals received the same stored proposal item ID.');
+            if (storedLineIds.includes(sharedIncomingItemId)) throw new Error('Catalog item ID leaked into proposal_items.item_id.');
+            console.log('duplicate catalog item identity: PASS', storedLineIds.map(id => id.slice(0, 32) + '…'));
+          })().catch(error => {
+            console.error(error);
+            process.exitCode = 1;
+          }).finally(async () => {
+            for (const id of createdIds) {
+              await serviceClient.from('proposal_items').delete().eq('proposal_id', id);
+              await serviceClient.from('proposals').delete().eq('id', id);
+            }
+            console.log('fixture cleanup: complete');
+          });
+          NODE
+
+      - name: Commit fix
+        run: |
+          git config user.name "incheckdev-glitch"
+          git config user.email "incheckdev@gmail.com"
+          git add supabase-data.js database/bootstrap/17_admin_locked_proposal_rpc_and_items.sql tests/proposal-item-identity.test.js
+          git commit -m "fix: scope proposal item IDs per proposal"
+          git push origin main
