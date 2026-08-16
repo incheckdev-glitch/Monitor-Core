@@ -677,7 +677,19 @@ const Leads = {
     return data;
   },
   currentConverterIdentity() {
-    return String(Session.displayName() || Session.username() || Session.user()?.email || '').trim();
+    const candidates = [
+      Session.userId?.(),
+      Session.user?.()?.user_id,
+      Session.user?.()?.id,
+      Session.user?.()?.user?.id,
+      Session.user?.()?.profile?.id,
+      Session.authContext?.()?.id,
+      Session.authContext?.()?.user?.id,
+      Session.authContext?.()?.profile?.id
+    ];
+    return candidates
+      .map(value => String(value || '').trim())
+      .find(value => this.isUuid(value)) || '';
   },
   isUuid(value) {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -790,6 +802,14 @@ const Leads = {
     };
     dropIfEmpty('source_lead_uuid');
     dropIfEmpty('lead_id');
+
+    // Deal identity/audit foreign keys are UUID columns. Never send display names, usernames or emails.
+    ['lead_id', 'source_lead_uuid', 'company_id', 'contact_id', 'customer_contact_id', 'converted_by'].forEach(key => {
+      if (!Object.prototype.hasOwnProperty.call(sanitized, key)) return;
+      const value = String(sanitized[key] || '').trim();
+      if (!value || !this.isUuid(value)) delete sanitized[key];
+      else sanitized[key] = value;
+    });
 
     sanitized.created_at = normalizeTs(sanitized.created_at) || nowIso;
     sanitized.updated_at = normalizeTs(sanitized.updated_at) || nowIso;
