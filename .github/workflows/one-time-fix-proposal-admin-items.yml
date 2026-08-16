@@ -1,0 +1,136 @@
+name: One-time Fix Proposal Admin Items
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/one-time-fix-proposal-admin-items.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - name: Patch proposal Admin routing and item persistence
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+
+          // ---- proposals.js ----
+          const proposalPath = 'proposals.js';
+          let p = fs.readFileSync(proposalPath, 'utf8');
+
+          const updateMarker = `  async updateProposal(proposalId, updates, items) {\n    const adminOverride = this.canUseAdminOverride();`;
+          const updateReplacement = `  requiresAdminOverrideForProposal(proposal = {}) {\n    const status = this.normalizeProposalStatus(proposal?.status);\n    return ['accepted', 'expired', 'rejected', 'converted', 'converted_to_agreement'].includes(status);\n  },\n  async updateProposal(proposalId, updates, items) {\n    const adminOverride = this.canUseAdminOverride() && this.state.adminOverrideActive === true;`;
+          if (!p.includes(updateMarker)) throw new Error('updateProposal marker not found');
+          p = p.replace(updateMarker, updateReplacement);
+
+          const updateStart = p.indexOf('  async updateProposal(proposalId, updates, items) {');
+          const updateEnd = p.indexOf('\n\n  refreshCompanyLifecycleStatus', updateStart);
+          if (updateStart < 0 || updateEnd < 0) throw new Error('updateProposal boundaries not found');
+          let updateBlock = p.slice(updateStart, updateEnd);
+          const overrideIf = `    if (this.canUseAdminOverride()) {`;
+          if (!updateBlock.includes(overrideIf)) throw new Error('Admin override branch marker not found');
+          updateBlock = updateBlock.replace(overrideIf, `    if (adminOverride) {`);
+          p = p.slice(0, updateStart) + updateBlock + p.slice(updateEnd);
+
+          const modeMarker = `    const mode = E.proposalForm?.dataset.mode === 'edit' ? 'edit' : 'create';`;
+          if (!p.includes(modeMarker)) throw new Error('submit mode marker not found');
+          p = p.replace(modeMarker, `${modeMarker}\n    this.state.adminOverrideActive = false;`);
+
+          const earlyOverride = `    if (mode === 'edit' && this.canUseAdminOverride()) {\n      // Expiry/signature helpers normally derive a status while collecting the form.`;
+          const earlyOverrideReplacement = `    const formRequiresAdminOverride = mode === 'edit' && this.canUseAdminOverride() && this.requiresAdminOverrideForProposal(\n      this.state.currentProposal || { status: E.proposalForm?.dataset?.originalStatus || '' }\n    );\n    if (formRequiresAdminOverride) {\n      // Expiry/signature helpers normally derive a status while collecting the form.`;
+          if (!p.includes(earlyOverride)) throw new Error('early Admin override marker not found');
+          p = p.replace(earlyOverride, earlyOverrideReplacement);
+
+          const validationMarker = `    const items = this.collectProposalItems();\n    if (!this.canUseAdminOverride() && !this.validateCommercialItems(items)) return;\n    let currentRecord = {};`;
+          const validationReplacement = `    const items = this.collectProposalItems();\n    if (!this.validateCommercialItems(items)) return;\n    let currentRecord = {};\n    let adminOverrideRequired = false;`;
+          if (!p.includes(validationMarker)) throw new Error('commercial validation marker not found');
+          p = p.replace(validationMarker, validationReplacement);
+
+          const currentRecordMarker = `      if (this.isProposalAccepted(currentRecord) && !this.canUseAdminOverride()) {\n        UI.toast('Accepted proposals are locked and cannot be edited.');`;
+          const currentRecordReplacement = `      adminOverrideRequired = this.canUseAdminOverride() && this.requiresAdminOverrideForProposal(currentRecord);\n      this.state.adminOverrideActive = adminOverrideRequired;\n      if (this.isProposalAccepted(currentRecord) && !adminOverrideRequired) {\n        UI.toast('Accepted proposals are locked and cannot be edited.');`;
+          if (!p.includes(currentRecordMarker)) throw new Error('current-record lock marker not found');
+          p = p.replace(currentRecordMarker, currentRecordReplacement);
+
+          const reasonMarker = `      if (this.canUseAdminOverride()) {\n        const currentStatus = this.normalizeProposalStatus(currentRecord.status);`;
+          const reasonReplacement = `      if (adminOverrideRequired) {\n        const currentStatus = this.normalizeProposalStatus(currentRecord.status);`;
+          if (!p.includes(reasonMarker)) throw new Error('Admin reason marker not found');
+          p = p.replace(reasonMarker, reasonReplacement);
+
+          const pendingMarker = `    if (currentStatus === 'pending_approval' && requestedStatus && requestedStatus !== 'pending_approval' && !this.canUseAdminOverride()) {`;
+          if (!p.includes(pendingMarker)) throw new Error('pending approval marker not found');
+          p = p.replace(pendingMarker, `    if (currentStatus === 'pending_approval' && requestedStatus && requestedStatus !== 'pending_approval' && this.state.adminOverrideActive !== true) {`);
+
+          const workflowMarker = `    const shouldValidateWorkflow = !this.canUseAdminOverride() && this.shouldValidateWorkflowBeforeSave({`;
+          if (!p.includes(workflowMarker)) throw new Error('workflow marker not found');
+          p = p.replace(workflowMarker, `    const shouldValidateWorkflow = this.state.adminOverrideActive !== true && this.shouldValidateWorkflowBeforeSave({`);
+
+          const persistenceMarker = `      if (!savedUuid) {\n        throw new Error('Proposal save failed because no internal proposal ID was returned.');\n      }\n      if (mode === 'edit' && this.canUseAdminOverride()) this.logAdminOverride('proposal_update_override', currentRecord || null, savedProposal, this.state.adminOverrideReason);`;
+          const persistenceReplacement = `      if (!savedUuid) {\n        throw new Error('Proposal save failed because no internal proposal ID was returned.');\n      }\n      const persistedItems = Array.isArray(parsed?.items) ? parsed.items : [];\n      if (persistedItems.length !== items.length) {\n        throw new Error(\`Proposal header was saved, but proposal item persistence was not verified (expected \${items.length}, found \${persistedItems.length}). Please retry the save; do not continue to agreement/invoice until the items are visible.\`);\n      }\n      if (mode === 'edit' && this.state.adminOverrideActive === true) this.logAdminOverride('proposal_update_override', currentRecord || null, savedProposal, this.state.adminOverrideReason);`;
+          if (!p.includes(persistenceMarker)) throw new Error('proposal save verification marker not found');
+          p = p.replace(persistenceMarker, persistenceReplacement);
+
+          const finallyMarker = `      this.state.saveInFlight = false;\n      this.state.adminOverrideReason = '';\n      this.setFormBusy(false);`;
+          if (!p.includes(finallyMarker)) throw new Error('proposal finally marker not found');
+          p = p.replace(finallyMarker, `      this.state.saveInFlight = false;\n      this.state.adminOverrideReason = '';\n      this.state.adminOverrideActive = false;\n      this.setFormBusy(false);`);
+
+          fs.writeFileSync(proposalPath, p);
+
+          // ---- supabase-data.js ----
+          const dataPath = 'supabase-data.js';
+          let s = fs.readFileSync(dataPath, 'utf8');
+
+          const createdMarker = `      const created = normalizeRow(resource, data);\n      if (resource === 'contacts') {`;
+          const createdReplacement = `      const created = normalizeRow(resource, data);\n      if (resource === 'proposals' && requestedItems.length) {\n        const parentId = String(created.id || '').trim();\n        if (!isUuid(parentId)) throw new Error('Proposal items were not saved because the proposal UUID is missing.');\n        const insertRows = requestedItems.map(item => sanitizeProposalItemRecord(item, parentId));\n        try {\n          const childResp = await insertSelectRowsWithSchemaRetry(client, 'proposal_items', insertRows, 'Unable to create proposal_items');\n          if (childResp.error) throw friendlyError('Unable to create proposal_items', childResp.error);\n          const verifyResp = await client\n            .from('proposal_items')\n            .select('id,proposal_id,item_id,section,line_no,item_name,line_total')\n            .eq('proposal_id', parentId);\n          if (verifyResp.error) throw friendlyError('Unable to verify proposal_items', verifyResp.error);\n          const persistedCount = Array.isArray(verifyResp.data) ? verifyResp.data.length : 0;\n          if (persistedCount !== requestedItems.length) {\n            throw new Error(\`Proposal item persistence mismatch: expected \${requestedItems.length}, found \${persistedCount}.\`);\n          }\n        } catch (itemError) {\n          const childCleanup = await client.from('proposal_items').delete().eq('proposal_id', parentId);\n          if (childCleanup.error) console.warn('[proposals:create] unable to clean partial proposal_items', childCleanup.error);\n          const headerRollback = await client.from('proposals').delete().eq('id', parentId);\n          if (headerRollback.error) {\n            throw new Error(\`Proposal items could not be saved, and the partial proposal header could not be rolled back. Internal proposal ID: \${parentId}. Original error: \${itemError?.message || itemError}. Rollback error: \${headerRollback.error?.message || headerRollback.error}.\`);\n          }\n          throw new Error(\`Proposal was not saved because its line items could not be persisted. The partial header was rolled back. \${itemError?.message || itemError}\`);\n        }\n      }\n      if (resource === 'contacts') {`;
+          if (!s.includes(createdMarker)) throw new Error('proposal create persistence insertion point not found');
+          s = s.replace(createdMarker, createdReplacement);
+
+          const genericCreateMarker = `      if (itemTable && items.length && (created[fk] || created.id)) {`;
+          if (!s.includes(genericCreateMarker)) throw new Error('generic create child marker not found');
+          s = s.replace(genericCreateMarker, `      if (resource !== 'proposals' && itemTable && items.length && (created[fk] || created.id)) {`);
+
+          const updateDeleteMarker = `        await client.from(itemTable).delete().eq(fk, parentId);\n        if (payload.items.length) {`;
+          const updateDeleteReplacement = `        const deleteResp = await client.from(itemTable).delete().eq(fk, parentId);\n        if (deleteResp.error) throw friendlyError(\`Unable to replace \${itemTable}\`, deleteResp.error);\n        if (payload.items.length) {`;
+          if (!s.includes(updateDeleteMarker)) throw new Error('update child delete marker not found');
+          s = s.replace(updateDeleteMarker, updateDeleteReplacement);
+
+          const updateVerifyMarker = `          const childResp = await insertSelectRowsWithSchemaRetry(client, itemTable, insertRows, \`Unable to update \${itemTable}\`);\n          if (childResp.error) throw friendlyError(\`Unable to update \${itemTable}\`, childResp.error);\n        }\n      }\n      return { handled: true, data: await withItems(resource, data) };`;
+          const updateVerifyReplacement = `          const childResp = await insertSelectRowsWithSchemaRetry(client, itemTable, insertRows, \`Unable to update \${itemTable}\`);\n          if (childResp.error) throw friendlyError(\`Unable to update \${itemTable}\`, childResp.error);\n        }\n        if (resource === 'proposals') {\n          const verifyResp = await client\n            .from('proposal_items')\n            .select('id,proposal_id,item_id,section,line_no,item_name,line_total')\n            .eq('proposal_id', parentId);\n          if (verifyResp.error) throw friendlyError('Unable to verify proposal_items after update', verifyResp.error);\n          const persistedCount = Array.isArray(verifyResp.data) ? verifyResp.data.length : 0;\n          if (persistedCount !== payload.items.length) {\n            throw new Error(\`Proposal item persistence mismatch after update: expected \${payload.items.length}, found \${persistedCount}.\`);\n          }\n        }\n      }\n      return { handled: true, data: await withItems(resource, data) };`;
+          if (!s.includes(updateVerifyMarker)) throw new Error('update proposal item verify marker not found');
+          s = s.replace(updateVerifyMarker, updateVerifyReplacement);
+
+          fs.writeFileSync(dataPath, s);
+
+          // ---- Source migration for the locked-proposal RPC ----
+          const migration = `-- Repair Admin locked-proposal update RPC and remove dependency on nonexistent jsonb_object_length(jsonb).\n-- Source migration only: apply to production Supabase separately.\n\nbegin;\n\ncreate or replace function public.admin_update_locked_proposal(\n  p_proposal_id uuid,\n  p_changes jsonb,\n  p_reason text\n)\nreturns jsonb\nlanguage plpgsql\nsecurity definer\nset search_path = public, pg_temp\nas $$\ndeclare\n  v_header jsonb := '{}'::jsonb;\n  v_items jsonb := null;\n  v_set_clause text;\n  v_result jsonb;\n  v_item_count integer := 0;\nbegin\n  if auth.uid() is null then\n    raise exception 'Authentication required.';\n  end if;\n\n  if not exists (\n    select 1\n    from public.profiles p\n    where p.id = auth.uid()\n      and p.is_active is distinct from false\n      and lower(coalesce(p.role_key, '')) = 'admin'\n  ) then\n    raise exception 'Only admins can override a locked proposal.';\n  end if;\n\n  if nullif(btrim(coalesce(p_reason, '')), '') is null then\n    raise exception 'Reason for editing locked proposal is required.';\n  end if;\n\n  if p_changes is null or p_changes = '{}'::jsonb then\n    raise exception 'No proposal changes were supplied.';\n  end if;\n\n  perform 1 from public.proposals where id = p_proposal_id for update;\n  if not found then\n    raise exception 'Proposal not found.';\n  end if;\n\n  if jsonb_typeof(p_changes -> 'proposal') = 'object' then\n    v_header := p_changes -> 'proposal';\n  else\n    v_header := p_changes;\n  end if;\n\n  if jsonb_typeof(p_changes -> 'items') = 'array' then\n    v_items := p_changes -> 'items';\n  elsif jsonb_typeof(p_changes -> 'proposal_items') = 'array' then\n    v_items := p_changes -> 'proposal_items';\n  end if;\n\n  v_header := v_header - 'proposal' - 'items' - 'proposal_items' - 'payload_version' - 'id' - 'created_at' - 'created_by';\n  v_header := v_header || jsonb_build_object('updated_at', now(), 'updated_by', auth.uid());\n\n  select string_agg(format('%I = x.%I', c.column_name, c.column_name), ', ' order by c.ordinal_position)\n    into v_set_clause\n  from information_schema.columns c\n  where c.table_schema = 'public'\n    and c.table_name = 'proposals'\n    and c.column_name not in ('id', 'created_at', 'created_by')\n    and coalesce(c.is_generated, 'NEVER') = 'NEVER'\n    and exists (select 1 from jsonb_object_keys(v_header) k(key) where k.key = c.column_name);\n\n  perform set_config('app.admin_proposal_override', 'on', true);\n\n  if nullif(v_set_clause, '') is not null then\n    execute format(\n      'update public.proposals p set %s from jsonb_populate_record(null::public.proposals, $1) x where p.id = $2 returning to_jsonb(p)',\n      v_set_clause\n    )\n    using v_header, p_proposal_id\n    into v_result;\n  else\n    select to_jsonb(p) into v_result from public.proposals p where p.id = p_proposal_id;\n  end if;\n\n  if v_items is not null then\n    delete from public.proposal_items where proposal_id = p_proposal_id;\n    if v_items <> '[]'::jsonb then\n      insert into public.proposal_items (\n        proposal_id, item_id, section, line_no, location_name, location_address, item_name,\n        unit_price, discount_percent, discounted_unit_price, quantity, license_quantity,\n        line_total, service_start_date, service_end_date, capability_name, capability_value, notes\n      )\n      select\n        p_proposal_id, r.item_id, r.section, r.line_no, r.location_name, r.location_address, r.item_name,\n        coalesce(r.unit_price, 0), coalesce(r.discount_percent, 0), coalesce(r.discounted_unit_price, 0),\n        coalesce(r.quantity, 1), r.license_quantity, coalesce(r.line_total, 0), r.service_start_date,\n        r.service_end_date, r.capability_name, r.capability_value, r.notes\n      from jsonb_populate_recordset(null::public.proposal_items, v_items) r;\n    end if;\n  end if;\n\n  select count(*) into v_item_count from public.proposal_items where proposal_id = p_proposal_id;\n  return jsonb_build_object(\n    'proposal', (select to_jsonb(p) from public.proposals p where p.id = p_proposal_id),\n    'items', coalesce((select jsonb_agg(to_jsonb(i) order by i.line_no nulls last, i.created_at) from public.proposal_items i where i.proposal_id = p_proposal_id), '[]'::jsonb),\n    'item_count', v_item_count,\n    'override_reason', p_reason\n  );\nend;\n$$;\n\nrevoke all on function public.admin_update_locked_proposal(uuid, jsonb, text) from public;\ngrant execute on function public.admin_update_locked_proposal(uuid, jsonb, text) to authenticated;\n\ncommit;\n\nnotify pgrst, 'reload schema';\n`;
+          fs.writeFileSync('database/bootstrap/17_admin_locked_proposal_rpc_and_items.sql', migration);
+
+          // ---- Regressions ----
+          const test = `const assert = require('assert');\nconst fs = require('fs');\n\nconst proposals = fs.readFileSync('proposals.js', 'utf8');\nconst data = fs.readFileSync('supabase-data.js', 'utf8');\nconst migration = fs.readFileSync('database/bootstrap/17_admin_locked_proposal_rpc_and_items.sql', 'utf8');\n\nassert.match(proposals, /requiresAdminOverrideForProposal[\\s\\S]*accepted[\\s\\S]*expired[\\s\\S]*rejected[\\s\\S]*converted_to_agreement/, 'locked proposal statuses must be explicit');\nassert.match(proposals, /const adminOverride = this\\.canUseAdminOverride\\(\\) && this\\.state\\.adminOverrideActive === true/, 'Admin role alone must not force override RPC');\nassert.match(proposals, /adminOverrideRequired = this\\.canUseAdminOverride\\(\\) && this\\.requiresAdminOverrideForProposal\\(currentRecord\\)/, 'submit flow must decide override from current proposal status');\nassert.match(proposals, /if \\(adminOverrideRequired\\)[\\s\\S]*requestAdminOverrideReason/, 'override reason should only be requested for a locked proposal');\nassert.match(proposals, /persistedItems\\.length !== items\\.length[\\s\\S]*proposal item persistence was not verified/i, 'UI must verify saved proposal item count');\nassert.match(data, /resource === 'proposals' && requestedItems\\.length[\\s\\S]*Proposal item persistence mismatch[\\s\\S]*partial header was rolled back/, 'proposal create must verify items and rollback partial headers');\nassert.match(data, /const deleteResp = await client\\.from\\(itemTable\\)\\.delete\\(\\)\\.eq\\(fk, parentId\\)[\\s\\S]*deleteResp\\.error/, 'proposal item replacement delete errors must be checked');\nassert.match(data, /Proposal item persistence mismatch after update/, 'proposal update must verify child persistence');\nassert(!migration.includes('jsonb_object_length'), 'fixed RPC must not use nonexistent jsonb_object_length');\nassert.match(migration, /p_changes is null or p_changes = '\\{\\}'::jsonb/, 'RPC must use PostgreSQL-safe JSON emptiness check');\nconsole.log('proposal Admin/item persistence regressions passed');\n`;
+          fs.writeFileSync('tests/proposal-admin-item-persistence.test.js', test);
+          NODE
+      - name: Validate patch
+        run: |
+          node --check proposals.js
+          node --check supabase-data.js
+          node tests/proposal-admin-item-persistence.test.js
+          npm ci
+          npm run check
+      - name: Commit fix
+        run: |
+          git config user.name "incheckdev-glitch"
+          git config user.email "incheckdev@gmail.com"
+          git add proposals.js supabase-data.js tests/proposal-admin-item-persistence.test.js database/bootstrap/17_admin_locked_proposal_rpc_and_items.sql
+          git commit -m "fix: persist proposal items and scope admin override"
+          git push origin main
