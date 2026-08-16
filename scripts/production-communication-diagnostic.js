@@ -18,6 +18,7 @@ let userClient;
 let serviceClient;
 let user;
 let conversationId;
+let messageId;
 
 async function cleanup() {
   if (!serviceClient || !conversationId) return;
@@ -30,6 +31,19 @@ async function cleanup() {
   if (conversation.error) errors.push(`conversation: ${conversation.error.message}`);
   if (errors.length) fail('Communication diagnostic cleanup', errors.join(' | '));
   else pass('Communication diagnostic cleanup', 'conversation, participants and messages removed');
+}
+
+async function rpcProbe(label, name, args, verify) {
+  try {
+    const response = await userClient.rpc(name, args || {});
+    if (response.error) throw response.error;
+    if (verify) await verify(response.data);
+    pass(label, 'reachable');
+    return response.data;
+  } catch (error) {
+    fail(label, error);
+    return null;
+  }
 }
 
 async function main() {
@@ -90,9 +104,8 @@ async function main() {
   });
   if (seed.error) throw seed.error;
 
-  const participantId = crypto.randomUUID();
   const participant = await serviceClient.from('communication_centre_participants').insert({
-    id: participantId,
+    id: crypto.randomUUID(),
     conversation_id: conversationId,
     user_id: user.id,
     created_at: now,
@@ -100,59 +113,86 @@ async function main() {
   if (participant.error) throw participant.error;
   pass('Service-role diagnostic parent seed', 'conversation + live-shape admin participant');
 
-  const canView = await userClient.rpc('can_view_communication_centre_conversation', { p_conversation_id: conversationId });
-  if (canView.error) throw canView.error;
-  if (canView.data !== true) throw new Error('Participant-backed conversation is not visible to the authenticated admin.');
-  pass('Communication participant visibility', 'can_view = true');
+  await rpcProbe('Communication debug context', 'communication_centre_debug_context', {}, async data => {
+    const row = Array.isArray(data) ? data[0] : data;
+    const keys = Object.keys(row || {}).sort();
+    if (!keys.length) throw new Error('Debug context returned no fields.');
+    pass('Communication debug context fields', keys.join(','));
+  });
 
-  const reply = await userClient.rpc('add_communication_centre_reply_secure', {
+  await rpcProbe('Communication current role helper', 'cc_current_role_key', {}, async data => {
+    const value = Array.isArray(data) ? data[0] : data;
+    if (String(value || '').toLowerCase() !== 'admin') throw new Error(`Expected admin role, received ${String(value || '(blank)')}.`);
+  });
+
+  await rpcProbe('Communication participant visibility', 'can_view_communication_centre_conversation', { p_conversation_id: conversationId }, async data => {
+    if (data !== true) throw new Error('Participant-backed conversation is not visible to the authenticated admin.');
+  });
+
+  const replyData = await rpcProbe('Secure Communication reply create', 'add_communication_centre_reply_secure', {
     p_conversation_id: conversationId,
     p_message_body: marker,
     p_message_type: 'message',
     p_reply_to_message_id: null,
+  }, async data => {
+    const raw = Array.isArray(data) ? data[0] : data;
+    messageId = raw?.id || raw?.message_id || raw;
+    if (!messageId) throw new Error(`Reply RPC did not return a message id: ${JSON.stringify(data)}`);
   });
-  if (reply.error) throw reply.error;
-  const replyRaw = Array.isArray(reply.data) ? reply.data[0] : reply.data;
-  const messageId = replyRaw?.id || replyRaw?.message_id || replyRaw;
-  if (!messageId) throw new Error(`Reply RPC did not return a message id: ${JSON.stringify(reply.data)}`);
-  pass('Secure Communication reply create', String(messageId));
 
-  const listed = await userClient.rpc('list_communication_centre_messages_secure', { p_conversation_id: conversationId });
-  if (listed.error) throw listed.error;
-  const rows = Array.isArray(listed.data) ? listed.data : [];
-  const message = rows.find(row => String(row.id || row.message_id || '') === String(messageId)) || rows.find(row => String(row.message_body || row.message || '') === marker);
-  if (!message) throw new Error('Secure message listing did not return the new reply.');
-  const persistedId = message.id || message.message_id || messageId;
-  pass('Secure Communication reply read', String(persistedId));
+  if (replyData && messageId) {
+    const listed = await rpcProbe('Secure Communication reply read', 'list_communication_centre_messages_secure', { p_conversation_id: conversationId }, async data => {
+      const rows = Array.isArray(data) ? data : [];
+      const message = rows.find(row => String(row.id || row.message_id || '') === String(messageId)) || rows.find(row => String(row.message_body || row.message || '') === marker);
+      if (!message) throw new Error('Secure message listing did not return the new reply.');
+      messageId = message.id || message.message_id || messageId;
+    });
 
-  const editedBody = `${marker} updated`;
-  const edited = await userClient.from('communication_centre_messages').update({
-    message_body: editedBody,
-    edited_at: new Date().toISOString(),
-    edited_by: user.id,
-  }).eq('id', persistedId).select('id,message_body,edited_at').single();
-  if (edited.error) throw edited.error;
-  if (edited.data?.message_body !== editedBody) throw new Error('Authenticated message edit did not persist.');
-  pass('Authenticated Communication message edit', String(persistedId));
+    if (listed && messageId) {
+      try {
+        const editedBody = `${marker} updated`;
+        const edited = await userClient.from('communication_centre_messages').update({
+          message_body: editedBody,
+          edited_at: new Date().toISOString(),
+          edited_by: user.id,
+        }).eq('id', messageId).select('id,message_body,edited_at').single();
+        if (edited.error) throw edited.error;
+        if (edited.data?.message_body !== editedBody) throw new Error('Authenticated message edit did not persist.');
+        pass('Authenticated Communication message edit', String(messageId));
+      } catch (error) {
+        fail('Authenticated Communication message edit', error);
+      }
+    }
+  }
 
-  const close = await userClient.rpc('close_communication_centre_conversation', { p_conversation_id: conversationId });
-  if (close.error) throw close.error;
-  const closed = await userClient.from('communication_centre_conversations').select('status').eq('id', conversationId).single();
-  if (closed.error) throw closed.error;
-  if (String(closed.data?.status || '').toLowerCase() !== 'closed') throw new Error(`Close RPC left status ${closed.data?.status || '(blank)'}.`);
-  pass('Close Communication conversation', 'Closed');
+  const closeData = await rpcProbe('Close Communication conversation', 'close_communication_centre_conversation', { p_conversation_id: conversationId });
+  if (closeData !== null) {
+    try {
+      const closed = await serviceClient.from('communication_centre_conversations').select('status').eq('id', conversationId).single();
+      if (closed.error) throw closed.error;
+      if (String(closed.data?.status || '').toLowerCase() !== 'closed') throw new Error(`Close RPC left status ${closed.data?.status || '(blank)'}.`);
+      pass('Close Communication persisted status', 'Closed');
+    } catch (error) {
+      fail('Close Communication persisted status', error);
+    }
+  }
 
-  const reopen = await userClient.rpc('reopen_communication_centre_conversation', { p_conversation_id: conversationId });
-  if (reopen.error) throw reopen.error;
-  const reopened = await userClient.from('communication_centre_conversations').select('status').eq('id', conversationId).single();
-  if (reopened.error) throw reopened.error;
-  if (String(reopened.data?.status || '').toLowerCase() !== 'open') throw new Error(`Reopen RPC left status ${reopened.data?.status || '(blank)'}.`);
-  pass('Reopen Communication conversation', 'Open');
+  const reopenData = await rpcProbe('Reopen Communication conversation', 'reopen_communication_centre_conversation', { p_conversation_id: conversationId });
+  if (reopenData !== null) {
+    try {
+      const reopened = await serviceClient.from('communication_centre_conversations').select('status').eq('id', conversationId).single();
+      if (reopened.error) throw reopened.error;
+      if (String(reopened.data?.status || '').toLowerCase() !== 'open') throw new Error(`Reopen RPC left status ${reopened.data?.status || '(blank)'}.`);
+      pass('Reopen Communication persisted status', 'Open');
+    } catch (error) {
+      fail('Reopen Communication persisted status', error);
+    }
+  }
 }
 
 (async () => {
   try { await main(); }
-  catch (error) { fail('Communication diagnostic downstream lifecycle', error); }
+  catch (error) { fail('Communication diagnostic setup', error); }
   finally { await cleanup(); }
   const counts = printResults('InCheck360 Production Communication Diagnostic', results);
   if (counts.FAIL > 1) process.exit(1);
