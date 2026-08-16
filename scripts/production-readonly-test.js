@@ -18,6 +18,7 @@ const serviceKey = env('TEST_SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SERVICE_ROLE_
 const testEmail = env('TEST_USER_EMAIL');
 const testPassword = env('TEST_USER_PASSWORD');
 
+// Retired modules are deliberately excluded from production health requirements.
 const requiredTables = [
   'profiles', 'roles', 'role_permissions',
   'companies', 'contacts', 'leads', 'deals',
@@ -25,7 +26,6 @@ const requiredTables = [
   'clients', 'renewals', 'invoices', 'invoice_items', 'invoice_payment_schedule',
   'receipts', 'receipt_items', 'credit_notes',
   'workflow_rules', 'workflow_approvals',
-  'operations_onboarding', 'technical_admin_requests',
   'tickets', 'events', 'csm_activities',
   'notifications', 'notification_delivery_queue',
   'user_push_subscriptions', 'push_subscriptions', 'crm_contact_company_links',
