@@ -48,7 +48,7 @@ function pass(name, details = '') {
   results.push(result('PASS', name, details));
 }
 function fail(name, error) {
-  results.push(result('FAIL', name, error instanceof Error ? error.message : String(error || 'Unknown error'));
+  results.push(result('FAIL', name, error instanceof Error ? error.message : String(error || 'Unknown error')));
 }
 function rowsFrom(value) {
   if (Array.isArray(value)) return value;
