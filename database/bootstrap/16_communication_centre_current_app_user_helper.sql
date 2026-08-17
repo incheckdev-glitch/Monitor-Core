@@ -4,7 +4,7 @@
 -- call public.cc_current_app_user_id(), but production currently does not expose
 -- that helper. Communication Centre participant rows use the authenticated
 -- profile UUID, which is the same UUID returned by auth.uid().
--- This helper is also required by the secure create/reply conversation path.
+-- This helper is also required by the secure create/reply and message-mutation paths.
 --
 -- Safe to re-run. No business rows are modified.
 
