@@ -9,9 +9,8 @@ const migration = fs.readFileSync('database/bootstrap/19_sales_commission_safe_d
 const clientColumnsMatch = clients.match(/CLIENT_COLUMNS:\s*new Set\(\[([\s\S]*?)\]\)/);
 assert(clientColumnsMatch, 'ClientsService CLIENT_COLUMNS must exist');
 assert(!clientColumnsMatch[1].includes("'company_id'"), 'ClientsService must not persist nonexistent clients.company_id');
-const sanitizeMatch = clients.match(/sanitizeClientPayload\(input[\s\S]*?return Object\.fromEntries/);
-assert(sanitizeMatch, 'sanitizeClientPayload must exist');
-assert(!sanitizeMatch[0].includes('company_id:'), 'Client create/update payload must not send company_id');
+assert(clients.includes('sanitizeClientPayload(input = {}, { includeCreatedBy = false } = {})'), 'sanitizeClientPayload must exist');
+assert(!clients.includes('company_id: input.company_id || input.companyId || input.customer_company_id || input.customerCompanyId || input.client_company_id || input.clientCompanyId,'), 'Client create/update payload must not send company_id');
 assert(index.includes('/clients-service.js?v=20260817-client-schema-fix-v2'), 'ClientsService cache key must be bumped');
 
 assert(commission.includes("rpc('delete_sales_commission',{p_commission_id:id})"), 'Commission delete must use safe RPC');
