@@ -2635,14 +2635,49 @@ const Invoices = {
     return new Date().toISOString().slice(0, 10);
   },
   generateInvoiceNumber() {
-    const now = new Date();
-    const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-    const randomPart = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
-    return `INV-${datePart}-${randomPart}`;
+    const year = new Date().getFullYear();
+    return `SA/${year}/NEW`;
   },
   ensureInvoiceNumber(value = '') {
     const existing = String(value || '').trim();
     return existing || this.generateInvoiceNumber();
+  },
+  isCanonicalInvoiceBusinessNumber(value = '') {
+    return /^SA\/\d{4}\/\d+$/i.test(String(value || '').trim());
+  },
+  async allocateNextInvoiceBusinessNumber() {
+    const client = this.getSupabaseClient();
+    if (!client?.from) throw new Error('Unable to allocate invoice number: Supabase is not available.');
+    const year = String(new Date().getFullYear());
+    const matcher = new RegExp(`^SA\\/${year}\\/([0-9]+)$`, 'i');
+    const { data, error } = await client
+      .from('invoices')
+      .select('invoice_id,invoice_number')
+      .order('created_at', { ascending: false })
+      .limit(5000);
+    if (error) throw new Error(`Unable to allocate invoice number: ${error.message || 'Unknown Supabase error'}`);
+    let maxSequence = 0;
+    (Array.isArray(data) ? data : []).forEach(row => {
+      [row?.invoice_id, row?.invoice_number].forEach(value => {
+        const match = String(value || '').trim().match(matcher);
+        if (!match) return;
+        const sequence = Number(match[1]);
+        if (Number.isFinite(sequence)) maxSequence = Math.max(maxSequence, sequence);
+      });
+    });
+    return `SA/${year}/${String(maxSequence + 1).padStart(2, '0')}`;
+  },
+  async ensureNewInvoiceBusinessIdentifiers(invoice = {}) {
+    const source = invoice && typeof invoice === 'object' ? invoice : {};
+    const existing = [source.invoice_id, source.invoice_number]
+      .map(value => String(value || '').trim())
+      .find(value => this.isCanonicalInvoiceBusinessNumber(value));
+    const friendly = existing || await this.allocateNextInvoiceBusinessNumber();
+    source.invoice_id = friendly;
+    source.invoice_number = friendly;
+    if (E.invoiceFormInvoiceId) E.invoiceFormInvoiceId.value = friendly;
+    if (E.invoiceFormInvoiceNumber) E.invoiceFormInvoiceNumber.value = friendly;
+    return friendly;
   },
   getCatalogRowsForSection(section) {
     const rows = typeof window.ProposalCatalog?.getActiveCatalogItems === 'function'
@@ -4707,6 +4742,12 @@ const Invoices = {
       console.log('[SAVE CHECK] final payload:', invoice);
     } catch (error) {
       UI.toast(error?.message || 'Selected company data mismatch. Please reselect the company.');
+      return;
+    }
+    try {
+      await this.ensureNewInvoiceBusinessIdentifiers(invoice);
+    } catch (error) {
+      UI.toast(error?.message || 'Unable to allocate invoice number.');
       return;
     }
     if (!this.validateInvoice(invoice)) return;

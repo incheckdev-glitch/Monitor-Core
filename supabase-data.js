@@ -2687,6 +2687,63 @@ IN WITNESS WHEREOF, the parties have caused this Agreement to be executed by the
     return rawState || null;
   }
 
+  function isCanonicalInvoiceBusinessNumber(value = '') {
+    return /^SA\/\d{4}\/\d+$/i.test(String(value || '').trim());
+  }
+
+  function isInvoiceBusinessIdConflict(error = {}) {
+    if (String(error?.code || '').trim() !== '23505') return false;
+    const text = `${error?.message || ''} ${error?.details || ''} ${error?.hint || ''} ${error?.constraint || ''}`.toLowerCase();
+    return text.includes('invoice_id') || text.includes('invoice_number') || text.includes('invoices_invoice_id') || text.includes('invoices_invoice_number');
+  }
+
+  async function allocateInvoiceBusinessNumber(client, { preferred = '', force = false } = {}) {
+    const preferredValue = String(preferred || '').trim();
+    if (!force && isCanonicalInvoiceBusinessNumber(preferredValue)) return preferredValue;
+    const year = String(new Date().getFullYear());
+    const matcher = new RegExp(`^SA\\/${year}\\/([0-9]+)$`, 'i');
+    const { data, error } = await client
+      .from('invoices')
+      .select('invoice_id,invoice_number')
+      .order('created_at', { ascending: false })
+      .limit(5000);
+    if (error) throw friendlyError('Unable to allocate invoice business ID', error);
+    let maxSequence = 0;
+    (Array.isArray(data) ? data : []).forEach(row => {
+      [row?.invoice_id, row?.invoice_number].forEach(value => {
+        const match = String(value || '').trim().match(matcher);
+        if (!match) return;
+        const sequence = Number(match[1]);
+        if (Number.isFinite(sequence)) maxSequence = Math.max(maxSequence, sequence);
+      });
+    });
+    return `SA/${year}/${String(maxSequence + 1).padStart(2, '0')}`;
+  }
+
+  async function ensureInvoiceBusinessIdentifiers(client, record = {}, { force = false } = {}) {
+    const source = record && typeof record === 'object' ? { ...record } : {};
+    const preferred = [source.invoice_id, source.invoice_number]
+      .map(value => String(value || '').trim())
+      .find(value => isCanonicalInvoiceBusinessNumber(value)) || '';
+    const friendly = await allocateInvoiceBusinessNumber(client, { preferred, force });
+    source.invoice_id = friendly;
+    source.invoice_number = friendly;
+    return source;
+  }
+
+  async function insertInvoiceWithBusinessIdRetry(client, table, record = {}, context = 'Unable to create invoices record') {
+    let workingRecord = await ensureInvoiceBusinessIdentifiers(client, record);
+    let lastError = null;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const result = await insertSelectSingleWithSchemaRetry(client, table, workingRecord, context);
+      if (!result?.error) return { ...result, finalCreateRecord: workingRecord };
+      lastError = result.error;
+      if (!isInvoiceBusinessIdConflict(lastError)) return { ...result, finalCreateRecord: workingRecord };
+      workingRecord = await ensureInvoiceBusinessIdentifiers(client, workingRecord, { force: true });
+    }
+    return { data: null, error: lastError || new Error('Unable to allocate a unique invoice business ID.'), finalCreateRecord: workingRecord };
+  }
+
   function sanitizeReceiptsRecord(record = {}, { includeCreatedBy = false, userId = '' } = {}) {
     const receiptPaymentState = normalizeReceiptPaymentStateForSave(record);
     const sanitized = compactObject({
@@ -8957,6 +9014,7 @@ IN WITNESS WHEREOF, the parties have caused this Agreement to be executed by the
         return { handled: true, data: await withItems(resource, normalizedRow) };
       }
       let finalCreateRecord = sanitizeUuidColumnsForMutation(table, createRecord);
+      if (resource === 'invoices') finalCreateRecord = await ensureInvoiceBusinessIdentifiers(client, finalCreateRecord);
       if (resource === 'agreements') {
         // Log the exact object handed to PostgREST, rather than the larger UI
         // model. devLog is disabled outside development builds.
@@ -9046,12 +9104,28 @@ IN WITNESS WHEREOF, the parties have caused this Agreement to be executed by the
       if (resource === 'tickets') {
         data = await insertTicketWithRetry(client, table, finalCreateRecord);
       } else {
-        const { data: inserted, error } = await insertSelectSingleWithSchemaRetry(
-          client,
-          table,
-          finalCreateRecord,
-          `Unable to create ${resource} record`
-        );
+        let inserted;
+        let error;
+        if (resource === 'invoices') {
+          const invoiceInsert = await insertInvoiceWithBusinessIdRetry(
+            client,
+            table,
+            finalCreateRecord,
+            `Unable to create ${resource} record`
+          );
+          inserted = invoiceInsert?.data;
+          error = invoiceInsert?.error;
+          finalCreateRecord = invoiceInsert?.finalCreateRecord || finalCreateRecord;
+        } else {
+          const insertResult = await insertSelectSingleWithSchemaRetry(
+            client,
+            table,
+            finalCreateRecord,
+            `Unable to create ${resource} record`
+          );
+          inserted = insertResult?.data;
+          error = insertResult?.error;
+        }
         if (error && resource === 'credit_notes' && finalCreateRecord.credit_note_request_key && String(error.code || '') === '23505') {
           const { data: existingCreditNote, error: existingCreditNoteError } = await client
             .from('credit_notes')
