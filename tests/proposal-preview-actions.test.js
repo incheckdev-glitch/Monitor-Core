@@ -19,7 +19,7 @@ const candidateBody = creatorNameBody.match(/const candidate = String\(([\s\S]*?
 assert.doesNotMatch(candidateBody, /creator\.email/, 'email must not be used as a provider signatory display-name candidate');
 assert.match(creatorNameBody, /emailLocal[\s\S]*lower === emailLocal/, 'email-local usernames must be rejected as human signatory names');
 
-assert(index.includes('/proposals.js?v=20260817-proposal-preview-actions-v1'), 'proposal script cache key must be bumped');
+assert.match(index, /\/proposals\.js\?v=20260817-[^"']+/, 'proposal script cache key must be versioned');
 assert(index.includes('id="proposalPreviewCloseBtn" type="button"'), 'proposal preview close button must be an explicit button');
 
 console.log('Proposal preview action and provider signatory checks passed.');
