@@ -1,7 +1,7 @@
 const ClientsService = {
   CLIENT_COLUMNS: new Set([
     'client_id','client_name','company_name','primary_email','primary_phone','billing_frequency','payment_term',
-    'status','company_id','source_agreement_id','total_agreements','total_locations','total_value','total_paid','total_due','created_by','updated_by'
+    'status','source_agreement_id','total_agreements','total_locations','total_value','total_paid','total_due','created_by','updated_by'
   ]),
   AGREEMENT_SELECT_COLUMNS: '*',
   companyLookup: { byId: new Map(), byName: new Map() },
@@ -457,7 +457,6 @@ const ClientsService = {
       billing_frequency: input.billing_frequency || input.billingFrequency,
       payment_term: input.payment_term || input.paymentTerm || input.payment_terms,
       status: input.status,
-      company_id: input.company_id || input.companyId || input.customer_company_id || input.customerCompanyId || input.client_company_id || input.clientCompanyId,
       source_agreement_id: input.source_agreement_id || input.sourceAgreementId,
       total_agreements: input.total_agreements ?? input.totalAgreements,
       total_locations: input.total_locations ?? input.totalLocations,
