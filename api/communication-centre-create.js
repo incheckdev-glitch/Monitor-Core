@@ -32,17 +32,17 @@ function errorMessage(error) {
   return text(error?.message || error?.details || error?.hint || error || 'Unknown error');
 }
 
-async function cleanupPartial(admin, conversationId) {
+async function cleanupPartial(client, conversationId) {
   if (!conversationId) return;
-  await admin.from('communication_centre_messages').delete().eq('conversation_id', conversationId);
-  await admin.from('communication_centre_participants').delete().eq('conversation_id', conversationId);
-  await admin.from('communication_centre_conversations').delete().eq('id', conversationId);
+  await client.from('communication_centre_messages').delete().eq('conversation_id', conversationId);
+  await client.from('communication_centre_participants').delete().eq('conversation_id', conversationId);
+  await client.from('communication_centre_conversations').delete().eq('id', conversationId);
 }
 
-async function nextConversationNumber(admin) {
+async function nextConversationNumber(client) {
   const year = String(new Date().getUTCFullYear());
   const prefix = `CC/${year}/`;
-  const response = await admin
+  const response = await client
     .from('communication_centre_conversations')
     .select('conversation_no')
     .like('conversation_no', `${prefix}%`)
@@ -58,11 +58,11 @@ async function nextConversationNumber(admin) {
   return `${prefix}${String(max + 1).padStart(4, '0')}`;
 }
 
-async function insertConversationWithRetry(admin, doc) {
+async function insertConversationWithRetry(client, doc) {
   let lastError = null;
   for (let attempt = 0; attempt < 6; attempt += 1) {
-    const conversationNo = await nextConversationNumber(admin);
-    const result = await admin
+    const conversationNo = await nextConversationNumber(client);
+    const result = await client
       .from('communication_centre_conversations')
       .insert({ ...doc, conversation_no: conversationNo })
       .select('*')
@@ -82,8 +82,7 @@ export default async function handler(req, res) {
 
   const supabaseUrl = text(process.env.SUPABASE_URL);
   const anonKey = text(process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY);
-  const serviceRoleKey = text(process.env.SUPABASE_SERVICE_ROLE_KEY);
-  if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+  if (!supabaseUrl || !anonKey) {
     return res.status(500).json({ ok: false, error: 'Communication Centre server configuration is incomplete.' });
   }
 
@@ -97,9 +96,6 @@ export default async function handler(req, res) {
     global: { headers: { Authorization: `Bearer ${token}` } },
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
   });
-  const admin = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
-  });
 
   const verified = await authClient.auth.getUser(token);
   const user = verified?.data?.user;
@@ -107,7 +103,7 @@ export default async function handler(req, res) {
     return res.status(401).json({ ok: false, error: 'Your session expired. Please log in again.' });
   }
 
-  const profileResult = await admin
+  const profileResult = await userClient
     .from('profiles')
     .select('id,role_key,is_active')
     .eq('id', user.id)
@@ -152,7 +148,7 @@ export default async function handler(req, res) {
   try {
     const now = new Date().toISOString();
     conversationId = randomUUID();
-    const conversation = await insertConversationWithRetry(admin, {
+    const conversation = await insertConversationWithRetry(userClient, {
       id: conversationId,
       title,
       description,
@@ -177,7 +173,7 @@ export default async function handler(req, res) {
 
     const participantIds = new Set([user.id]);
     if (assignedUserIds.length) {
-      const explicitProfiles = await admin.from('profiles').select('id,is_active').in('id', assignedUserIds);
+      const explicitProfiles = await userClient.from('profiles').select('id,is_active').in('id', assignedUserIds);
       if (explicitProfiles.error) throw explicitProfiles.error;
       for (const row of explicitProfiles.data || []) {
         if (row?.id && row.is_active !== false) participantIds.add(row.id);
@@ -185,7 +181,7 @@ export default async function handler(req, res) {
     }
 
     if (assignedRole) {
-      const roleProfiles = await admin.from('profiles').select('id,role_key,is_active').eq('is_active', true).limit(5000);
+      const roleProfiles = await userClient.from('profiles').select('id,role_key,is_active').eq('is_active', true).limit(5000);
       if (roleProfiles.error) throw roleProfiles.error;
       for (const row of roleProfiles.data || []) {
         if (row?.id && normalizeRole(row.role_key) === assignedRole) participantIds.add(row.id);
@@ -198,10 +194,10 @@ export default async function handler(req, res) {
       user_id: userId,
       created_at: now
     }));
-    const participantInsert = await admin.from('communication_centre_participants').insert(participantRows);
+    const participantInsert = await userClient.from('communication_centre_participants').insert(participantRows);
     if (participantInsert.error) throw participantInsert.error;
 
-    const syncConversation = await admin
+    const syncConversation = await userClient
       .from('communication_centre_conversations')
       .update({ participant_count: participantRows.length, updated_at: new Date().toISOString() })
       .eq('id', conversationId)
@@ -220,11 +216,11 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       data: syncConversation.data || conversation,
-      source: 'vercel-secure-fallback',
+      source: 'vercel-authenticated-rls-fallback',
       native_rpc: CREATE_RPC
     });
   } catch (error) {
-    await cleanupPartial(admin, conversationId);
+    await cleanupPartial(userClient, conversationId);
     console.error('[Communication Centre create fallback] failed', error);
     return res.status(500).json({ ok: false, error: `Unable to create conversation: ${errorMessage(error)}` });
   }
