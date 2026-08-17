@@ -164,14 +164,14 @@ async function main() {
   pass('Secure Communication reply create', String(messageId));
 
   const editedBody = `${marker} reply updated`;
-  const edited = await userClient.from('communication_centre_messages').update({
-    message_body: editedBody,
-    edited_at: new Date().toISOString(),
-    edited_by: user.id
-  }).eq('id', messageId).select('id,message_body,edited_at').single();
-  if (edited.error) throw edited.error;
-  if (edited.data?.message_body !== editedBody) throw new Error('Authenticated message edit did not persist.');
-  pass('Authenticated Communication message edit', String(messageId));
+const edited = await userClient.rpc('edit_communication_centre_message_secure', {
+  p_message_id: messageId,
+  p_message_body: editedBody
+});
+if (edited.error) throw edited.error;
+const editedRow = Array.isArray(edited.data) ? edited.data[0] : edited.data;
+if (editedRow?.message_body !== editedBody) throw new Error('Secure message edit did not persist.');
+pass('Secure Communication message edit', String(messageId));
 
   const close = await userClient.rpc('close_communication_centre_conversation', { p_conversation_id: conversationId });
   if (close.error) throw close.error;
@@ -184,6 +184,12 @@ async function main() {
   const reopened = await serviceClient.from('communication_centre_conversations').select('status').eq('id', conversationId).single();
   if (reopened.error || String(reopened.data?.status || '').toLowerCase() !== 'open') throw reopened.error || new Error('Reopen RPC did not persist Open status.');
   pass('Reopen Communication conversation', 'Open');
+
+const deleted = await userClient.rpc('soft_delete_communication_centre_message_secure', { p_message_id: messageId });
+if (deleted.error) throw deleted.error;
+const deletedRow = Array.isArray(deleted.data) ? deleted.data[0] : deleted.data;
+if (deletedRow?.is_deleted !== true) throw new Error('Secure message soft delete did not persist.');
+pass('Secure Communication message soft delete', String(messageId));
 }
 
 (async () => {

@@ -8264,9 +8264,22 @@ IN WITNESS WHEREOF, the parties have caused this Agreement to be executed by the
           deleted_by_email: authData?.user?.email || null
         };
       }
-      const { data, error } = await client.from('communication_centre_messages').update(updates).eq('id', id).select('*').single();
-      if (error) throw friendlyError(action === 'update_message' ? 'Unable to edit message' : 'Unable to delete message', error);
-      return { handled: true, data };
+      if (action === 'update_message') {
+  const messageBody = allowedTextFields
+    .map(field => updates[field])
+    .find(value => typeof value === 'string' && value.trim());
+  const { data, error } = await client.rpc('edit_communication_centre_message_secure', {
+    p_message_id: id,
+    p_message_body: String(messageBody || '').trim()
+  });
+  if (error) throw friendlyError('Unable to edit message', error);
+  return { handled: true, data: Array.isArray(data) ? data[0] : data };
+}
+const { data, error } = await client.rpc('soft_delete_communication_centre_message_secure', {
+  p_message_id: id
+});
+if (error) throw friendlyError('Unable to delete message', error);
+return { handled: true, data: Array.isArray(data) ? data[0] : data };
     }
 
     if (resource === 'companies' && ['verify', 'verify_company'].includes(action)) {
