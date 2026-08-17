@@ -37,3 +37,5 @@ jobs:
           git diff --cached --quiet && exit 0
           git commit -m "fix: accept signed proposal images as PDF"
           git push origin HEAD:main
+
+# rerun after cache-key regression compatibility update
