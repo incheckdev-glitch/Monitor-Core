@@ -1,6 +1,7 @@
 const assert = require('assert');
 const fs = require('fs');
 
+// Final runtime guard for the deployed Client schema and Commission delete RPC path.
 const clients = fs.readFileSync('clients-service.js', 'utf8');
 const commission = fs.readFileSync('commission-tracker.js', 'utf8');
 const index = fs.readFileSync('index.html', 'utf8');
