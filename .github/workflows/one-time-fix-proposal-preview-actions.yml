@@ -22,7 +22,9 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Patch proposal preview
-        run: python3 .github/scripts/patch-proposal-preview.py
+        run: |
+          python3 .github/scripts/patch-proposal-preview.py
+          python3 .github/scripts/fix-proposal-preview-test.py
       - name: Focused validation
         run: |
           node --check proposals.js
