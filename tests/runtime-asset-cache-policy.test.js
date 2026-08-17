@@ -8,6 +8,8 @@ const headers = Array.isArray(config.headers) ? config.headers : [];
 const mutableRuntimeAssets = [
   '/communication-centre.js',
   '/supabase-client.js',
+  '/push-notifications.js',
+  '/config.js',
   '/service-worker.js'
 ];
 
