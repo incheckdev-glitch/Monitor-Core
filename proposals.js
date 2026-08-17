@@ -711,15 +711,23 @@ const Proposals = {
   },
   getProposalCreatorDisplayName(creator = {}) {
     if (!creator || typeof creator !== 'object') return '';
-    return String(
+    const candidate = String(
       creator.full_name ||
       creator.fullName ||
       creator.name ||
       creator.display_name ||
       creator.displayName ||
-      creator.email ||
+      creator.user_metadata?.full_name ||
+      creator.user_metadata?.name ||
       ''
     ).trim();
+    if (!candidate) return '';
+    const lower = candidate.toLowerCase();
+    const email = String(creator.email || '').trim().toLowerCase();
+    const emailLocal = email.includes('@') ? email.split('@')[0] : email;
+    const username = String(creator.username || creator.user_name || creator.userName || '').trim().toLowerCase();
+    if (lower.includes('@') || (username && lower === username) || (emailLocal && lower === emailLocal)) return '';
+    return candidate;
   },
   getProposalCreatorTitle(creator = {}) {
     if (!creator || typeof creator !== 'object') return '';
@@ -790,14 +798,49 @@ const Proposals = {
       .filter(Boolean);
     return providerNames.includes(text.toLowerCase()) ? '' : text;
   },
+  isProposalProviderLoginIdentity(value, proposal = {}, creator = null) {
+    const text = String(value || '').trim().toLowerCase();
+    if (!text) return false;
+    const sessionApi = window.Session || {};
+    const sessionState = sessionApi.state || {};
+    const sessionUser = typeof sessionApi.user === 'function' ? (sessionApi.user() || {}) : {};
+    const profile = sessionUser.profile || sessionState.profile || {};
+    const authUser = sessionUser.user || sessionState.user || {};
+    const identities = [
+      creator?.username,
+      creator?.user_name,
+      creator?.userName,
+      creator?.email,
+      profile.username,
+      profile.email,
+      sessionState.username,
+      sessionState.email,
+      authUser.email,
+      authUser.user_metadata?.username,
+      proposal.generated_by,
+      proposal.generatedBy
+    ];
+    const normalized = new Set();
+    identities.forEach(identity => {
+      const raw = String(identity || '').trim().toLowerCase();
+      if (!raw) return;
+      normalized.add(raw);
+      if (raw.includes('@')) normalized.add(raw.split('@')[0]);
+    });
+    return text.includes('@') || normalized.has(text);
+  },
   getProposalProviderSignatoryName(proposal = {}) {
+    const creator = this.getProviderSignatoryCreator(proposal);
+    const creatorName = this.getProposalCreatorDisplayName(creator);
     const savedName = this.getCleanProviderSignatoryValue(
       this.getProposalValue(proposal, 'provider_signatory_name', 'providerSignatoryName'),
       proposal
     );
-    if (savedName) return savedName;
-    const creator = this.getProviderSignatoryCreator(proposal);
-    return this.getCleanProviderSignatoryValue(this.getProposalCreatorDisplayName(creator), proposal);
+    if (savedName && !this.isProposalProviderLoginIdentity(savedName, proposal, creator)) return savedName;
+    if (creatorName) return creatorName;
+    const sessionProvider = this.getSignedInUserForProposal();
+    const sessionName = this.getProposalCreatorDisplayName(sessionProvider);
+    return sessionName && !this.isProposalProviderLoginIdentity(sessionName, proposal, sessionProvider) ? sessionName : '';
   },
   getProposalProviderSignatoryTitle(proposal = {}) {
     const savedName = this.getCleanProviderSignatoryValue(
@@ -1565,7 +1608,7 @@ const Proposals = {
     const creator = this.getProviderSignatoryCreator(target);
     if (window?.AppState?.debugMode) console.debug('[Proposal Provider Session]', provider, creator);
 
-    const creatorName = this.getProposalCreatorDisplayName(creator) || provider.name || provider.email?.split('@')?.[0] || '';
+    const creatorName = this.getProposalCreatorDisplayName(creator) || this.getProposalCreatorDisplayName(provider) || '';
     const creatorTitle = this.getProposalCreatorTitle(creator) || provider.role || '';
     const creatorUserId = this.getProposalCreatorUserId(creator) || this.getProposalValue(target, 'provider_signatory_user_id', 'providerSignatoryUserId') || provider.id || '';
     const savedSignatoryName = this.getCleanProviderSignatoryValue(
@@ -4656,7 +4699,7 @@ const Proposals = {
     const providerEmail = this.providerContactDefaults.email;
     const providerMobile = this.providerContactDefaults.mobile;
     const providerRole = provider.role || '';
-    const providerUserName = provider.name || provider.email?.split('@')?.[0] || '';
+    const providerUserName = this.getProposalCreatorDisplayName(provider);
     const contactPersonName = this.buildContactDisplayName(selectedContact);
     const pocPayload = this.getProposalPocPayload();
     const customerSignDate = String(E.proposalFormCustomerSignDate?.value || '').trim();
@@ -5555,6 +5598,29 @@ const Proposals = {
     }
   },
 
+  closePreviewModal() {
+    if (!E.proposalPreviewModal) return;
+    E.proposalPreviewModal.style.display = 'none';
+    E.proposalPreviewModal.classList.remove('open');
+    E.proposalPreviewModal.setAttribute('aria-hidden', 'true');
+    if (E.proposalPreviewFrame) E.proposalPreviewFrame.srcdoc = '';
+  },
+  exportPreviewPdf() {
+    const frame = E.proposalPreviewFrame;
+    const previewTitle = String(E.proposalPreviewTitle?.textContent || 'Proposal Preview').trim();
+    if (!frame || !String(frame.srcdoc || '').trim()) {
+      UI.toast('Open proposal preview first to extract PDF.');
+      return;
+    }
+    const frameWindow = frame.contentWindow;
+    if (!frameWindow) {
+      UI.toast('Unable to access proposal preview content.');
+      return;
+    }
+    frameWindow.focus();
+    frameWindow.print();
+    UI.toast(`Print dialog opened for ${previewTitle}. Choose "Save as PDF" to extract.`);
+  },
   async previewProposalHtml(proposalId) {
     if (!proposalId) {
       UI.toast('Missing proposal ID for preview.');
