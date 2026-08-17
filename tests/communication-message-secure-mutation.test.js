@@ -1,6 +1,7 @@
 const assert = require('assert');
 const fs = require('fs');
 
+// Final production guard: Communication message writes stay behind secure RPCs.
 const source = fs.readFileSync('supabase-data.js', 'utf8');
 const diagnostic = fs.readFileSync('scripts/production-communication-diagnostic.js', 'utf8');
 const migration = fs.readFileSync('database/bootstrap/20_communication_centre_secure_message_mutation.sql', 'utf8');
