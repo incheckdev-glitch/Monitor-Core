@@ -5130,18 +5130,74 @@ const Proposals = {
     const { data } = await authClient?.auth?.getUser?.() || {};
     return String(data?.user?.id || '').trim();
   },
+  async normalizeSignedProposalUploadFile(file) {
+    if (!file) throw new Error('Choose a signed proposal document to upload.');
+    const type = String(file.type || '').trim().toLowerCase();
+    const name = String(file.name || 'signed-proposal').trim();
+    if (type === 'application/pdf' || name.toLowerCase().endsWith('.pdf')) return file;
+    const supportedImages = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp']);
+    if (!supportedImages.has(type)) {
+      throw new Error('Signed proposal document must be a PDF, PNG, JPG, JPEG, or WEBP file.');
+    }
+    const JsPdf = window.jspdf?.jsPDF;
+    if (!JsPdf) throw new Error('Image-to-PDF converter is unavailable. Refresh the page and try again.');
+
+    const objectUrl = URL.createObjectURL(file);
+    try {
+      const image = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('Unable to read the selected image.'));
+        img.src = objectUrl;
+      });
+      const sourceWidth = Number(image.naturalWidth || image.width || 0);
+      const sourceHeight = Number(image.naturalHeight || image.height || 0);
+      if (!sourceWidth || !sourceHeight) throw new Error('The selected image has invalid dimensions.');
+
+      const maxDimension = 2400;
+      const scale = Math.min(1, maxDimension / Math.max(sourceWidth, sourceHeight));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+      canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Unable to prepare the selected image for PDF conversion.');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const jpegData = canvas.toDataURL('image/jpeg', 0.92);
+
+      const orientation = canvas.width > canvas.height ? 'landscape' : 'portrait';
+      const pdf = new JsPdf({ orientation, unit: 'pt', format: 'a4', compress: true });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 24;
+      const fit = Math.min((pageWidth - margin * 2) / canvas.width, (pageHeight - margin * 2) / canvas.height);
+      const drawWidth = canvas.width * fit;
+      const drawHeight = canvas.height * fit;
+      const x = (pageWidth - drawWidth) / 2;
+      const y = (pageHeight - drawHeight) / 2;
+      pdf.addImage(jpegData, 'JPEG', x, y, drawWidth, drawHeight, undefined, 'FAST');
+      const blob = pdf.output('blob');
+      const baseName = name.replace(/\.[^.]+$/, '') || 'signed-proposal';
+      return new File([blob], `${baseName}.pdf`, { type: 'application/pdf', lastModified: Date.now() });
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  },
   async uploadSignedProposalDocument() {
     const proposal = this.getSignedDocumentProposalSnapshot(this.state.currentProposal || {});
     if (!proposal.id) { UI.toast('Save this proposal before uploading a signed document.'); return; }
     if (!this.isProposalAccepted(proposal) || this.isProposalExpired(proposal)) { UI.toast('Upload the signed document only after the proposal status is accepted and before it expires.'); return; }
-    const file = E.proposalSignedDocumentFile?.files?.[0];
-    if (!file) { UI.toast('Choose a signed proposal document to upload.'); return; }
+    const selectedFile = E.proposalSignedDocumentFile?.files?.[0];
+    if (!selectedFile) { UI.toast('Choose a signed proposal document to upload.'); return; }
+    let file = selectedFile;
     const client = this.getSupabaseClient();
     if (!client?.storage?.from || !client?.from) { UI.toast('Supabase Storage is not available.'); return; }
     const currentUserId = await this.getCurrentUserIdForSignedDocument(client);
     if (!currentUserId) { UI.toast('Unable to identify the current user. Please log in again.'); return; }
     this.setFormBusy(true);
     try {
+      file = await this.normalizeSignedProposalUploadFile(selectedFile);
       const { data: latestProposal, error: latestError } = await client
         .from('proposals')
         .select('*')

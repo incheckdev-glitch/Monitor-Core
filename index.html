@@ -10,6 +10,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <!-- FullCalendar -->
@@ -4016,7 +4017,7 @@ Sample:
 
           <div id="proposalSignedDocumentSection" class="proposal-section-card proposal-info-card" style="display:none;">
             <div class="proposal-section-title"><div class="proposal-section-heading-left"><span class="proposal-section-icon" aria-hidden="true">✍️</span><div><h3>Signed Proposal Document</h3><p id="proposalSignedDocumentState">Upload a signed proposal after the proposal status is Accepted.</p></div></div></div>
-            <div class="proposal-inline-actions"><input id="proposalSignedDocumentFile" class="input" type="file" aria-label="Signed proposal document" /><button id="proposalSignedDocumentUploadBtn" class="btn btn-incheck-outline sm" type="button">Upload Signed Document</button><button id="proposalSignedDocumentOpenBtn" class="btn btn-incheck-outline sm" type="button" style="display:none;">View / Download</button></div>
+            <div class="proposal-inline-actions"><input id="proposalSignedDocumentFile" class="input" type="file" accept="application/pdf,image/png,image/jpeg,image/webp,.pdf,.png,.jpg,.jpeg,.webp" aria-label="Signed proposal document" /><button id="proposalSignedDocumentUploadBtn" class="btn btn-incheck-outline sm" type="button">Upload Signed Document</button><button id="proposalSignedDocumentOpenBtn" class="btn btn-incheck-outline sm" type="button" style="display:none;">View / Download</button></div>
             <small class="muted">Files are stored in a private Supabase bucket and opened with temporary signed URLs.</small>
           </div>
 
@@ -4565,7 +4566,7 @@ Sample:
   <script src="/companies.js?v=20260718-company-verification-save-fix"></script>
   <script src="/contacts.js?v=20260611-direct-communication"></script>
   <script src="/deals.js?v=20260817-empty-uuid-fix-v1"></script>
-  <script src="/proposals.js?v=20260817-proposal-preview-actions-v1"></script>
+  <script src="/proposals.js?v=20260817-signed-image-upload-v1"></script>
   <script src="/agreements.js?v=20260810-agreement-00096-00113-blank-signatory-v38"></script>
   <script src="/agreement-annex.js?v=20260728-agreement-annex-open-view-v33"></script>
   <script src="/commission-tracker.js?v=20260730-custom-rate-persistence-v36"></script>

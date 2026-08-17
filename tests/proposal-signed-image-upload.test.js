@@ -1,0 +1,13 @@
+const assert = require('assert');
+const fs = require('fs');
+const proposals = fs.readFileSync('proposals.js','utf8');
+const index = fs.readFileSync('index.html','utf8');
+assert(proposals.includes('async normalizeSignedProposalUploadFile(file)'), 'image-to-PDF normalizer missing');
+assert(proposals.includes("type === 'application/pdf'"), 'PDF passthrough missing');
+assert(proposals.includes("new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp'])"), 'image MIME support missing');
+assert(proposals.includes("new File([blob], `${baseName}.pdf`"), 'converted upload must be a real PDF File');
+assert(proposals.includes('file = await this.normalizeSignedProposalUploadFile(selectedFile);'), 'upload path must normalize selected image');
+assert(index.includes('jspdf@2.5.2/dist/jspdf.umd.min.js'), 'jsPDF browser library missing');
+assert(index.includes('accept="application/pdf,image/png,image/jpeg,image/webp,.pdf,.png,.jpg,.jpeg,.webp"'), 'signed proposal file picker must accept images');
+assert(index.includes('/proposals.js?v=20260817-signed-image-upload-v1'), 'proposal cache key must be bumped');
+console.log('Proposal signed image upload checks passed.');
