@@ -287,3 +287,84 @@ window.ROLES = Object.freeze({
 });
 
 const ROLES = window.ROLES;
+
+(function installAutomaticPushEnrollment(global) {
+  const runtimeState = {
+    wired: false,
+    sessionWired: false,
+    running: false,
+    lastAttemptAt: 0
+  };
+
+  async function attemptAutomaticPushEnrollment(source = 'runtime') {
+    if (runtimeState.running) return false;
+    if (!('Notification' in global)) return false;
+    if (String(global.Notification.permission || 'default').toLowerCase() !== 'granted') return false;
+
+    const session = global.Session;
+    const push = global.PushNotifications;
+    if (!session?.isAuthenticated?.() || !push) return false;
+
+    runtimeState.running = true;
+    runtimeState.lastAttemptAt = Date.now();
+    try {
+      if (!push.state?.initialized && typeof push.init === 'function') {
+        await push.init();
+      }
+      if (typeof push.registerCurrentDevicePushSubscription === 'function') {
+        await push.registerCurrentDevicePushSubscription();
+        return Boolean(push.state?.enabled);
+      }
+      if (typeof push.enablePush === 'function') {
+        await push.enablePush();
+        return Boolean(push.state?.enabled);
+      }
+      return false;
+    } catch (error) {
+      console.warn('[push:auto] automatic enrollment failed', {
+        source,
+        message: String(error?.message || error || 'Unknown error')
+      });
+      return false;
+    } finally {
+      runtimeState.running = false;
+    }
+  }
+
+  function scheduleAttempt(source = 'runtime', delayMs = 0) {
+    global.setTimeout(() => {
+      attemptAutomaticPushEnrollment(source).catch(error => {
+        console.warn('[push:auto] scheduled enrollment failed', error);
+      });
+    }, Math.max(0, Number(delayMs || 0)));
+  }
+
+  function wireSession() {
+    if (runtimeState.sessionWired || !global.Session?.subscribe) return;
+    runtimeState.sessionWired = true;
+    global.Session.subscribe(() => {
+      scheduleAttempt('session-change', 0);
+      scheduleAttempt('session-change-retry', 1200);
+    });
+  }
+
+  function start() {
+    if (runtimeState.wired) return;
+    runtimeState.wired = true;
+    wireSession();
+    scheduleAttempt('startup', 0);
+    scheduleAttempt('startup-retry', 1200);
+    scheduleAttempt('startup-late-retry', 4000);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start, { once: true });
+  } else {
+    start();
+  }
+
+  global.InCheck360PushAutoEnrollment = Object.freeze({
+    attempt: attemptAutomaticPushEnrollment,
+    state: runtimeState
+  });
+})(window);
