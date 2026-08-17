@@ -185,7 +185,7 @@
           db.from('sales_commission_receipts').select('*').order('issued_at',{ascending:false}),
           manageAll ? this.loadInvoices(db) : Promise.resolve([]),
           manageAll
-            ? db.from('profiles').select('id,name,email,username,role_key,is_active,active').limit(2000)
+            ? db.from('profiles').select('id,name,email,username,role_key,is_active').limit(2000)
             : Promise.resolve({data:[],error:null})
         ]);
         if(commissionsRes.error) throw commissionsRes.error;
@@ -217,10 +217,10 @@
           const profiles=Array.isArray(profilesRes.data)?profilesRes.data:[];
           let salespeople=profiles.filter(row=>{
             const role=this.normalize(row.role_key);
-            const active=row.is_active!==false && row.active!==false;
+            const active=row.is_active!==false;
             return active && (role.includes('sales') || ['head_of_sales','sales_executive','sales_manager'].includes(role));
           });
-          if(!salespeople.length) salespeople=profiles.filter(row=>row.is_active!==false && row.active!==false);
+          if(!salespeople.length) salespeople=profiles.filter(row=>row.is_active!==false);
           this.state.salespeople=salespeople.sort((a,b)=>this.salespersonName(a).localeCompare(this.salespersonName(b)));
         }else{
           const bySalesperson=new Map();
