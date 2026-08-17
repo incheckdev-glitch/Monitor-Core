@@ -1,0 +1,56 @@
+name: One-time Fix Invoice Business ID
+
+on:
+  push:
+    branches:
+      - repair/invoice-business-id-20260817
+    paths:
+      - '.github/workflows/one-time-fix-invoice-business-id.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Preserve repair helper and switch to latest main
+        run: |
+          cp .github/scripts/patch-invoice-business-id.py /tmp/patch-invoice-business-id.py
+          git fetch origin main
+          git checkout -B main origin/main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply invoice business ID repair
+        run: python3 /tmp/patch-invoice-business-id.py
+
+      - name: Focused validation
+        run: |
+          node --check invoices.js
+          node --check supabase-data.js
+          node tests/invoice-business-id-allocation.test.js
+
+      - name: Full validation
+        run: npm run check
+
+      - name: Commit tested product fix to main
+        run: |
+          git config user.name "incheckdev-glitch"
+          git config user.email "incheckdev@gmail.com"
+          git add invoices.js supabase-data.js index.html tests/invoice-business-id-allocation.test.js
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: guarantee friendly invoice business IDs"
+          git push origin HEAD:main
