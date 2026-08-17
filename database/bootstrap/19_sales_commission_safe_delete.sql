@@ -1,4 +1,53 @@
+-- InCheck360 Sales Commission safe-delete path
+--
+-- The application deletes commission records through delete_sales_commission(uuid).
+-- Paid installments and active receipts must remain protected. Once a payment has
+-- been undone, its receipt is retained as void; those voided receipt rows may be
+-- removed so the otherwise-unpaid commission can be deleted cleanly.
+--
+-- The BEFORE DELETE trigger mirrors the RPC guard for defense in depth if an
+-- authorized manage_all caller ever performs a direct table delete.
+
 begin;
+
+create or replace function public.incheck360_prepare_sales_commission_delete()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if exists (
+    select 1
+      from public.sales_commission_installments i
+     where i.commission_id = old.id
+       and (coalesce(i.paid_amount, 0) > 0 or lower(coalesce(i.status, '')) = 'paid')
+  ) then
+    raise exception 'Commission has paid installments. Undo all commission payments before deleting.';
+  end if;
+
+  if exists (
+    select 1
+      from public.sales_commission_receipts r
+     where r.commission_id = old.id
+       and lower(coalesce(r.status, '')) not in ('void', 'voided', 'cancelled', 'canceled')
+  ) then
+    raise exception 'Commission has an active payment receipt. Undo the related payment before deleting.';
+  end if;
+
+  delete from public.sales_commission_receipts
+   where commission_id = old.id
+     and lower(coalesce(status, '')) in ('void', 'voided', 'cancelled', 'canceled');
+
+  return old;
+end;
+$$;
+
+drop trigger if exists trg_prepare_sales_commission_delete on public.sales_commissions;
+create trigger trg_prepare_sales_commission_delete
+before delete on public.sales_commissions
+for each row
+execute function public.incheck360_prepare_sales_commission_delete();
 
 create or replace function public.delete_sales_commission(p_commission_id uuid)
 returns boolean
