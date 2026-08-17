@@ -31,85 +31,73 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
+          import re
 
           supabase = Path('supabase-data.js')
           text = supabase.read_text(encoding='utf-8')
-          old = """      const { data, error } = await client.from('communication_centre_messages').update(updates).eq('id', id).select('*').single();
-                if (error) throw friendlyError(action === 'update_message' ? 'Unable to edit message' : 'Unable to delete message', error);
-                return { handled: true, data };
-          """
-          if old not in text:
-              old = """      const { data, error } = await client.from('communication_centre_messages').update(updates).eq('id', id).select('*').single();
-                if (error) throw friendlyError(action === 'update_message' ? 'Unable to edit message' : 'Unable to delete message', error);
-                return { handled: true, data };
-          """.replace('        if', '      if').replace('        return', '      return')
-          if old not in text:
-              old = """      const { data, error } = await client.from('communication_centre_messages').update(updates).eq('id', id).select('*').single();
-                if (error) throw friendlyError(action === 'update_message' ? 'Unable to edit message' : 'Unable to delete message', error);
-                return { handled: true, data };
-          """.replace('                ', '      ')
-          if old not in text:
-              raise SystemExit('Expected direct Communication message UPDATE block was not found.')
-          new = """      if (action === 'update_message') {
-                const messageBody = allowedTextFields
-                  .map(field => updates[field])
-                  .find(value => typeof value === 'string' && value.trim());
-                const { data, error } = await client.rpc('edit_communication_centre_message_secure', {
-                  p_message_id: id,
-                  p_message_body: String(messageBody || '').trim()
-                });
-                if (error) throw friendlyError('Unable to edit message', error);
-                return { handled: true, data: Array.isArray(data) ? data[0] : data };
-              }
-              const { data, error } = await client.rpc('soft_delete_communication_centre_message_secure', {
-                p_message_id: id
-              });
-              if (error) throw friendlyError('Unable to delete message', error);
-              return { handled: true, data: Array.isArray(data) ? data[0] : data };
-          """.replace('              ', '      ')
-          text = text.replace(old, new, 1)
+          direct_pattern = re.compile(
+              r"      const \{ data, error \} = await client\.from\('communication_centre_messages'\)\.update\(updates\)\.eq\('id', id\)\.select\('\*'\)\.single\(\);\n"
+              r"      if \(error\) throw friendlyError\(action === 'update_message' \? 'Unable to edit message' : 'Unable to delete message', error\);\n"
+              r"      return \{ handled: true, data \};"
+          )
+          replacement = """      if (action === 'update_message') {
+            const messageBody = allowedTextFields
+              .map(field => updates[field])
+              .find(value => typeof value === 'string' && value.trim());
+            const { data, error } = await client.rpc('edit_communication_centre_message_secure', {
+              p_message_id: id,
+              p_message_body: String(messageBody || '').trim()
+            });
+            if (error) throw friendlyError('Unable to edit message', error);
+            return { handled: true, data: Array.isArray(data) ? data[0] : data };
+          }
+          const { data, error } = await client.rpc('soft_delete_communication_centre_message_secure', {
+            p_message_id: id
+          });
+          if (error) throw friendlyError('Unable to delete message', error);
+          return { handled: true, data: Array.isArray(data) ? data[0] : data };"""
+          text, count = direct_pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'Expected one direct Communication message UPDATE block, found {count}.')
           supabase.write_text(text, encoding='utf-8')
 
           diagnostic = Path('scripts/production-communication-diagnostic.js')
           script = diagnostic.read_text(encoding='utf-8')
-          old_edit = """  const editedBody = `${marker} reply updated`;
-            const edited = await userClient.from('communication_centre_messages').update({
-              message_body: editedBody,
-              edited_at: new Date().toISOString(),
-              edited_by: user.id
-            }).eq('id', messageId).select('id,message_body,edited_at').single();
-            if (edited.error) throw edited.error;
-            if (edited.data?.message_body !== editedBody) throw new Error('Authenticated message edit did not persist.');
-            pass('Authenticated Communication message edit', String(messageId));
-          """.replace('    ', '  ')
-          if old_edit not in script:
-              raise SystemExit('Expected direct diagnostic message edit block was not found.')
-          new_edit = """  const editedBody = `${marker} reply updated`;
-            const edited = await userClient.rpc('edit_communication_centre_message_secure', {
-              p_message_id: messageId,
-              p_message_body: editedBody
-            });
-            if (edited.error) throw edited.error;
-            const editedRow = Array.isArray(edited.data) ? edited.data[0] : edited.data;
-            if (editedRow?.message_body !== editedBody) throw new Error('Secure message edit did not persist.');
-            pass('Secure Communication message edit', String(messageId));
-          """.replace('    ', '  ')
-          script = script.replace(old_edit, new_edit, 1)
+          edit_pattern = re.compile(
+              r"  const editedBody = `\$\{marker\} reply updated`;\n"
+              r"  const edited = await userClient\.from\('communication_centre_messages'\)\.update\(\{\n"
+              r"    message_body: editedBody,\n"
+              r"    edited_at: new Date\(\)\.toISOString\(\),\n"
+              r"    edited_by: user\.id\n"
+              r"  \}\)\.eq\('id', messageId\)\.select\('id,message_body,edited_at'\)\.single\(\);\n"
+              r"  if \(edited\.error\) throw edited\.error;\n"
+              r"  if \(edited\.data\?\.message_body !== editedBody\) throw new Error\('Authenticated message edit did not persist\.'\);\n"
+              r"  pass\('Authenticated Communication message edit', String\(messageId\)\);"
+          )
+          edit_replacement = """  const editedBody = `${marker} reply updated`;
+          const edited = await userClient.rpc('edit_communication_centre_message_secure', {
+            p_message_id: messageId,
+            p_message_body: editedBody
+          });
+          if (edited.error) throw edited.error;
+          const editedRow = Array.isArray(edited.data) ? edited.data[0] : edited.data;
+          if (editedRow?.message_body !== editedBody) throw new Error('Secure message edit did not persist.');
+          pass('Secure Communication message edit', String(messageId));"""
+          script, count = edit_pattern.subn(edit_replacement, script, count=1)
+          if count != 1:
+              raise SystemExit(f'Expected one direct diagnostic message edit block, found {count}.')
 
-          old_reopen = """  if (reopened.error || String(reopened.data?.status || '').toLowerCase() !== 'open') throw reopened.error || new Error('Reopen RPC did not persist Open status.');
-            pass('Reopen Communication conversation', 'Open');
-          """.replace('    ', '  ')
-          if old_reopen not in script:
-              raise SystemExit('Expected reopen diagnostic block was not found.')
-          new_reopen = old_reopen + """
+          reopen_anchor = "  pass('Reopen Communication conversation', 'Open');"
+          if reopen_anchor not in script:
+              raise SystemExit('Expected reopen diagnostic anchor was not found.')
+          delete_check = """  pass('Reopen Communication conversation', 'Open');
 
-            const deleted = await userClient.rpc('soft_delete_communication_centre_message_secure', { p_message_id: messageId });
-            if (deleted.error) throw deleted.error;
-            const deletedRow = Array.isArray(deleted.data) ? deleted.data[0] : deleted.data;
-            if (deletedRow?.is_deleted !== true) throw new Error('Secure message soft delete did not persist.');
-            pass('Secure Communication message soft delete', String(messageId));
-          """.replace('    ', '  ')
-          script = script.replace(old_reopen, new_reopen, 1)
+          const deleted = await userClient.rpc('soft_delete_communication_centre_message_secure', { p_message_id: messageId });
+          if (deleted.error) throw deleted.error;
+          const deletedRow = Array.isArray(deleted.data) ? deleted.data[0] : deleted.data;
+          if (deletedRow?.is_deleted !== true) throw new Error('Secure message soft delete did not persist.');
+          pass('Secure Communication message soft delete', String(messageId));"""
+          script = script.replace(reopen_anchor, delete_check, 1)
           diagnostic.write_text(script, encoding='utf-8')
 
           index = Path('index.html')
