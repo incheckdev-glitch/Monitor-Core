@@ -148,15 +148,14 @@ async function testCommunicationCentre(profile) {
     pass('Communication Centre: secure reply read', String(persistedMessageId));
 
     const editedBody = `${marker} updated`;
-    const editResponse = await userClient
-      .from('communication_centre_messages')
-      .update({ message_body: editedBody, edited_at: new Date().toISOString() })
-      .eq('id', persistedMessageId)
-      .select('*')
-      .single();
+    const editResponse = await userClient.rpc('edit_communication_centre_message_secure', {
+      p_message_id: persistedMessageId,
+      p_message_body: editedBody,
+    });
     if (editResponse.error) throw editResponse.error;
-    if (editResponse.data?.message_body !== editedBody) throw new Error('Communication Centre message edit did not persist expected text.');
-    pass('Communication Centre: authenticated message edit', String(persistedMessageId));
+    const editedMessage = Array.isArray(editResponse.data) ? editResponse.data[0] : editResponse.data;
+    if (editedMessage?.message_body !== editedBody) throw new Error('Communication Centre secure message edit did not persist expected text.');
+    pass('Communication Centre: secure message edit', String(persistedMessageId));
 
     const closeResponse = await userClient.rpc('close_communication_centre_conversation', { p_conversation_id: conversationId });
     if (closeResponse.error) throw closeResponse.error;
