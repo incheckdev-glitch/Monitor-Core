@@ -24,7 +24,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Inspect authenticated profile identity
+      - name: Correct and verify authenticated profile identity
         run: |
           node <<'NODE'
           const { createClient } = require('@supabase/supabase-js');
@@ -38,9 +38,17 @@ jobs:
             const { data: authData, error: authError } = await client.auth.signInWithPassword({ email, password });
             if (authError) throw authError;
             const userId = authData?.user?.id;
-            const { data, error } = await client.from('profiles').select('id,name,email,username,role_key,is_active').eq('id', userId).maybeSingle();
-            if (error) throw error;
-            const emailLocal = String(data?.email || email || '').split('@')[0];
-            console.log('PROFILE', JSON.stringify({ name: data?.name || '', username: data?.username || '', email_local: emailLocal, role_key: data?.role_key || '', is_active: data?.is_active !== false }));
+            if (!userId) throw new Error('Authenticated user id is missing');
+            const { data: before, error: readError } = await client.from('profiles').select('id,name,email,username,role_key,is_active').eq('id', userId).single();
+            if (readError) throw readError;
+            const currentName = String(before?.name || '').trim();
+            if (currentName !== 'Khaled Yakan') {
+              const { error: updateError } = await client.from('profiles').update({ name: 'Khaled Yakan' }).eq('id', userId);
+              if (updateError) throw updateError;
+            }
+            const { data: after, error: verifyError } = await client.from('profiles').select('id,name,email,username,role_key,is_active').eq('id', userId).single();
+            if (verifyError) throw verifyError;
+            if (String(after?.name || '').trim() !== 'Khaled Yakan') throw new Error('Profile name correction did not persist');
+            console.log('PROFILE_NAME_VERIFIED', JSON.stringify({ name: after.name, role_key: after.role_key || '', is_active: after.is_active !== false }));
           })().catch(err => { console.error(err); process.exit(1); });
           NODE
