@@ -10,7 +10,9 @@ assert.match(endpoint, /auth\.getUser\(token\)/, 'server fallback must verify th
 assert.match(endpoint, /rpc\('cc_has_permission', \{ p_action: 'manage' \}\)/, 'server fallback must enforce backend Communication Centre manage permission');
 assert.match(endpoint, /if \(permission\.data !== true\)/, 'server fallback must deny callers without manage permission');
 assert.match(endpoint, /communication_centre_conversations/, 'server fallback must create the conversation in the live table');
-assert.doesNotMatch(endpoint, /assigned_user_ids\s*:/, 'server fallback must not write the stale assigned_user_ids conversation column');
+const conversationInsert = endpoint.match(/insertConversationWithRetry\(admin, \{([\s\S]*?)\n    \}\);/)?.[1] || '';
+assert.ok(conversationInsert, 'server fallback must expose an explicit conversation insert payload');
+assert.doesNotMatch(conversationInsert, /\bassigned_user_ids\b/, 'server fallback must not write the stale assigned_user_ids conversation column');
 assert.match(endpoint, /communication_centre_participants/, 'server fallback must create participant rows');
 assert.match(endpoint, /conversation_id: conversationId,[\s\S]*user_id: userId,[\s\S]*created_at: now/, 'participant rows must use the accepted live columns');
 assert.match(endpoint, /const participantIds = new Set\(\[user\.id\]\)/, 'the authenticated creator must always be a participant');
