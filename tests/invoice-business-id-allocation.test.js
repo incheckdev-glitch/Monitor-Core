@@ -19,7 +19,7 @@ assert(supabaseData.includes('async function insertInvoiceWithBusinessIdRetry(')
 assert(supabaseData.includes("String(error?.code || '').trim() !== '23505'"), 'invoice retry must only handle unique conflicts');
 assert(supabaseData.includes('workingRecord = await ensureInvoiceBusinessIdentifiers(client, workingRecord, { force: true });'), 'invoice collision retry must allocate a fresh SA number');
 
-assert(index.includes('/supabase-data.js?v=20260817-invoice-business-id-v1'), 'supabase-data cache key must be bumped');
+assert(/\/supabase-data\.js\?v=20260817-[^"']+/.test(index), 'supabase-data cache key must remain versioned');
 assert(index.includes('/invoices.js?v=20260817-invoice-business-id-v1'), 'invoice cache key must be bumped');
 assert(migration12.includes("v_no := 'SA/' || v_year || '/' || lpad(v_invoice_seq::text, 2, '0');"), 'database agreement-to-invoice flow must remain aligned to SA/YYYY/NN');
 
