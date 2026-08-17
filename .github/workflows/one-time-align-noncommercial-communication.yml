@@ -1,0 +1,72 @@
+name: One-time Align Noncommercial Communication E2E
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/one-time-align-noncommercial-communication.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Patch noncommercial Communication edit path
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('scripts/production-noncommercial-write-e2e.js')
+          s = p.read_text(encoding='utf-8')
+          old = """    const editedBody = `${marker} updated`;
+    const editResponse = await userClient
+      .from('communication_centre_messages')
+      .update({ message_body: editedBody, edited_at: new Date().toISOString() })
+      .eq('id', persistedMessageId)
+      .select('*')
+      .single();
+    if (editResponse.error) throw editResponse.error;
+    if (editResponse.data?.message_body !== editedBody) throw new Error('Communication Centre message edit did not persist expected text.');
+    pass('Communication Centre: authenticated message edit', String(persistedMessageId));
+"""
+          new = """    const editedBody = `${marker} updated`;
+    const editResponse = await userClient.rpc('edit_communication_centre_message_secure', {
+      p_message_id: persistedMessageId,
+      p_message_body: editedBody,
+    });
+    if (editResponse.error) throw editResponse.error;
+    const editedMessage = Array.isArray(editResponse.data) ? editResponse.data[0] : editResponse.data;
+    if (editedMessage?.message_body !== editedBody) throw new Error('Communication Centre secure message edit did not persist expected text.');
+    pass('Communication Centre: secure message edit', String(persistedMessageId));
+"""
+          if old not in s:
+              raise SystemExit('Expected stale direct Communication edit block was not found.')
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+
+          t = Path('tests/noncommercial-communication-secure-edit.test.js')
+          t.write_text("""const assert = require('assert');
+          const fs = require('fs');
+          const source = fs.readFileSync('scripts/production-noncommercial-write-e2e.js', 'utf8');
+          assert(source.includes("rpc('edit_communication_centre_message_secure'"), 'Noncommercial Communication E2E must use secure edit RPC');
+          assert(!source.includes(".from('communication_centre_messages')\n      .update({ message_body: editedBody"), 'Noncommercial Communication E2E must not use direct message UPDATE');
+          console.log('Noncommercial Communication secure edit check passed.');
+          """, encoding='utf-8')
+      - run: node tests/noncommercial-communication-secure-edit.test.js
+      - run: npm run check
+      - name: Commit tested patch and remove helper
+        run: |
+          rm -f .github/workflows/one-time-align-noncommercial-communication.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/production-noncommercial-write-e2e.js tests/noncommercial-communication-secure-edit.test.js .github/workflows/one-time-align-noncommercial-communication.yml
+          git commit -m "test: align noncommercial communication secure edit"
+          git push origin HEAD:main
