@@ -1,0 +1,39 @@
+name: One-time Fix Agreement Signed Image Upload
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/one-time-fix-agreement-signed-image-upload.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Patch signed agreement image upload
+        run: python3 .github/scripts/patch-agreement-signed-image-upload.py
+      - name: Focused validation
+        run: |
+          node --check agreements.js
+          node tests/agreement-signed-image-upload.test.js
+      - name: Full validation
+        run: npm run check
+      - name: Commit fix
+        run: |
+          git config user.name "incheckdev-glitch"
+          git config user.email "incheckdev@gmail.com"
+          git add agreements.js index.html tests/agreement-signed-image-upload.test.js
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: accept signed agreement images as PDF"
+          git push origin HEAD:main
