@@ -1,4 +1,4 @@
-# Retry after regression matcher correction.
+# Retry after cache-version regression correction.
 name: One-time Fix Client And Commission Delete
 
 on:
