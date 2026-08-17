@@ -4207,7 +4207,7 @@ const Agreements = {
       <strong style="display:block;margin-bottom:6px;">Signed Agreement Document</strong>
       <p id="agreementSignedDocumentState" class="muted" style="margin:0 0 8px;">Upload the signed agreement document before creating an invoice.</p>
       <div class="actions" style="justify-content:flex-start;gap:8px;align-items:center;flex-wrap:wrap;">
-        <input id="agreementSignedDocumentFile" class="input" type="file" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" aria-label="Signed agreement document" />
+        <input id="agreementSignedDocumentFile" class="input" type="file" accept="application/pdf,image/png,image/jpeg,image/webp,.pdf,.png,.jpg,.jpeg,.webp" aria-label="Signed agreement document" />
         <button id="agreementSignedDocumentUploadBtn" class="btn ghost sm" type="button">Upload Signed Agreement</button>
         <button id="agreementSignedDocumentOpenBtn" class="btn ghost sm" type="button" style="display:none;">View / Download</button>
       </div>`;
@@ -4335,19 +4335,79 @@ const Agreements = {
     const { agreement } = this.extractAgreementAndItems(response, id);
     return agreement && typeof agreement === 'object' ? agreement : null;
   },
+  async normalizeSignedAgreementUploadFile(file) {
+    if (!file) throw new Error('Choose a signed agreement document to upload.');
+    const type = String(file.type || '').trim().toLowerCase();
+    const name = String(file.name || 'signed-agreement').trim();
+    const lowerName = name.toLowerCase();
+    if (type === 'application/pdf' || lowerName.endsWith('.pdf')) return file;
+
+    const supportedImageTypes = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp']);
+    const supportedImageExtension = /\.(png|jpe?g|webp)$/i.test(lowerName);
+    if (!supportedImageTypes.has(type) && !supportedImageExtension) {
+      throw new Error('Signed agreement document must be a PDF, PNG, JPG, JPEG, or WEBP file.');
+    }
+
+    const JsPdf = window.jspdf?.jsPDF;
+    if (!JsPdf) throw new Error('Image-to-PDF converter is unavailable. Refresh the page and try again.');
+
+    const objectUrl = URL.createObjectURL(file);
+    try {
+      const image = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('Unable to read the selected image.'));
+        img.src = objectUrl;
+      });
+      const sourceWidth = Number(image.naturalWidth || image.width || 0);
+      const sourceHeight = Number(image.naturalHeight || image.height || 0);
+      if (!sourceWidth || !sourceHeight) throw new Error('The selected image has invalid dimensions.');
+
+      const maxDimension = 2400;
+      const scale = Math.min(1, maxDimension / Math.max(sourceWidth, sourceHeight));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+      canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Unable to prepare the selected image for PDF conversion.');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const jpegData = canvas.toDataURL('image/jpeg', 0.92);
+
+      const orientation = canvas.width > canvas.height ? 'landscape' : 'portrait';
+      const pdf = new JsPdf({ orientation, unit: 'pt', format: 'a4', compress: true });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 24;
+      const fit = Math.min((pageWidth - margin * 2) / canvas.width, (pageHeight - margin * 2) / canvas.height);
+      const drawWidth = canvas.width * fit;
+      const drawHeight = canvas.height * fit;
+      const x = (pageWidth - drawWidth) / 2;
+      const y = (pageHeight - drawHeight) / 2;
+      pdf.addImage(jpegData, 'JPEG', x, y, drawWidth, drawHeight, undefined, 'FAST');
+      const blob = pdf.output('blob');
+      const baseName = name.replace(/\.[^.]+$/, '') || 'signed-agreement';
+      return new File([blob], `${baseName}.pdf`, { type: 'application/pdf', lastModified: Date.now() });
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  },
   async uploadSignedAgreementDocument() {
     const agreement = this.getSignedDocumentAgreementSnapshot(this.state.currentAgreement || {});
     if (!agreement.id) { UI.toast('Save this agreement before uploading the signed agreement document.'); return; }
     if (!this.isAgreementSigned(agreement)) { UI.toast('Upload the signed agreement document only after the agreement status is signed.'); return; }
     const elements = this.ensureSignedAgreementDocumentSection();
-    const file = elements.file?.files?.[0];
-    if (!file) { UI.toast('Choose a signed agreement document to upload.'); return; }
+    const selectedFile = elements.file?.files?.[0];
+    if (!selectedFile) { UI.toast('Choose a signed agreement document to upload.'); return; }
+    let file = selectedFile;
     const client = this.getSupabaseClient();
     if (!client?.storage?.from || !client?.from) { UI.toast('Supabase Storage is not available for Agreement signed documents. Check Supabase client config and bucket agreement-signed-documents.'); return; }
     const currentUserId = await this.getCurrentUserIdForSignedAgreementDocument(client);
     if (!currentUserId) { UI.toast('Unable to identify the current user. Please log in again.'); return; }
     this.setFormBusy(true);
     try {
+      file = await this.normalizeSignedAgreementUploadFile(selectedFile);
       const latestAgreement = await this.reloadLatestAgreementRow(agreement.id) || agreement;
       if (!this.isAgreementSigned(latestAgreement)) {
         UI.toast('Upload the signed agreement document only after the agreement status is signed.');
