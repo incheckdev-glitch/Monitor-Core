@@ -248,6 +248,14 @@ const Deals = {
       if (value === undefined || value === null) return '';
       return String(value).trim();
     };
+    const toIdOrNull = keys => {
+      const hasAny = keys.some(hasOwn);
+      if (!hasAny) return undefined;
+      const value = keys.map(key => deal[key]).find(value => value !== undefined);
+      if (value === undefined || value === null) return null;
+      const text = String(value).trim();
+      return text || null;
+    };
     const toNumberOrNull = keys => {
       const hasAny = keys.some(hasOwn);
       if (!hasAny) return undefined;
@@ -275,18 +283,18 @@ const Deals = {
     };
     const mapped = {
       deal_id: toTextOrEmpty(['deal_id', 'dealId']),
-      lead_id: toTextOrEmpty(['lead_id', 'leadId']),
+      lead_id: toIdOrNull(['lead_id', 'leadId']),
       lead_code: toTextOrEmpty(['lead_code', 'leadCode']),
-      source_lead_uuid: toTextOrEmpty(['source_lead_uuid', 'sourceLeadUuid', 'lead_uuid', 'leadUuid']),
+      source_lead_uuid: toIdOrNull(['source_lead_uuid', 'sourceLeadUuid', 'lead_uuid', 'leadUuid']),
       full_name: toTextOrEmpty(['full_name', 'fullName']),
-      company_id: toTextOrEmpty(['company_id', 'companyId']),
+      company_id: toIdOrNull(['company_id', 'companyId']),
       company_name: toTextOrEmpty(['company_name', 'companyName']),
-      contact_id: toTextOrEmpty(['contact_id', 'contactId']),
-      customer_contact_id: toTextOrEmpty(['customer_contact_id', 'customerContactId']),
-      client_contact_id: toTextOrEmpty(['client_contact_id', 'clientContactId']),
-      primary_contact_id: toTextOrEmpty(['primary_contact_id', 'primaryContactId']),
-      selected_contact_id: toTextOrEmpty(['selected_contact_id', 'selectedContactId']),
-      contact_uuid: toTextOrEmpty(['contact_uuid', 'contactUuid']),
+      contact_id: toIdOrNull(['contact_id', 'contactId']),
+      customer_contact_id: toIdOrNull(['customer_contact_id', 'customerContactId']),
+      client_contact_id: toIdOrNull(['client_contact_id', 'clientContactId']),
+      primary_contact_id: toIdOrNull(['primary_contact_id', 'primaryContactId']),
+      selected_contact_id: toIdOrNull(['selected_contact_id', 'selectedContactId']),
+      contact_uuid: toIdOrNull(['contact_uuid', 'contactUuid']),
       contact_name: toTextOrEmpty(['contact_name', 'contactName']),
       contact_email: toTextOrEmpty(['contact_email', 'contactEmail']),
       contact_phone: toTextOrEmpty(['contact_phone', 'contactPhone']),
@@ -303,7 +311,7 @@ const Deals = {
       estimated_value: toNumberOrNull(['estimated_value', 'estimatedValue']),
       currency: toTextOrEmpty(['currency']),
       assigned_to: toTextOrEmpty(['assigned_to', 'assignedTo']),
-      converted_by: toTextOrEmpty(['converted_by', 'convertedBy']),
+      converted_by: toIdOrNull(['converted_by', 'convertedBy']),
       converted_at: toDateOrNull(['converted_at', 'convertedAt']),
       notes: toTextOrEmpty(['notes']),
       created_at: toDateOrNull(['created_at', 'createdAt']),
