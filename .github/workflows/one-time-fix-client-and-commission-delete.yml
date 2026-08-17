@@ -27,139 +27,42 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Patch client create and commission delete
+      - name: Patch runtime compatibility
         shell: python
         run: |
           from pathlib import Path
 
-          # Client creation: live clients table has no company_id column.
           p = Path('clients-service.js')
           text = p.read_text(encoding='utf-8')
-          old_cols = "'status','company_id','source_agreement_id','total_agreements','total_locations','total_value','total_paid','total_due','created_by','updated_by'"
-          new_cols = "'status','source_agreement_id','total_agreements','total_locations','total_value','total_paid','total_due','created_by','updated_by'"
-          if old_cols not in text:
-              raise SystemExit('Expected stale clients-service CLIENT_COLUMNS company_id entry was not found.')
-          text = text.replace(old_cols, new_cols, 1)
-          old_company_payload = "      company_id: input.company_id || input.companyId || input.customer_company_id || input.customerCompanyId || input.client_company_id || input.clientCompanyId,\n"
-          if old_company_payload not in text:
-              raise SystemExit('Expected stale clients-service company_id payload was not found.')
-          text = text.replace(old_company_payload, '', 1)
+          old = "'status','company_id','source_agreement_id','total_agreements','total_locations','total_value','total_paid','total_due','created_by','updated_by'"
+          new = "'status','source_agreement_id','total_agreements','total_locations','total_value','total_paid','total_due','created_by','updated_by'"
+          if old not in text:
+              raise SystemExit('Expected stale clients company_id column entry not found')
+          text = text.replace(old, new, 1)
+          old = "      company_id: input.company_id || input.companyId || input.customer_company_id || input.customerCompanyId || input.client_company_id || input.clientCompanyId,\n"
+          if old not in text:
+              raise SystemExit('Expected stale clients company_id payload not found')
+          text = text.replace(old, '', 1)
           p.write_text(text, encoding='utf-8')
 
-          # Commission delete: use controlled DB RPC so void receipts can be cleaned safely.
           p = Path('commission-tracker.js')
           text = p.read_text(encoding='utf-8')
-          old_delete = "const {error}=await this.db().from('sales_commissions').delete().eq('id',id);if(error){this.toast(error.message);return;}"
-          new_delete = "const {data,error}=await this.db().rpc('delete_sales_commission',{p_commission_id:id});if(error){this.toast(error.message||'Unable to delete commission record.');return;}if(data!==true){this.toast('Commission record was not deleted.');return;}"
-          if old_delete not in text:
-              raise SystemExit('Expected raw commission DELETE path was not found.')
-          text = text.replace(old_delete, new_delete, 1)
+          old = "const {error}=await this.db().from('sales_commissions').delete().eq('id',id);if(error){this.toast(error.message);return;}"
+          new = "const {data,error}=await this.db().rpc('delete_sales_commission',{p_commission_id:id});if(error){this.toast(error.message||'Unable to delete commission record.');return;}if(data!==true){this.toast('Commission record was not deleted.');return;}"
+          if old not in text:
+              raise SystemExit('Expected raw commission delete not found')
+          text = text.replace(old, new, 1)
           p.write_text(text, encoding='utf-8')
 
-          # Browser cache versions.
           p = Path('index.html')
-          html = p.read_text(encoding='utf-8')
-          old_client_cache = '/clients-service.js?v=20260427-allpwa1'
-          new_client_cache = '/clients-service.js?v=20260817-client-schema-fix-v2'
-          old_commission_cache = '/commission-tracker.js?v=20260817-salesperson-profile-fix-v37'
-          new_commission_cache = '/commission-tracker.js?v=20260817-delete-rpc-v38'
-          if old_client_cache not in html or old_commission_cache not in html:
-              raise SystemExit('Expected cache keys were not found.')
-          html = html.replace(old_client_cache, new_client_cache, 1)
-          html = html.replace(old_commission_cache, new_commission_cache, 1)
-          p.write_text(html, encoding='utf-8')
-
-          # Permanent DB source for the live migration already applied to Monitor Core.
-          migration = Path('database/bootstrap/19_sales_commission_safe_delete.sql')
-          migration.write_text("""begin;
-
-create or replace function public.delete_sales_commission(p_commission_id uuid)
-returns boolean
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_exists boolean;
-  v_has_paid boolean;
-  v_has_active_receipt boolean;
-begin
-  if public.sales_commission_access_level() <> 'manage_all' then
-    raise exception 'You do not have permission to delete commission records.';
-  end if;
-
-  select exists(select 1 from public.sales_commissions where id = p_commission_id) into v_exists;
-  if not v_exists then
-    raise exception 'Commission record was not found.';
-  end if;
-
-  perform 1 from public.sales_commissions where id = p_commission_id for update;
-
-  select exists(
-    select 1 from public.sales_commission_installments i
-    where i.commission_id = p_commission_id
-      and (lower(coalesce(i.status, '')) = 'paid' or coalesce(i.paid_amount, 0) > 0)
-  ) into v_has_paid;
-  if v_has_paid then
-    raise exception 'A commission with paid installments cannot be deleted. Undo the payments first.';
-  end if;
-
-  select exists(
-    select 1 from public.sales_commission_receipts r
-    where r.commission_id = p_commission_id
-      and lower(coalesce(r.status, 'issued')) not in ('void', 'voided', 'cancelled', 'canceled')
-  ) into v_has_active_receipt;
-  if v_has_active_receipt then
-    raise exception 'A commission with an active receipt cannot be deleted. Undo the payment first.';
-  end if;
-
-  delete from public.sales_commission_receipts
-  where commission_id = p_commission_id
-    and lower(coalesce(status, '')) in ('void', 'voided', 'cancelled', 'canceled');
-
-  delete from public.sales_commissions where id = p_commission_id;
-  if not found then
-    raise exception 'Commission record was not deleted.';
-  end if;
-
-  return true;
-end;
-$$;
-
-revoke all on function public.delete_sales_commission(uuid) from public;
-grant execute on function public.delete_sales_commission(uuid) to authenticated;
-
-commit;
-notify pgrst, 'reload schema';
-""", encoding='utf-8')
-
-          # Regression checks.
-          test = Path('tests/client-commission-runtime-compatibility.test.js')
-          test.write_text("""const assert = require('assert');
-const fs = require('fs');
-
-const clients = fs.readFileSync('clients-service.js', 'utf8');
-const commission = fs.readFileSync('commission-tracker.js', 'utf8');
-const index = fs.readFileSync('index.html', 'utf8');
-const migration = fs.readFileSync('database/bootstrap/19_sales_commission_safe_delete.sql', 'utf8');
-
-const clientColumnsMatch = clients.match(/CLIENT_COLUMNS:\s*new Set\(\[([\s\S]*?)\]\)/);
-assert(clientColumnsMatch, 'ClientsService CLIENT_COLUMNS must exist');
-assert(!clientColumnsMatch[1].includes("'company_id'"), 'ClientsService must not persist nonexistent clients.company_id');
-const sanitizeMatch = clients.match(/sanitizeClientPayload\(input[\s\S]*?return Object\.fromEntries/);
-assert(sanitizeMatch, 'sanitizeClientPayload must exist');
-assert(!sanitizeMatch[0].includes('company_id:'), 'Client create/update payload must not send company_id');
-assert(index.includes('/clients-service.js?v=20260817-client-schema-fix-v2'), 'ClientsService cache key must be bumped');
-
-assert(commission.includes("rpc('delete_sales_commission',{p_commission_id:id})"), 'Commission delete must use safe RPC');
-assert(!commission.includes("from('sales_commissions').delete().eq('id',id)"), 'Commission delete must not use raw parent DELETE');
-assert(index.includes('/commission-tracker.js?v=20260817-delete-rpc-v38'), 'Commission Tracker cache key must be bumped');
-assert(migration.includes('create or replace function public.delete_sales_commission'), 'Safe commission delete migration must be checked in');
-assert(migration.includes("lower(coalesce(r.status, 'issued')) not in ('void', 'voided', 'cancelled', 'canceled')"), 'Active receipts must block deletion');
-assert(migration.includes('coalesce(i.paid_amount, 0) > 0'), 'Paid installments must block deletion');
-
-console.log('Client schema and commission delete regression checks passed.');
-""", encoding='utf-8')
+          text = p.read_text(encoding='utf-8')
+          old_client = '/clients-service.js?v=20260427-allpwa1'
+          old_commission = '/commission-tracker.js?v=20260817-salesperson-profile-fix-v37'
+          if old_client not in text or old_commission not in text:
+              raise SystemExit('Expected browser cache keys not found')
+          text = text.replace(old_client, '/clients-service.js?v=20260817-client-schema-fix-v2', 1)
+          text = text.replace(old_commission, '/commission-tracker.js?v=20260817-delete-rpc-v38', 1)
+          p.write_text(text, encoding='utf-8')
 
       - name: Focused regression
         run: node tests/client-commission-runtime-compatibility.test.js
@@ -172,6 +75,6 @@ console.log('Client schema and commission delete regression checks passed.');
           rm -f .github/workflows/one-time-fix-client-and-commission-delete.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add clients-service.js commission-tracker.js index.html database/bootstrap/19_sales_commission_safe_delete.sql tests/client-commission-runtime-compatibility.test.js .github/workflows/one-time-fix-client-and-commission-delete.yml
+          git add clients-service.js commission-tracker.js index.html .github/workflows/one-time-fix-client-and-commission-delete.yml
           git commit -m "fix: repair client create and commission delete"
           git push origin HEAD:main
