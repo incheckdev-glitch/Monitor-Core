@@ -1,6 +1,7 @@
 const assert = require('assert');
 const fs = require('fs');
 
+// Guard the production profiles contract used by the Commission Tracker salesperson selectors.
 const source = fs.readFileSync('commission-tracker.js', 'utf8');
 const index = fs.readFileSync('index.html', 'utf8');
 
