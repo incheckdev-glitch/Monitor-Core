@@ -56,8 +56,8 @@ const fs = require('fs');
 const deals = fs.readFileSync('deals.js', 'utf8');
 const index = fs.readFileSync('index.html', 'utf8');
 
-assert.match(deals, /const toIdOrNull = keys => \{[\s\S]*return text \|\| null;/,
-  'Deal mapper must normalize blank relational IDs to null');
+assert(deals.includes('const toIdOrNull = keys => {'), 'Deal mapper must define nullable ID normalization');
+assert(deals.includes('return text || null;'), 'Blank relational IDs must normalize to null');
 
 [
   'lead_id',
@@ -71,11 +71,10 @@ assert.match(deals, /const toIdOrNull = keys => \{[\s\S]*return text \|\| null;/
   'contact_uuid',
   'converted_by'
 ].forEach(field => {
-  const pattern = new RegExp(field + ':\\s*toIdOrNull\\(');
-  assert.match(deals, pattern, `${field} must use nullable ID normalization`);
+  assert(deals.includes(`${field}: toIdOrNull(`), `${field} must use nullable ID normalization`);
 });
 
-assert.match(deals, /const isDirectCreate = mode !== 'edit' && !String\(deal\.lead_id \|\| ''\)\.trim\(\);/,
+assert(deals.includes("const isDirectCreate = mode !== 'edit' && !String(deal.lead_id || '').trim();"),
   'Direct Deal creation without a Lead must remain supported');
 assert(index.includes('/deals.js?v=20260817-empty-uuid-fix-v1'),
   'Deals script cache key must be bumped so browsers receive the fix');
