@@ -2,192 +2,39 @@ name: Remove SFC agreement signatures
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
       - '.github/workflows/remove-sfc-signatures.yml'
+      - 'scripts/remove-sfc-signatures.py'
 
 permissions:
   contents: write
 
 jobs:
-  patch-signatures:
+  patch:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
 
-      - name: Update provider signature model to GM only
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
+      - name: Apply migration
+        run: python scripts/remove-sfc-signatures.py
 
-          def replace_required(text, old, new, label, count=None):
-              occurrences = text.count(old)
-              if occurrences == 0:
-                  raise SystemExit(f'Missing expected block: {label}')
-              if count is not None and occurrences != count:
-                  raise SystemExit(f'Unexpected occurrence count for {label}: {occurrences}, expected {count}')
-              return text.replace(old, new)
-
-          agreements_path = Path('agreements.js')
-          agreements = agreements_path.read_text(encoding='utf-8')
-
-          old_sign_dates = """    (hasAgreementValue(source?.customer_official_sign_date) || hasAgreementValue(source?.customerOfficialSignDate) || hasAgreementValue(source?.customer_sign_date) || hasAgreementValue(source?.customerSignDate)) &&
-    (hasAgreementValue(source?.provider_official_signatory_1_sign_date) || hasAgreementValue(source?.providerOfficialSignatory1SignDate) || hasAgreementValue(source?.provider_sign_date) || hasAgreementValue(source?.providerSignDate)) &&
-    (hasAgreementValue(source?.provider_official_signatory_2_sign_date) || hasAgreementValue(source?.providerOfficialSignatory2SignDate))"""
-          new_sign_dates = """    (hasAgreementValue(source?.customer_official_sign_date) || hasAgreementValue(source?.customerOfficialSignDate) || hasAgreementValue(source?.customer_sign_date) || hasAgreementValue(source?.customerSignDate)) &&
-    (hasAgreementValue(source?.provider_official_signatory_1_sign_date) || hasAgreementValue(source?.providerOfficialSignatory1SignDate) || hasAgreementValue(source?.provider_sign_date) || hasAgreementValue(source?.providerSignDate))"""
-          agreements = replace_required(agreements, old_sign_dates, new_sign_dates, 'signed agreement date requirements', 1)
-
-          old_defaults = """    primarySignatoryName: 'Simon Moujaly',
-    primarySignatoryTitle: 'Senior Financial Controller',
-    secondarySignatoryName: 'Hanna Khattar',
-    secondarySignatoryTitle: 'General Manager'"""
-          new_defaults = """    primarySignatoryName: 'Hanna Khattar',
-    primarySignatoryTitle: 'General Manager',
-    secondarySignatoryName: '',
-    secondarySignatoryTitle: ''"""
-          agreements = replace_required(agreements, old_defaults, new_defaults, 'provider signatory defaults', 1)
-
-          old_primary_role = "return ['senior_financial_controller', 'financial_controller', 'senior_fc', 'sfc'].includes(role);"
-          new_primary_role = "return ['general_manager', 'gm'].includes(role);"
-          agreements = replace_required(agreements, old_primary_role, new_primary_role, 'provider sign-date role', 1)
-
-          old_rules = """  getProviderSignDateLockRules() {
-    return [
-      {
-        inputId: 'agreementFormProviderOfficialSignatory1SignDate',
-        field: 'provider_official_signatory_1_sign_date',
-        label: 'Provider Official Signatory 1 Sign Date',
-        requiredRoleLabel: 'Senior Financial Controller',
-        canEdit: this.canEditProviderOfficialSignatory1SignDate()
-      },
-      {
-        inputId: 'agreementFormProviderOfficialSignatory2SignDate',
-        field: 'provider_official_signatory_2_sign_date',
-        label: 'Provider Official Signatory 2 Sign Date',
-        requiredRoleLabel: 'General Manager',
-        canEdit: this.canEditProviderOfficialSignatory2SignDate()
-      }
-    ];
-  },"""
-          new_rules = """  getProviderSignDateLockRules() {
-    return [
-      {
-        inputId: 'agreementFormProviderOfficialSignatory1SignDate',
-        field: 'provider_official_signatory_1_sign_date',
-        label: 'Provider Official Signatory Sign Date',
-        requiredRoleLabel: 'General Manager',
-        canEdit: this.canEditProviderOfficialSignatory1SignDate()
-      }
-    ];
-  },"""
-          agreements = replace_required(agreements, old_rules, new_rules, 'provider sign-date lock rules', 1)
-
-          old_lock_logic = """    const sfcDate = this.normalizeDateInputValue(read('agreementFormProviderOfficialSignatory1SignDate'));
-    this.getProviderSignDateLockRules().forEach(rule => {
-      const el = document.getElementById(rule.inputId);
-      if (!el) return;
-      const isSfcField = rule.inputId === 'agreementFormProviderOfficialSignatory1SignDate';
-      const isGmField = rule.inputId === 'agreementFormProviderOfficialSignatory2SignDate';
-      const workflowLocked = !this.canUseAdminOverride() && ((isSfcField && !customerDate) || (isGmField && !sfcDate));"""
-          new_lock_logic = """    this.getProviderSignDateLockRules().forEach(rule => {
-      const el = document.getElementById(rule.inputId);
-      if (!el) return;
-      const isProviderField = rule.inputId === 'agreementFormProviderOfficialSignatory1SignDate';
-      const workflowLocked = !this.canUseAdminOverride() && isProviderField && !customerDate;"""
-          agreements = replace_required(agreements, old_lock_logic, new_lock_logic, 'provider sign-date lock sequence', 1)
-
-          old_lock_title = """        el.title = workflowLocked
-          ? (isSfcField ? 'Customer sign date is required before the Senior Financial Controller sign date.' : 'Senior Financial Controller must sign first.')
-          : `${rule.label} can only be filled by the ${rule.requiredRoleLabel} role.`;"""
-          new_lock_title = """        el.title = workflowLocked
-          ? 'Customer sign date is required before the General Manager sign date.'
-          : `${rule.label} can only be filled by the ${rule.requiredRoleLabel} role.`;"""
-          agreements = replace_required(agreements, old_lock_title, new_lock_title, 'provider sign-date lock message', 1)
-
-          old_validation = """    const customerDate = this.normalizeDateInputValue(document.getElementById('agreementFormCustomerOfficialSignDate')?.value || document.getElementById('agreementFormCustomerSignDate')?.value || '');
-    const sfcDate = this.normalizeDateInputValue(document.getElementById('agreementFormProviderOfficialSignatory1SignDate')?.value || '');
-    const gmDate = this.normalizeDateInputValue(document.getElementById('agreementFormProviderOfficialSignatory2SignDate')?.value || '');
-    const originalSfcDate = this.normalizeDateInputValue(document.getElementById('agreementFormProviderOfficialSignatory1SignDate')?.dataset?.originalValue || '');
-    const originalGmDate = this.normalizeDateInputValue(document.getElementById('agreementFormProviderOfficialSignatory2SignDate')?.dataset?.originalValue || '');
-    if (sfcDate !== originalSfcDate && !customerDate) {
-      UI.toast('Customer sign date is required before the Senior Financial Controller sign date.');
-      return false;
-    }
-    if (gmDate !== originalGmDate && !sfcDate) {
-      UI.toast('Senior Financial Controller must sign before General Manager.');
-      return false;
-    }
-    return true;"""
-          new_validation = """    const customerDate = this.normalizeDateInputValue(document.getElementById('agreementFormCustomerOfficialSignDate')?.value || document.getElementById('agreementFormCustomerSignDate')?.value || '');
-    const providerDate = this.normalizeDateInputValue(document.getElementById('agreementFormProviderOfficialSignatory1SignDate')?.value || '');
-    const originalProviderDate = this.normalizeDateInputValue(document.getElementById('agreementFormProviderOfficialSignatory1SignDate')?.dataset?.originalValue || '');
-    if (providerDate !== originalProviderDate && !customerDate) {
-      UI.toast('Customer sign date is required before the General Manager sign date.');
-      return false;
-    }
-    return true;"""
-          agreements = replace_required(agreements, old_validation, new_validation, 'provider sign-date validation sequence', 1)
-
-          agreements = replace_required(
-              agreements,
-              '<div class="signature-head">Provider Official Signatory 1</div>',
-              '<div class="signature-head">Provider Official Signatory</div>',
-              'provider signature preview heading',
-              1
-          )
-          agreements = replace_required(
-              agreements,
-              '<div class="signature-box signature-box-provider-2">',
-              '<div class="signature-box signature-box-provider-2" style="display:none">',
-              'secondary provider signature preview box',
-              1
-          )
-
-          if 'Simon Moujaly' in agreements:
-              raise SystemExit('Simon Moujaly still exists in agreements.js after signature migration')
-          if 'Senior Financial Controller sign date' in agreements or 'Senior Financial Controller must sign' in agreements:
-              raise SystemExit('SFC signature workflow text still exists in agreements.js')
-
-          agreements_path.write_text(agreements, encoding='utf-8')
-
-          clients_path = Path('clients-service.js')
-          clients = clients_path.read_text(encoding='utf-8')
-          old_clients = """        provider_official_signatory_1_name: 'Simon Moujaly',
-        provider_official_signatory_1_title: 'Senior Financial Controller',
-        provider_official_signatory_2_name: 'Hanna Khattar',
-        provider_official_signatory_2_title: 'General Manager',"""
-          new_clients = """        provider_official_signatory_1_name: 'Hanna Khattar',
-        provider_official_signatory_1_title: 'General Manager',
-        provider_official_signatory_2_name: '',
-        provider_official_signatory_2_title: '',"""
-          clients = replace_required(clients, old_clients, new_clients, 'client-created agreement signatories', 1)
-          if 'Simon Moujaly' in clients:
-              raise SystemExit('Simon Moujaly still exists in clients-service.js after signature migration')
-          clients_path.write_text(clients, encoding='utf-8')
-          PY
-
-      - name: Run focused tests
-        shell: bash
+      - name: Syntax check
         run: |
           node --check agreements.js
           node --check clients-service.js
-          if [ -f package.json ]; then
-            npm test -- --runInBand || npm test
-          fi
 
-      - name: Commit changes
-        shell: bash
+      - name: Commit migration
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add agreements.js clients-service.js
           if git diff --cached --quiet; then
-            echo "No changes to commit"
             exit 0
           fi
           git commit -m "Remove SFC from agreement signatures"
