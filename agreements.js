@@ -9,8 +9,7 @@ function hasAgreementValue(value) {
 function hasAllRequiredAgreementSignDates(source = {}) {
   return (
     (hasAgreementValue(source?.customer_official_sign_date) || hasAgreementValue(source?.customerOfficialSignDate) || hasAgreementValue(source?.customer_sign_date) || hasAgreementValue(source?.customerSignDate)) &&
-    (hasAgreementValue(source?.provider_official_signatory_1_sign_date) || hasAgreementValue(source?.providerOfficialSignatory1SignDate) || hasAgreementValue(source?.provider_sign_date) || hasAgreementValue(source?.providerSignDate)) &&
-    (hasAgreementValue(source?.provider_official_signatory_2_sign_date) || hasAgreementValue(source?.providerOfficialSignatory2SignDate))
+    (hasAgreementValue(source?.provider_official_signatory_1_sign_date) || hasAgreementValue(source?.providerOfficialSignatory1SignDate) || hasAgreementValue(source?.provider_sign_date) || hasAgreementValue(source?.providerSignDate))
   );
 }
 
@@ -464,10 +463,10 @@ const Agreements = {
     contactName: 'Incheck 360 FZC',
     contactMobile: '+31 97 010280855',
     contactEmail: 'Info@incheck360.nl',
-    primarySignatoryName: 'Simon Moujaly',
-    primarySignatoryTitle: 'Senior Financial Controller',
-    secondarySignatoryName: 'Hanna Khattar',
-    secondarySignatoryTitle: 'General Manager'
+    primarySignatoryName: 'Hanna Khattar',
+    primarySignatoryTitle: 'General Manager',
+    secondarySignatoryName: '',
+    secondarySignatoryTitle: ''
   },
 
   toNumberSafe(value) {
@@ -2173,7 +2172,7 @@ const Agreements = {
   canEditProviderOfficialSignatory1SignDate() {
     if (this.canUseAdminOverride()) return true;
     const role = this.getCurrentAgreementRoleKey();
-    return ['senior_financial_controller', 'financial_controller', 'senior_fc', 'sfc'].includes(role);
+    return ['general_manager', 'gm'].includes(role);
   },
   canEditProviderOfficialSignatory2SignDate() {
     if (this.canUseAdminOverride()) return true;
@@ -2185,16 +2184,9 @@ const Agreements = {
       {
         inputId: 'agreementFormProviderOfficialSignatory1SignDate',
         field: 'provider_official_signatory_1_sign_date',
-        label: 'Provider Official Signatory 1 Sign Date',
-        requiredRoleLabel: 'Senior Financial Controller',
-        canEdit: this.canEditProviderOfficialSignatory1SignDate()
-      },
-      {
-        inputId: 'agreementFormProviderOfficialSignatory2SignDate',
-        field: 'provider_official_signatory_2_sign_date',
-        label: 'Provider Official Signatory 2 Sign Date',
+        label: 'Provider Official Signatory Sign Date',
         requiredRoleLabel: 'General Manager',
-        canEdit: this.canEditProviderOfficialSignatory2SignDate()
+        canEdit: this.canEditProviderOfficialSignatory1SignDate()
       }
     ];
   },
@@ -2209,13 +2201,11 @@ const Agreements = {
     const formReadOnly = String(E.agreementForm?.dataset?.readOnly || '').trim() === 'true';
     const read = id => document.getElementById(id)?.value || '';
     const customerDate = this.normalizeDateInputValue(read('agreementFormCustomerOfficialSignDate') || read('agreementFormCustomerSignDate'));
-    const sfcDate = this.normalizeDateInputValue(read('agreementFormProviderOfficialSignatory1SignDate'));
     this.getProviderSignDateLockRules().forEach(rule => {
       const el = document.getElementById(rule.inputId);
       if (!el) return;
-      const isSfcField = rule.inputId === 'agreementFormProviderOfficialSignatory1SignDate';
-      const isGmField = rule.inputId === 'agreementFormProviderOfficialSignatory2SignDate';
-      const workflowLocked = !this.canUseAdminOverride() && ((isSfcField && !customerDate) || (isGmField && !sfcDate));
+      const isProviderField = rule.inputId === 'agreementFormProviderOfficialSignatory1SignDate';
+      const workflowLocked = !this.canUseAdminOverride() && isProviderField && !customerDate;
       const locked = formReadOnly || !rule.canEdit || workflowLocked;
       el.disabled = locked;
       el.readOnly = locked;
@@ -2225,7 +2215,7 @@ const Agreements = {
         el.setAttribute('aria-disabled', 'true');
         el.setAttribute('aria-readonly', 'true');
         el.title = workflowLocked
-          ? (isSfcField ? 'Customer sign date is required before the Senior Financial Controller sign date.' : 'Senior Financial Controller must sign first.')
+          ? 'Customer sign date is required before the General Manager sign date.'
           : `${rule.label} can only be filled by the ${rule.requiredRoleLabel} role.`;
       } else {
         el.removeAttribute('aria-disabled');
@@ -2246,16 +2236,10 @@ const Agreements = {
       }
     }
     const customerDate = this.normalizeDateInputValue(document.getElementById('agreementFormCustomerOfficialSignDate')?.value || document.getElementById('agreementFormCustomerSignDate')?.value || '');
-    const sfcDate = this.normalizeDateInputValue(document.getElementById('agreementFormProviderOfficialSignatory1SignDate')?.value || '');
-    const gmDate = this.normalizeDateInputValue(document.getElementById('agreementFormProviderOfficialSignatory2SignDate')?.value || '');
-    const originalSfcDate = this.normalizeDateInputValue(document.getElementById('agreementFormProviderOfficialSignatory1SignDate')?.dataset?.originalValue || '');
-    const originalGmDate = this.normalizeDateInputValue(document.getElementById('agreementFormProviderOfficialSignatory2SignDate')?.dataset?.originalValue || '');
-    if (sfcDate !== originalSfcDate && !customerDate) {
-      UI.toast('Customer sign date is required before the Senior Financial Controller sign date.');
-      return false;
-    }
-    if (gmDate !== originalGmDate && !sfcDate) {
-      UI.toast('Senior Financial Controller must sign before General Manager.');
+    const providerDate = this.normalizeDateInputValue(document.getElementById('agreementFormProviderOfficialSignatory1SignDate')?.value || '');
+    const originalProviderDate = this.normalizeDateInputValue(document.getElementById('agreementFormProviderOfficialSignatory1SignDate')?.dataset?.originalValue || '');
+    if (providerDate !== originalProviderDate && !customerDate) {
+      UI.toast('Customer sign date is required before the General Manager sign date.');
       return false;
     }
     return true;
@@ -2824,14 +2808,14 @@ const Agreements = {
           </div>
         </div>
         <div class="signature-box signature-box-provider-1">
-          <div class="signature-head">Provider Official Signatory 1</div>
+          <div class="signature-head">Provider Official Signatory</div>
           <div class="signature-body">
             <div><strong>Name:</strong> ${textValue(agreementData.provider_official_signatory_1_name || agreementData.provider_signatory_name_primary || agreementData.provider_signatory_name)}</div>
             <div><strong>Title:</strong> ${textValue(agreementData.provider_official_signatory_1_title || agreementData.provider_signatory_title_primary || agreementData.provider_signatory_title)}</div>
             <div><strong>Date:</strong> ${dateValue(agreementData.provider_official_signatory_1_sign_date || agreementData.provider_sign_date)}</div>
           </div>
         </div>
-        <div class="signature-box signature-box-provider-2">
+        <div class="signature-box signature-box-provider-2" style="display:none">
           <div class="signature-head">Provider Official Signatory 2</div>
           <div class="signature-body">
             <div><strong>Name:</strong> ${textValue(agreementData.provider_official_signatory_2_name || agreementData.provider_signatory_name_secondary)}</div>
