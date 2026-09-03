@@ -47,8 +47,8 @@ const Proposals = {
   },
   signedDocumentBucket: 'proposal-signed-documents',
   providerContactDefaults: {
-    name: 'InCheck 360 Holding BV',
-    address: 'Pyrmontstraat 5, 7513 BN, Enschede, The Netherlands',
+    name: 'Incheck 360 FZC',
+    address: 'Business Centre, Sharjah Publishing City Free Zone, Sharjah, United Arab Emirates',
     mobile: '+31 97 010280855',
     email: 'Info@incheck360.nl'
   },

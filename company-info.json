@@ -1,0 +1,64 @@
+{
+  "company_name": "Incheck 360 FZC",
+  "formation_type": "Free Zone Company",
+  "formation_number": "4431674",
+  "license_number": "4431674.01",
+  "company_address": "Business Centre, Sharjah Publishing City Free Zone, Sharjah, United Arab Emirates",
+  "license_formation_date": "03/09/2026",
+  "license_expiry_date": "02/09/2027",
+  "manager": "Vanessa Georges Wazen",
+  "issuing_authority": "Sharjah Publishing City - Free Zone Authority",
+  "country": "United Arab Emirates",
+  "contact_email": "info@incheck360.nl",
+  "contact_mobile": "+31 97 010280855",
+  "activities": [
+    {
+      "code": "4791",
+      "name": "Retail Sale Via Mail Order Houses or Via internet (E-Commerce)"
+    },
+    {
+      "code": "4791.05",
+      "name": "Retail Sale of Any Kind of Product Over the Internet, Selling IT Solutions Over the Internet"
+    },
+    {
+      "code": "5820",
+      "name": "Software publishing"
+    },
+    {
+      "code": "6201",
+      "name": "Computer programming activities"
+    },
+    {
+      "code": "6201.01",
+      "name": "Designing software, applications, databases and web pages"
+    },
+    {
+      "code": "6201.02",
+      "name": "Customizing of software"
+    },
+    {
+      "code": "6209.15",
+      "name": "Innovation and artificial intelligence research and consultancies"
+    },
+    {
+      "code": "6209.22",
+      "name": "IT Consultancy, IT Services"
+    },
+    {
+      "code": "6311.02",
+      "name": "Specialized hosting activities"
+    },
+    {
+      "code": "6311.03",
+      "name": "Application service provisioning"
+    },
+    {
+      "code": "6311.08",
+      "name": "Data Classification & Analysis Services"
+    },
+    {
+      "code": "6311.18",
+      "name": "Electronic Integration"
+    }
+  ]
+}

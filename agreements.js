@@ -91,7 +91,7 @@ function getAgreementsPaginatedRows({
   };
 }
 
-const DEFAULT_AGREEMENT_TERMS_AND_CONDITIONS = `Provider and Customer hereby agree to abide by and be bound by this Subscription Agreement, Provider’s Terms of Use, and Provider’s Privacy Policy. Provider’s Terms of Use and Privacy Policy can be found at https://www.incheck360.com/terms-of-use and https://www.incheck360.com/privacy-policy, respectively, and are hereby incorporated into this Agreement. The Subscription Agreement, Provider’s Terms of Use, and Privacy Policy form the Agreement between Customer, as listed above, and InCheck 360 Holding B.V.
+const DEFAULT_AGREEMENT_TERMS_AND_CONDITIONS = `Provider and Customer hereby agree to abide by and be bound by this Subscription Agreement, Provider’s Terms of Use, and Provider’s Privacy Policy. Provider’s Terms of Use and Privacy Policy can be found at https://www.incheck360.com/terms-of-use and https://www.incheck360.com/privacy-policy, respectively, and are hereby incorporated into this Agreement. The Subscription Agreement, Provider’s Terms of Use, and Privacy Policy form the Agreement between Customer, as listed above, and Incheck 360 FZC
 
 IN WITNESS WHEREOF, the parties have caused this Agreement to be executed by their authorized representatives as of the date of last signature by either party (“Effective Date”).`;
 
@@ -458,10 +458,10 @@ const Agreements = {
   },
 
   providerIdentityDefaults: {
-    legalName: 'InCheck 360 Holding BV',
-    name: 'InCheck 360 Holding BV',
-    address: 'Pyrmontstraat 5, 7513 BN, Enschede, The Netherlands',
-    contactName: 'InCheck 360 Holding BV',
+    legalName: 'Incheck 360 FZC',
+    name: 'Incheck 360 FZC',
+    address: 'Business Centre, Sharjah Publishing City Free Zone, Sharjah, United Arab Emirates',
+    contactName: 'Incheck 360 FZC',
     contactMobile: '+31 97 010280855',
     contactEmail: 'Info@incheck360.nl',
     primarySignatoryName: 'Simon Moujaly',
