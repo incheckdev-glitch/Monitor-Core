@@ -91,7 +91,7 @@ function getAgreementsPaginatedRows({
   };
 }
 
-const DEFAULT_AGREEMENT_TERMS_AND_CONDITIONS = `Provider and Customer hereby agree to abide by and be bound by this Subscription Agreement, Provider’s Terms of Use, and Provider’s Privacy Policy. Provider’s Terms of Use and Privacy Policy can be found at https://www.incheck360.com/terms-of-use and https://www.incheck360.com/privacy-policy, respectively, and are hereby incorporated into this Agreement. The Subscription Agreement, Provider’s Terms of Use, and Privacy Policy form the Agreement between Customer, as listed above, and Incheck 360 FZC
+const DEFAULT_AGREEMENT_TERMS_AND_CONDITIONS = `Provider and Customer hereby agree to abide by and be bound by this Subscription Agreement, Provider’s Terms of Use, and Provider’s Privacy Policy. Provider’s Terms of Use and Privacy Policy can be found at https://www.incheck360.com/terms-of-use and https://www.incheck360.com/privacy-policy, respectively, and are hereby incorporated into this Agreement. The Subscription Agreement, Provider’s Terms of Use, and Privacy Policy form the Agreement between Customer, as listed above, and Incheck 360 FZC.
 
 IN WITNESS WHEREOF, the parties have caused this Agreement to be executed by their authorized representatives as of the date of last signature by either party (“Effective Date”).`;
 
