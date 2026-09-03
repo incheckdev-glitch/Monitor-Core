@@ -9,6 +9,7 @@
   "manager": "Vanessa Georges Wazen",
   "issuing_authority": "Sharjah Publishing City - Free Zone Authority",
   "country": "United Arab Emirates",
+  "license_verification_url": "https://portal.spcfz.ae/web/mydocuments/dc/178843261133?d=TVRBM09EYzU=",
   "contact_email": "info@incheck360.nl",
   "contact_mobile": "+31 97 010280855",
   "activities": [
@@ -30,11 +31,11 @@
     },
     {
       "code": "6201.01",
-      "name": "Designing software, applications, databases and web pages"
+      "name": "Designing the structure and content of, and/or writing the computer code necessary to create and implement: Systems software (including updates and patches); Software applications (including updates and patches); Databases; Web pages"
     },
     {
       "code": "6201.02",
-      "name": "Customizing of software"
+      "name": "Customizing of software, i.e. modifying and configuring an existing application so that it is functional within the clients’ information system environment"
     },
     {
       "code": "6209.15",
@@ -46,7 +47,7 @@
     },
     {
       "code": "6311.02",
-      "name": "Specialized hosting activities"
+      "name": "Specialized hosting activities such as: Web hosting; Streaming services; Application hosting"
     },
     {
       "code": "6311.03",
