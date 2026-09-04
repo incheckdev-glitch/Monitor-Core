@@ -42,6 +42,7 @@
     style.id = 'incheck360-profile-menu-style';
     style.textContent = `
       body:not(.auth-locked) #appHeader .topbar-language,
+      body:not(.auth-locked) #appHeader .topbar-online,
       body:not(.auth-locked) #appHeader .topbar-logout,
       body:not(.auth-locked) #appHeader #topbarQuickCreate {
         display:none!important;
@@ -149,6 +150,21 @@
     document.head.appendChild(style);
   }
 
+  function hideLegacyTopbarControls(actions) {
+    const languageControl = actions.querySelector('.topbar-language');
+    const onlineControl = actions.querySelector('.topbar-online');
+    const logoutButton = document.getElementById('logoutBtn') || actions.querySelector('.topbar-logout');
+
+    [languageControl, onlineControl, logoutButton].filter(Boolean).forEach(control => {
+      control.style.setProperty('display', 'none', 'important');
+      control.hidden = true;
+      control.setAttribute('aria-hidden', 'true');
+      control.setAttribute('tabindex', '-1');
+    });
+
+    STATE.logoutButton = logoutButton;
+  }
+
   function syncProfileMenuIdentity() {
     const menu = STATE.profileMenu;
     if (!menu) return;
@@ -187,16 +203,12 @@
 
   function installProfileMenu(actions) {
     const profileButton = document.getElementById('profileMenuBtn');
-    const logoutButton = document.getElementById('logoutBtn');
-    const languageButton = actions.querySelector('.topbar-language');
 
     document.getElementById('topbarQuickCreate')?.remove();
-    if (languageButton) languageButton.style.display = 'none';
-    if (logoutButton) logoutButton.style.display = 'none';
+    hideLegacyTopbarControls(actions);
     if (!profileButton) return;
 
     STATE.profileButton = profileButton;
-    STATE.logoutButton = logoutButton;
 
     profileButton.setAttribute('aria-haspopup', 'menu');
     profileButton.setAttribute('aria-expanded', 'false');
@@ -257,6 +269,15 @@
     if (identityTargets.length && typeof MutationObserver !== 'undefined') {
       const observer = new MutationObserver(syncProfileMenuIdentity);
       identityTargets.forEach(node => observer.observe(node, { childList: true, subtree: true, characterData: true }));
+    }
+
+    if (typeof MutationObserver !== 'undefined') {
+      new MutationObserver(() => hideLegacyTopbarControls(actions)).observe(actions, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['style', 'hidden', 'class']
+      });
     }
   }
 
