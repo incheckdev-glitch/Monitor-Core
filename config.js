@@ -369,30 +369,86 @@ const ROLES = window.ROLES;
   });
 })(window);
 
-(function installFzcErpBranding() {
+(function installOperationsPortalBranding() {
+  const FULL_NAME = 'InCheck360 Operations Portal';
+
+  function replaceBrandText(value) {
+    return String(value || '')
+      .replace(/InCheck360\s+MonitorCore/gi, FULL_NAME)
+      .replace(/InCheck360\s+FZC\s+ERP/gi, FULL_NAME)
+      .replace(/InCheck360\s+ERP/gi, FULL_NAME)
+      .replace(/MonitorCore/gi, 'Operations Portal')
+      .replace(/ERP\s+SOLUTION/gi, 'Operations Portal');
+  }
+
+  function rewriteVisibleBranding(root = document) {
+    if (!root) return;
+
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+    while (walker.nextNode()) textNodes.push(walker.currentNode);
+    textNodes.forEach(node => {
+      const next = replaceBrandText(node.nodeValue);
+      if (next !== node.nodeValue) node.nodeValue = next;
+    });
+
+    const elements = root.querySelectorAll ? root.querySelectorAll('[aria-label], [title], [alt]') : [];
+    elements.forEach(el => {
+      ['aria-label', 'title', 'alt'].forEach(attr => {
+        const current = el.getAttribute(attr);
+        if (!current) return;
+        const next = replaceBrandText(current);
+        if (next !== current) el.setAttribute(attr, next);
+      });
+    });
+  }
+
   function applyBranding() {
-    document.title = 'InCheck360 FZC ERP';
+    document.title = FULL_NAME;
 
     const brand = document.querySelector('.topbar-brand-text');
     if (brand) {
       const name = brand.querySelector('strong');
       const descriptor = brand.querySelector('span');
-      if (name) name.textContent = 'InCheck360 FZC';
-      if (descriptor) descriptor.textContent = 'ERP';
+      if (name) name.textContent = 'InCheck360';
+      if (descriptor) descriptor.textContent = 'Operations Portal';
     }
 
     document
       .querySelectorAll('meta[name="apple-mobile-web-app-title"]')
-      .forEach(meta => meta.setAttribute('content', 'InCheck360 FZC ERP'));
+      .forEach(meta => meta.setAttribute('content', FULL_NAME));
 
     document
       .querySelectorAll('.ui-brand-logo, .auth-brand-logo, .login-brand-logo')
-      .forEach(img => img.setAttribute('alt', 'InCheck360 FZC ERP'));
+      .forEach(img => img.setAttribute('alt', FULL_NAME));
+
+    rewriteVisibleBranding(document.body || document);
+  }
+
+  function startBrandObserver() {
+    if (!document.body || typeof MutationObserver === 'undefined') return;
+    const observer = new MutationObserver(records => {
+      records.forEach(record => {
+        record.addedNodes.forEach(node => {
+          if (node.nodeType === Node.TEXT_NODE) {
+            const next = replaceBrandText(node.nodeValue);
+            if (next !== node.nodeValue) node.nodeValue = next;
+          } else if (node.nodeType === Node.ELEMENT_NODE) {
+            rewriteVisibleBranding(node);
+          }
+        });
+      });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', applyBranding, { once: true });
+    document.addEventListener('DOMContentLoaded', () => {
+      applyBranding();
+      startBrandObserver();
+    }, { once: true });
   } else {
     applyBranding();
+    startBrandObserver();
   }
 })(window);
