@@ -1,0 +1,406 @@
+/* InCheck360 Operations Portal — modern top navigation
+   Scoped to the authenticated ERP shell so the login page is untouched. */
+
+body:not(.auth-locked) #appHeader.app-topbar{
+  min-height:72px!important;
+  height:72px!important;
+  padding:0 22px!important;
+  gap:14px!important;
+  display:flex!important;
+  align-items:center!important;
+  background:rgba(255,255,255,.98)!important;
+  color:#0f172a!important;
+  border:0!important;
+  border-bottom:1px solid #e7edf5!important;
+  box-shadow:0 4px 18px rgba(15,23,42,.055)!important;
+  backdrop-filter:blur(18px)!important;
+  -webkit-backdrop-filter:blur(18px)!important;
+  z-index:1100!important;
+}
+
+body:not(.auth-locked) #appHeader .topbar-menu-btn{
+  width:42px!important;
+  min-width:42px!important;
+  height:42px!important;
+  border-radius:12px!important;
+  border:1px solid #e2e8f0!important;
+  background:#fff!important;
+  color:#334155!important;
+  box-shadow:none!important;
+  font-size:18px!important;
+}
+body:not(.auth-locked) #appHeader .topbar-menu-btn:hover{
+  background:#f8fafc!important;
+  color:#1546e8!important;
+  border-color:#cbd5e1!important;
+  transform:none!important;
+}
+
+body:not(.auth-locked) #appHeader .topbar-brand{
+  flex:0 0 auto!important;
+  min-width:172px!important;
+  display:flex!important;
+  align-items:center!important;
+  gap:0!important;
+}
+body:not(.auth-locked) #appHeader .topbar-logo{
+  display:flex!important;
+  align-items:center!important;
+  min-width:0!important;
+}
+body:not(.auth-locked) #appHeader .topbar-logo img,
+body:not(.auth-locked) #appHeader .ui-brand-logo{
+  width:172px!important;
+  max-width:172px!important;
+  height:48px!important;
+  max-height:48px!important;
+  object-fit:contain!important;
+  object-position:left center!important;
+}
+body:not(.auth-locked) #appHeader .topbar-brand-text,
+body:not(.auth-locked) #appHeader .topbar-divider{
+  display:none!important;
+}
+
+body:not(.auth-locked) #appHeader .topbar-search{
+  flex:1 1 520px!important;
+  width:auto!important;
+  max-width:720px!important;
+  min-width:230px!important;
+  height:44px!important;
+  margin:0 4px 0 6px!important;
+  padding:0 12px!important;
+  display:flex!important;
+  align-items:center!important;
+  gap:9px!important;
+  border:1px solid #dbe4ef!important;
+  border-radius:12px!important;
+  background:#fbfdff!important;
+  box-shadow:0 1px 3px rgba(15,23,42,.035)!important;
+  transition:border-color .18s ease,box-shadow .18s ease,background .18s ease!important;
+}
+body:not(.auth-locked) #appHeader .topbar-search:focus-within{
+  background:#fff!important;
+  border-color:#8fb0ff!important;
+  box-shadow:0 0 0 3px rgba(37,99,235,.10)!important;
+}
+body:not(.auth-locked) #appHeader .topbar-search-icon{
+  color:#64748b!important;
+  font-size:21px!important;
+  line-height:1!important;
+}
+body:not(.auth-locked) #appHeader #searchInput{
+  min-width:0!important;
+  flex:1 1 auto!important;
+  height:40px!important;
+  padding:0!important;
+  border:0!important;
+  outline:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  color:#0f172a!important;
+  font-size:14px!important;
+  font-weight:500!important;
+}
+body:not(.auth-locked) #appHeader #searchInput::placeholder{
+  color:#94a3b8!important;
+}
+body:not(.auth-locked) #appHeader .topbar-search-shortcut{
+  display:inline-flex!important;
+  align-items:center!important;
+  height:24px!important;
+  padding:0 7px!important;
+  border:1px solid #e2e8f0!important;
+  border-radius:7px!important;
+  background:#fff!important;
+  color:#94a3b8!important;
+  font-size:11px!important;
+  font-weight:700!important;
+  white-space:nowrap!important;
+}
+
+body:not(.auth-locked) #appHeader .topbar-context-chip{
+  flex:0 1 auto;
+  max-width:190px;
+  min-width:0;
+  padding:7px 10px;
+  border-radius:10px;
+  background:#f8fafc;
+  color:#64748b;
+  font-size:12px;
+  font-weight:700;
+  line-height:1.2;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  border:1px solid #eef2f7;
+}
+body:not(.auth-locked) #appHeader .topbar-context-chip strong{
+  color:#1546e8;
+  font-weight:800;
+}
+
+body:not(.auth-locked) #appHeader .topbar-actions{
+  margin-left:auto!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-end!important;
+  flex:0 0 auto!important;
+  gap:8px!important;
+  min-width:0!important;
+}
+
+body:not(.auth-locked) #appHeader .topbar-quick-create{
+  height:42px;
+  min-width:104px;
+  padding:0 15px;
+  border:1px solid #1546e8;
+  border-radius:11px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  background:linear-gradient(135deg,#1546e8,#285ff2);
+  color:#fff;
+  font-size:14px;
+  font-weight:800;
+  line-height:1;
+  cursor:pointer;
+  box-shadow:0 6px 14px rgba(21,70,232,.18);
+  transition:transform .16s ease,box-shadow .16s ease,filter .16s ease;
+  white-space:nowrap;
+}
+body:not(.auth-locked) #appHeader .topbar-quick-create:hover{
+  transform:translateY(-1px);
+  box-shadow:0 8px 18px rgba(21,70,232,.24);
+  filter:brightness(1.02);
+}
+body:not(.auth-locked) #appHeader .topbar-quick-create:active{transform:translateY(0);}
+body:not(.auth-locked) #appHeader .topbar-quick-create[disabled]{
+  opacity:.5;
+  cursor:not-allowed;
+  transform:none;
+  box-shadow:none;
+}
+body:not(.auth-locked) #appHeader .topbar-quick-create-plus{
+  font-size:20px;
+  font-weight:400;
+  margin-top:-1px;
+}
+
+body:not(.auth-locked) #appHeader .topbar-icon-btn,
+body:not(.auth-locked) #appHeader .topbar-language,
+body:not(.auth-locked) #appHeader .topbar-logout{
+  width:42px!important;
+  min-width:42px!important;
+  height:42px!important;
+  padding:0!important;
+  border:1px solid transparent!important;
+  border-radius:11px!important;
+  background:transparent!important;
+  color:#475569!important;
+  box-shadow:none!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:0!important;
+  transition:background .16s ease,color .16s ease,border-color .16s ease!important;
+}
+body:not(.auth-locked) #appHeader .topbar-icon-btn:hover,
+body:not(.auth-locked) #appHeader .topbar-language:hover,
+body:not(.auth-locked) #appHeader .topbar-logout:hover{
+  background:#f1f5f9!important;
+  color:#1546e8!important;
+  border-color:#e2e8f0!important;
+  transform:none!important;
+  box-shadow:none!important;
+}
+body:not(.auth-locked) #appHeader .topbar-language > span:nth-child(2),
+body:not(.auth-locked) #appHeader .topbar-language > span:nth-child(3),
+body:not(.auth-locked) #appHeader .topbar-logout-text{
+  display:none!important;
+}
+
+body:not(.auth-locked) #appHeader .notification-shell{display:inline-flex!important;}
+body:not(.auth-locked) #appHeader .topbar-badge{
+  min-width:17px!important;
+  height:17px!important;
+  padding:0 4px!important;
+  top:-4px!important;
+  right:-4px!important;
+  border:2px solid #fff!important;
+  border-radius:999px!important;
+  font-size:9px!important;
+  font-weight:800!important;
+}
+
+body:not(.auth-locked) #appHeader .topbar-online{
+  width:30px!important;
+  min-width:30px!important;
+  height:30px!important;
+  padding:0!important;
+  justify-content:center!important;
+  border:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+body:not(.auth-locked) #appHeader .topbar-online > span:first-child{
+  width:8px!important;
+  height:8px!important;
+  margin:0!important;
+}
+body:not(.auth-locked) #appHeader .topbar-online-text{display:none!important;}
+
+body:not(.auth-locked) #appHeader .topbar-profile{
+  height:44px!important;
+  min-width:142px!important;
+  max-width:210px!important;
+  padding:3px 9px 3px 4px!important;
+  gap:8px!important;
+  border:1px solid #e2e8f0!important;
+  border-radius:12px!important;
+  background:#fff!important;
+  color:#0f172a!important;
+  box-shadow:none!important;
+}
+body:not(.auth-locked) #appHeader .topbar-profile:hover{
+  background:#f8fafc!important;
+  border-color:#cbd5e1!important;
+  color:#0f172a!important;
+  transform:none!important;
+  box-shadow:none!important;
+}
+body:not(.auth-locked) #appHeader .topbar-avatar{
+  width:34px!important;
+  min-width:34px!important;
+  height:34px!important;
+  border-radius:10px!important;
+  background:linear-gradient(135deg,#eaf0ff,#dbe7ff)!important;
+  color:#1546e8!important;
+  font-size:11px!important;
+  font-weight:900!important;
+}
+body:not(.auth-locked) #appHeader .topbar-user-info{
+  min-width:0!important;
+  flex:1 1 auto!important;
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:flex-start!important;
+  line-height:1.12!important;
+}
+body:not(.auth-locked) #appHeader #currentUserChip{
+  max-width:118px!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+  color:#0f172a!important;
+  font-size:12px!important;
+  font-weight:800!important;
+}
+body:not(.auth-locked) #appHeader .topbar-role-badge{
+  max-width:118px!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+  color:#64748b!important;
+  background:transparent!important;
+  border:0!important;
+  padding:0!important;
+  font-size:10px!important;
+  font-weight:700!important;
+}
+body:not(.auth-locked) #appHeader .topbar-profile-arrow{color:#64748b!important;font-size:13px!important;}
+
+/* Dark mode keeps the same modern structure, with a darker enterprise surface. */
+:root:not([data-theme="light"]) body:not(.auth-locked) #appHeader.app-topbar,
+:root[data-theme="dark"] body:not(.auth-locked) #appHeader.app-topbar{
+  background:rgba(15,23,42,.98)!important;
+  color:#e5e7eb!important;
+  border-bottom-color:#273449!important;
+  box-shadow:0 5px 22px rgba(0,0,0,.20)!important;
+}
+:root:not([data-theme="light"]) body:not(.auth-locked) #appHeader .topbar-menu-btn,
+:root:not([data-theme="light"]) body:not(.auth-locked) #appHeader .topbar-search,
+:root:not([data-theme="light"]) body:not(.auth-locked) #appHeader .topbar-profile,
+:root[data-theme="dark"] body:not(.auth-locked) #appHeader .topbar-menu-btn,
+:root[data-theme="dark"] body:not(.auth-locked) #appHeader .topbar-search,
+:root[data-theme="dark"] body:not(.auth-locked) #appHeader .topbar-profile{
+  background:#111827!important;
+  border-color:#2b3a50!important;
+  color:#e5e7eb!important;
+}
+:root:not([data-theme="light"]) body:not(.auth-locked) #appHeader #searchInput,
+:root:not([data-theme="light"]) body:not(.auth-locked) #appHeader #currentUserChip,
+:root[data-theme="dark"] body:not(.auth-locked) #appHeader #searchInput,
+:root[data-theme="dark"] body:not(.auth-locked) #appHeader #currentUserChip{color:#e5e7eb!important;}
+:root:not([data-theme="light"]) body:not(.auth-locked) #appHeader .topbar-search-shortcut,
+:root:not([data-theme="light"]) body:not(.auth-locked) #appHeader .topbar-context-chip,
+:root[data-theme="dark"] body:not(.auth-locked) #appHeader .topbar-search-shortcut,
+:root[data-theme="dark"] body:not(.auth-locked) #appHeader .topbar-context-chip{
+  background:#0f172a!important;
+  border-color:#2b3a50!important;
+  color:#94a3b8!important;
+}
+:root:not([data-theme="light"]) body:not(.auth-locked) #appHeader .topbar-icon-btn,
+:root:not([data-theme="light"]) body:not(.auth-locked) #appHeader .topbar-language,
+:root:not([data-theme="light"]) body:not(.auth-locked) #appHeader .topbar-logout,
+:root[data-theme="dark"] body:not(.auth-locked) #appHeader .topbar-icon-btn,
+:root[data-theme="dark"] body:not(.auth-locked) #appHeader .topbar-language,
+:root[data-theme="dark"] body:not(.auth-locked) #appHeader .topbar-logout{
+  background:transparent!important;
+  border-color:transparent!important;
+  color:#cbd5e1!important;
+}
+:root:not([data-theme="light"]) body:not(.auth-locked) #appHeader .topbar-icon-btn:hover,
+:root:not([data-theme="light"]) body:not(.auth-locked) #appHeader .topbar-language:hover,
+:root:not([data-theme="light"]) body:not(.auth-locked) #appHeader .topbar-logout:hover,
+:root[data-theme="dark"] body:not(.auth-locked) #appHeader .topbar-icon-btn:hover,
+:root[data-theme="dark"] body:not(.auth-locked) #appHeader .topbar-language:hover,
+:root[data-theme="dark"] body:not(.auth-locked) #appHeader .topbar-logout:hover{
+  background:#1e293b!important;
+  border-color:#334155!important;
+  color:#8fb0ff!important;
+}
+
+@media (max-width:1320px){
+  body:not(.auth-locked) #appHeader.app-topbar{padding:0 14px!important;gap:9px!important;}
+  body:not(.auth-locked) #appHeader .topbar-brand{min-width:146px!important;}
+  body:not(.auth-locked) #appHeader .topbar-logo img,
+  body:not(.auth-locked) #appHeader .ui-brand-logo{width:146px!important;max-width:146px!important;}
+  body:not(.auth-locked) #appHeader .topbar-context-chip{display:none!important;}
+  body:not(.auth-locked) #appHeader .topbar-profile{min-width:118px!important;}
+}
+
+@media (max-width:1050px){
+  body:not(.auth-locked) #appHeader .topbar-search-shortcut,
+  body:not(.auth-locked) #appHeader .topbar-language,
+  body:not(.auth-locked) #appHeader .topbar-online{display:none!important;}
+  body:not(.auth-locked) #appHeader .topbar-profile{min-width:44px!important;width:44px!important;padding:4px!important;}
+  body:not(.auth-locked) #appHeader .topbar-user-info,
+  body:not(.auth-locked) #appHeader .topbar-profile-arrow{display:none!important;}
+}
+
+@media (max-width:760px){
+  body:not(.auth-locked) #appHeader.app-topbar{height:64px!important;min-height:64px!important;padding:0 9px!important;gap:7px!important;}
+  body:not(.auth-locked) #appHeader .topbar-menu-btn{width:38px!important;min-width:38px!important;height:38px!important;}
+  body:not(.auth-locked) #appHeader .topbar-brand{min-width:104px!important;width:104px!important;}
+  body:not(.auth-locked) #appHeader .topbar-logo img,
+  body:not(.auth-locked) #appHeader .ui-brand-logo{width:104px!important;max-width:104px!important;height:36px!important;max-height:36px!important;}
+  body:not(.auth-locked) #appHeader .topbar-search{min-width:44px!important;max-width:none!important;height:40px!important;margin:0!important;padding:0 9px!important;}
+  body:not(.auth-locked) #appHeader .topbar-search-icon{font-size:18px!important;}
+  body:not(.auth-locked) #appHeader #searchInput{font-size:13px!important;}
+  body:not(.auth-locked) #appHeader .topbar-actions{gap:4px!important;}
+  body:not(.auth-locked) #appHeader .topbar-quick-create{width:40px;min-width:40px;height:40px;padding:0;border-radius:10px;}
+  body:not(.auth-locked) #appHeader .topbar-quick-create-label{display:none;}
+  body:not(.auth-locked) #appHeader #refreshNow,
+  body:not(.auth-locked) #appHeader .topbar-logout{display:none!important;}
+  body:not(.auth-locked) #appHeader .topbar-icon-btn{width:40px!important;min-width:40px!important;height:40px!important;}
+  body:not(.auth-locked) #appHeader .topbar-profile{width:40px!important;min-width:40px!important;height:40px!important;}
+  body:not(.auth-locked) #appHeader .topbar-avatar{width:30px!important;min-width:30px!important;height:30px!important;}
+}
+
+@media (max-width:560px){
+  body:not(.auth-locked) #appHeader .topbar-brand{display:none!important;}
+  body:not(.auth-locked) #appHeader .topbar-search{flex:1 1 auto!important;min-width:0!important;}
+  body:not(.auth-locked) #appHeader #themeSelect{display:none!important;}
+}
