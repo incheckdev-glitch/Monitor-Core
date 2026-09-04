@@ -240,13 +240,14 @@ small{
   box-shadow:0 14px 28px rgba(37,99,235,.28);
 }
 .topbar-menu-btn:hover{background:#1d4ed8;border-color:#1d4ed8;transform:translateY(-1px)}
-.topbar-brand{display:flex;align-items:center;gap:10px;flex:0 0 auto;min-width:0;}
+.topbar-brand{display:flex;align-items:center;gap:0;flex:0 0 auto;min-width:0;}
 .topbar-logo{
-  width:44px;height:44px;border-radius:14px;background:#eff6ff;
-  display:flex;align-items:center;justify-content:center;overflow:hidden;border:1px solid #dbeafe;
+  width:190px;height:52px;border-radius:14px;background:#ffffff;
+  display:flex;align-items:center;justify-content:center;overflow:hidden;
+  border:1px solid #dbeafe;padding:5px 8px;
 }
-.topbar-logo .brand-logo{width:34px;height:34px;object-fit:contain;}
-.topbar-brand-text{display:flex;flex-direction:column;line-height:1.1;white-space:nowrap;}
+.topbar-logo .brand-logo{width:100%;height:100%;object-fit:contain;}
+.topbar-brand-text{display:none;}
 .topbar-brand-text strong{font-size:17px;color:#0f172a;letter-spacing:-.02em;}
 .topbar-brand-text span{font-size:10px;font-weight:800;letter-spacing:.18em;color:#64748b;margin-top:4px;}
 .topbar-divider{width:1px;height:42px;background:#e5e7eb;flex:0 0 auto;}
@@ -295,7 +296,7 @@ small{
 }
 @media (max-width:560px){
   #appHeader.app-topbar{padding:10px;gap:8px;}
-  .topbar-logo{width:40px;height:40px;border-radius:13px;}
+  .topbar-logo{width:138px;height:40px;border-radius:13px;padding:4px 6px;}
   .topbar-icon-btn{width:40px;height:40px;border-radius:13px;font-size:16px;}
   .topbar-online{height:34px;padding:0 9px;font-size:12px;}
   .topbar-language{height:38px;padding:0 9px;}
@@ -670,10 +671,10 @@ body.auth-locked .login-logo,
 .login-brand-logo,
 .auth-brand-logo{
   display:block;
-  width:min(280px,72vw);
-  max-width:280px;
+  width:min(440px,86vw);
+  max-width:440px;
   height:auto;
-  max-height:90px;
+  max-height:160px;
   object-fit:contain;
   object-position:center;
   margin:0 auto 1rem;
@@ -683,7 +684,7 @@ body.auth-locked .login-logo,
 }
 
 body.auth-locked .login-logo{
-  filter:brightness(0) invert(1);
+  filter:none;
 }
 
 body.auth-locked .login-form .input,
