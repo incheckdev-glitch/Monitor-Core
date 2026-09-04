@@ -5,7 +5,9 @@
   const STYLE_ID = 'incheck360-employee-calendar-css';
   const HASH = '#employee-calendar';
   let loadPromise = null;
+  let openPromise = null;
   let bodyObserver = null;
+  let initialHashHandled = false;
 
   function isUnlocked() {
     return !!document.body && !document.body.classList.contains('auth-locked');
@@ -24,7 +26,7 @@
     const link = document.createElement('link');
     link.id = STYLE_ID;
     link.rel = 'stylesheet';
-    link.href = '/src/ui/employee-calendar.css?v=20260904-employeecalendar2';
+    link.href = '/src/ui/employee-calendar.css?v=20260904-employeecalendar3';
     document.head.appendChild(link);
   }
 
@@ -77,13 +79,56 @@
     else delete tab.dataset.calendarLoading;
   }
 
+  function captureCalendarObservers() {
+    const NativeObserver = global.MutationObserver;
+    if (typeof NativeObserver !== 'function') {
+      return { restore() {}, disconnect() {} };
+    }
+
+    const captured = [];
+    function WrappedObserver(callback) {
+      const observer = new NativeObserver(callback);
+      try {
+        const stack = String(new Error().stack || '');
+        if (stack.includes('employeeCalendar.js')) captured.push(observer);
+      } catch (_) {}
+      return observer;
+    }
+
+    try {
+      WrappedObserver.prototype = NativeObserver.prototype;
+      Object.setPrototypeOf(WrappedObserver, NativeObserver);
+      global.MutationObserver = WrappedObserver;
+    } catch (_) {
+      return { restore() {}, disconnect() {} };
+    }
+
+    return {
+      restore() {
+        try {
+          if (global.MutationObserver === WrappedObserver) global.MutationObserver = NativeObserver;
+        } catch (_) {}
+      },
+      disconnect() {
+        captured.forEach((observer) => {
+          try { observer.disconnect(); } catch (_) {}
+        });
+      }
+    };
+  }
+
   async function loadCalendar() {
     if (global.InCheck360EmployeeCalendar?.open) return global.InCheck360EmployeeCalendar;
     ensureStyle();
 
     if (!loadPromise) {
-      loadPromise = import('./employeeCalendar.js?v=20260904-employeecalendar2')
+      const observerCapture = captureCalendarObservers();
+      loadPromise = import('./employeeCalendar.js?v=20260904-employeecalendar3')
         .then(() => global.InCheck360EmployeeCalendar)
+        .finally(() => {
+          observerCapture.restore();
+          observerCapture.disconnect();
+        })
         .catch((error) => {
           loadPromise = null;
           throw error;
@@ -97,15 +142,25 @@
 
   async function openCalendar() {
     if (!isUnlocked()) return;
-    const tab = ensureTab();
-    setLoading(tab, true);
+    if (openPromise) return openPromise;
+
+    openPromise = (async () => {
+      const tab = ensureTab();
+      setLoading(tab, true);
+      try {
+        const api = await loadCalendar();
+        api.open();
+      } catch (error) {
+        notify(error?.message || 'Unable to open Calendar', 'error');
+      } finally {
+        setLoading(tab, false);
+      }
+    })();
+
     try {
-      const api = await loadCalendar();
-      api.open();
-    } catch (error) {
-      notify(error?.message || 'Unable to open Calendar', 'error');
+      await openPromise;
     } finally {
-      setLoading(tab, false);
+      openPromise = null;
     }
   }
 
@@ -127,15 +182,27 @@
 
     tab.hidden = false;
     tab.style.removeProperty('display');
+  }
+
+  function handleInitialHash() {
+    if (initialHashHandled || !isUnlocked()) return;
+    initialHashHandled = true;
     if (location.hash.startsWith(HASH)) openCalendar();
   }
 
   function boot() {
     syncAuthState();
+    handleInitialHash();
+
     if (document.body && global.MutationObserver && !bodyObserver) {
-      bodyObserver = new MutationObserver(syncAuthState);
+      bodyObserver = new MutationObserver(() => {
+        const wasUnlocked = isUnlocked();
+        syncAuthState();
+        if (wasUnlocked) handleInitialHash();
+      });
       bodyObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
     }
+
     global.addEventListener('hashchange', () => {
       if (isUnlocked() && location.hash.startsWith(HASH)) openCalendar();
     });
