@@ -12,6 +12,14 @@ function lower(value = '') {
   return text(value).toLowerCase();
 }
 
+function normalizeBrandText(value = '') {
+  return String(value ?? '')
+    .replace(/InCheck360\s+MonitorCore/gi, 'InCheck360 Operations Portal')
+    .replace(/InCheck360\s+FZC\s+ERP/gi, 'InCheck360 Operations Portal')
+    .replace(/InCheck360\s+ERP/gi, 'InCheck360 Operations Portal')
+    .replace(/MonitorCore/gi, 'Operations Portal');
+}
+
 function isWebPushChannel(channel = '') {
   return WEB_PUSH_CHANNELS.has(lower(channel));
 }
@@ -78,12 +86,12 @@ function getJobPayload(job = {}) {
 
 function getJobTitle(job = {}) {
   const payload = getJobPayload(job);
-  return text(job.title || payload.title || payload.notification?.title || 'InCheck360 Notification');
+  return text(normalizeBrandText(job.title || payload.title || payload.notification?.title || 'InCheck360 Notification'));
 }
 
 function getJobBody(job = {}) {
   const payload = getJobPayload(job);
-  return text(job.body || job.message || payload.body || payload.message || payload.notification?.body || 'A business event requires your attention.');
+  return text(normalizeBrandText(job.body || job.message || payload.body || payload.message || payload.notification?.body || 'A business event requires your attention.'));
 }
 
 function getJobDeepLink(job = {}) {
@@ -100,13 +108,13 @@ function buildEmailHtml(job = {}) {
       <div style="max-width:620px;margin:0 auto;padding:28px 18px;">
         <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:18px;overflow:hidden;box-shadow:0 18px 45px rgba(15,23,42,.08);">
           <div style="padding:22px 24px;border-bottom:1px solid #e2e8f0;background:linear-gradient(135deg,#0f172a,#1e293b);color:#ffffff;">
-            <div style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;opacity:.75;">InCheck360 MonitorCore</div>
+            <div style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;opacity:.75;">InCheck360 Operations Portal</div>
             <h1 style="font-size:22px;line-height:1.3;margin:8px 0 0;">${escapeHtml(title)}</h1>
           </div>
           <div style="padding:24px;">
             <p style="font-size:15px;line-height:1.65;margin:0 0 20px;">${escapeHtml(body)}</p>
             <a href="${escapeHtml(deepLink)}" style="display:inline-block;background:#0f172a;color:#ffffff;text-decoration:none;border-radius:999px;padding:12px 18px;font-weight:700;font-size:14px;">Open in InCheck360</a>
-            <p style="font-size:12px;color:#64748b;line-height:1.5;margin:22px 0 0;">This notification was generated automatically by InCheck360 MonitorCore.</p>
+            <p style="font-size:12px;color:#64748b;line-height:1.5;margin:22px 0 0;">This notification was generated automatically by InCheck360 Operations Portal.</p>
           </div>
         </div>
       </div>
