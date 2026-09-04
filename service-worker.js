@@ -31,6 +31,14 @@ function pushDebugLog(...args) {
   console.log('[sw:push]', ...args);
 }
 
+function normalizeBrandText(value = '') {
+  return String(value || '')
+    .replace(/InCheck360\s+MonitorCore/gi, 'InCheck360 Operations Portal')
+    .replace(/InCheck360\s+FZC\s+ERP/gi, 'InCheck360 Operations Portal')
+    .replace(/InCheck360\s+ERP/gi, 'InCheck360 Operations Portal')
+    .replace(/MonitorCore/gi, 'Operations Portal');
+}
+
 self.addEventListener('install', event => {
   event.waitUntil(
     caches
@@ -184,16 +192,18 @@ self.addEventListener('push', (event) => {
     const notificationPayload = payload?.notification || {};
     const dataPayload = payload?.data || {};
 
-    const title =
+    const title = normalizeBrandText(
       payload?.title ||
       notificationPayload?.title ||
       dataPayload?.title ||
-      defaultPayload.title;
-    const body =
+      defaultPayload.title
+    );
+    const body = normalizeBrandText(
       payload?.body ||
       notificationPayload?.body ||
       dataPayload?.body ||
-      defaultPayload.body;
+      defaultPayload.body
+    );
 
     const conversationId =
       payload?.conversation_id ||
