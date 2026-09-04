@@ -6,7 +6,6 @@ import './workspaceModuleFilters.js?v=20260904-modulefilters2';
 import './crmGridView.js?v=20260904-crmgrid1';
 import './allModuleGridView.js?v=20260904-allgrid4';
 import './statusGridGrouping.js?v=20260904-statusgrid1';
-import './employeeCalendar.js?v=20260904-employeecalendar1';
 import '../ui/index.js?v=20260904-ds4';
 
 (function installInCheck360DarkModeSafetyPatch() {
@@ -17,8 +16,7 @@ import '../ui/index.js?v=20260904-ds4';
     ['incheck360-responsive-shell-css', '/src/ui/responsive-shell.css?v=20260904-responsive2'],
     ['incheck360-crm-grid-view-css', '/src/ui/crm-grid-view.css?v=20260904-crmgrid1'],
     ['incheck360-all-module-grid-view-css', '/src/ui/all-module-grid-view.css?v=20260904-allgrid1'],
-    ['incheck360-grid-view-final-css', '/src/ui/grid-view-final.css?v=20260904-allgrid3'],
-    ['incheck360-employee-calendar-css', '/src/ui/employee-calendar.css?v=20260904-employeecalendar1']
+    ['incheck360-grid-view-final-css', '/src/ui/grid-view-final.css?v=20260904-allgrid3']
   ];
 
   for (const [id, href] of styles) {
