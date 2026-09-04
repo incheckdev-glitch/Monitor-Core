@@ -368,3 +368,31 @@ const ROLES = window.ROLES;
     state: runtimeState
   });
 })(window);
+
+(function installFzcErpBranding() {
+  function applyBranding() {
+    document.title = 'InCheck360 FZC ERP';
+
+    const brand = document.querySelector('.topbar-brand-text');
+    if (brand) {
+      const name = brand.querySelector('strong');
+      const descriptor = brand.querySelector('span');
+      if (name) name.textContent = 'InCheck360 FZC';
+      if (descriptor) descriptor.textContent = 'ERP';
+    }
+
+    document
+      .querySelectorAll('meta[name="apple-mobile-web-app-title"]')
+      .forEach(meta => meta.setAttribute('content', 'InCheck360 FZC ERP'));
+
+    document
+      .querySelectorAll('.ui-brand-logo, .auth-brand-logo, .login-brand-logo')
+      .forEach(img => img.setAttribute('alt', 'InCheck360 FZC ERP'));
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', applyBranding, { once: true });
+  } else {
+    applyBranding();
+  }
+})(window);
