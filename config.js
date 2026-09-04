@@ -242,7 +242,7 @@ window.CONFIG = {
       gulf: [5, 6],
       levant: [5],
       northafrica: [5]
-    ],
+    },
     BUSY_WINDOWS: [
       { start: 12, end: 15, weight: 3, label: 'lunch rush' },
       { start: 19, end: 23, weight: 4, label: 'dinner rush' }
@@ -421,14 +421,6 @@ const ROLES = window.ROLES;
     document
       .querySelectorAll('.ui-brand-logo, .auth-brand-logo, .login-brand-logo')
       .forEach(img => img.setAttribute('alt', FULL_NAME));
-
-    // The login background is dark blue; render only the login logo in white.
-    // Header/PWA/document branding remains unchanged.
-    document
-      .querySelectorAll('body.auth-locked .login-logo')
-      .forEach(img => {
-        img.style.filter = 'brightness(0) invert(1)';
-      });
 
     rewriteVisibleBranding(document.body || document);
   }
