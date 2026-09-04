@@ -1,7 +1,7 @@
 {
-  "name": "InCheck360 MonitorCore",
-  "short_name": "MonitorCore",
-  "description": "InCheck360 MonitorCore business operations platform",
+  "name": "InCheck360 FZC ERP",
+  "short_name": "InCheck360 ERP",
+  "description": "InCheck360 FZC ERP business operations platform",
   "display": "standalone",
   "start_url": "/",
   "scope": "/",
