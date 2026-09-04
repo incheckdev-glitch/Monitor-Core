@@ -1,4 +1,4 @@
-const STATIC_CACHE_NAME = 'incheck360-operations-portal-v3-logo';
+const STATIC_CACHE_NAME = 'incheck360-operations-portal-v4-transparent-logo';
 const PUSH_DIAGNOSTICS_CACHE_NAME = 'incheck360-operations-portal-push-diagnostics-v1';
 const PUSH_DIAGNOSTICS_PREFIX = '/__incheck360_push_diagnostics__/';
 const STATIC_ASSETS = [
