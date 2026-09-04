@@ -1,5 +1,5 @@
-const STATIC_CACHE_NAME = 'incheck360-clean-master-v1';
-const PUSH_DIAGNOSTICS_CACHE_NAME = 'incheck360-monitorcore-push-diagnostics-v1';
+const STATIC_CACHE_NAME = 'incheck360-operations-portal-v2';
+const PUSH_DIAGNOSTICS_CACHE_NAME = 'incheck360-operations-portal-push-diagnostics-v1';
 const PUSH_DIAGNOSTICS_PREFIX = '/__incheck360_push_diagnostics__/';
 const STATIC_ASSETS = [
   '/',
@@ -159,7 +159,7 @@ self.addEventListener('fetch', event => {
 self.addEventListener('push', (event) => {
   event.waitUntil((async () => {
     const defaultPayload = {
-      title: 'InCheck360 MonitorCore',
+      title: 'InCheck360 Operations Portal',
       body: 'You have a new notification.',
       url: '/'
     };
