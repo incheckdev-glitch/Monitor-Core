@@ -3,7 +3,7 @@ import './collapsibleFilters.js?v=20260904-filtertoggle3';
 import './sidebarModern.js?v=20260904-menustyle1';
 import './sidebarLightTheme.js?v=20260904-menulight1';
 import './workspaceModuleFilters.js?v=20260904-modulefilters2';
-import '../ui/index.js?v=20260904-ds1';
+import '../ui/index.js?v=20260904-ds2';
 
 (function installInCheck360DarkModeSafetyPatch() {
   const styles = [

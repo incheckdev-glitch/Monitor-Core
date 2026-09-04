@@ -1,0 +1,116 @@
+body:not(.auth-locked) .icds-module-page{
+  min-width:0;
+  padding:18px!important;
+  border:1px solid var(--icds-border)!important;
+  border-radius:18px!important;
+  background:var(--icds-surface)!important;
+  box-shadow:var(--icds-shadow-sm)!important;
+}
+body:not(.auth-locked) .icds-module-page>.icds-module-header,
+body:not(.auth-locked) .icds-module-page .icds-module-header{
+  margin:0 0 16px!important;
+  padding:0 0 14px!important;
+  border:0!important;
+  border-bottom:1px solid var(--icds-border)!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+body:not(.auth-locked) .icds-module-page .icds-module-header .icds-breadcrumb{margin-bottom:6px!important}
+body:not(.auth-locked) .icds-module-page .icds-module-header .icds-toolbar{margin-bottom:0!important}
+body:not(.auth-locked) .icds-module-page .icds-module-actions{
+  margin:0 0 14px!important;
+}
+body:not(.auth-locked) .icds-module-page .icds-module-actions-in-header{
+  margin:0!important;
+  justify-content:flex-end!important;
+}
+body:not(.auth-locked) .icds-module-page .icds-module-actions-in-header .btn,
+body:not(.auth-locked) .icds-module-page .icds-module-actions-in-header button{
+  min-height:38px;
+}
+body:not(.auth-locked) .icds-module-page .icds-module-kpis{
+  margin:0 0 16px!important;
+  padding:0 0 16px!important;
+  border-bottom:1px solid var(--icds-border);
+}
+body:not(.auth-locked) .icds-module-page .icds-kpi-card{
+  box-shadow:none!important;
+  background:var(--icds-surface-alt)!important;
+}
+body:not(.auth-locked) .icds-module-page .icds-module-filters,
+body:not(.auth-locked) .icds-module-page .icds-module-filter-toggle{
+  margin-left:0!important;
+  margin-right:0!important;
+}
+body:not(.auth-locked) .icds-module-page .icds-module-filter-panel{
+  margin:0 0 16px!important;
+  padding:14px!important;
+  border:1px solid var(--icds-border)!important;
+  border-radius:12px!important;
+  background:var(--icds-surface-alt)!important;
+  box-shadow:none!important;
+}
+body:not(.auth-locked) .icds-module-page .icds-module-filters .icds-module-filter-panel{
+  margin-bottom:0!important;
+}
+body:not(.auth-locked) .icds-module-page .icds-module-data{
+  margin:0!important;
+  border:1px solid var(--icds-border)!important;
+  border-radius:12px!important;
+  box-shadow:none!important;
+}
+body:not(.auth-locked) .icds-module-page .icds-module-form{
+  margin:0!important;
+  padding:0!important;
+}
+body:not(.auth-locked) .icds-module-page .icds-module-pagination{
+  padding-top:12px!important;
+  border-top:1px solid var(--icds-border);
+}
+body:not(.auth-locked) .icds-module-page>.icds-module-block{
+  margin-top:0!important;
+  margin-bottom:16px!important;
+}
+body:not(.auth-locked) .icds-module-page>.card.icds-module-block,
+body:not(.auth-locked) .icds-module-page>.panel.icds-module-block,
+body:not(.auth-locked) .icds-module-page>.section-card.icds-module-block{
+  box-shadow:none!important;
+}
+body:not(.auth-locked) .icds-module-page .icds-module-legacy-title{
+  display:none!important;
+}
+body:not(.auth-locked) .icds-module-page .icds-module-generated-header{
+  animation:icdsModuleHeaderIn .14s ease-out;
+}
+@keyframes icdsModuleHeaderIn{
+  from{opacity:.65;transform:translateY(-3px)}
+  to{opacity:1;transform:translateY(0)}
+}
+body:not(.auth-locked) .icds-module-page .ic-filter-toggle-row,
+body:not(.auth-locked) .icds-module-page .ic-events-filter-toggle-row{
+  margin:0 0 10px!important;
+}
+body:not(.auth-locked) .icds-module-page table.icds-table thead th{
+  top:0!important;
+}
+body:not(.auth-locked) .icds-module-page .icds-empty{
+  margin:12px 0 0!important;
+}
+:root[data-theme="dark"] body:not(.auth-locked) .icds-module-page{
+  background:var(--icds-surface)!important;
+  border-color:var(--icds-border)!important;
+  box-shadow:var(--icds-shadow-sm)!important;
+}
+:root[data-theme="dark"] body:not(.auth-locked) .icds-module-page .icds-module-filter-panel,
+:root[data-theme="dark"] body:not(.auth-locked) .icds-module-page .icds-kpi-card{
+  background:var(--icds-surface-alt)!important;
+}
+@media(max-width:900px){
+  body:not(.auth-locked) .icds-module-page{padding:14px!important;border-radius:14px!important}
+  body:not(.auth-locked) .icds-module-page .icds-module-header{padding-bottom:12px!important}
+}
+@media(max-width:640px){
+  body:not(.auth-locked) .icds-module-page{padding:11px!important;border-left:0!important;border-right:0!important;border-radius:0!important}
+  body:not(.auth-locked) .icds-module-page .icds-module-actions-in-header{width:100%;justify-content:flex-start!important}
+}

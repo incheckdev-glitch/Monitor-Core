@@ -1,19 +1,28 @@
-import { UIComponents } from './components.js?v=20260904-ds1';
-import { installLegacyBridge, LegacyBridge } from './legacyBridge.js?v=20260904-ds1';
+import { UIComponents } from './components.js?v=20260904-ds2';
+import { installLegacyBridge, LegacyBridge } from './legacyBridge.js?v=20260904-ds2';
+import { installModulePageSystem, ModulePage } from './modulePage.js?v=20260904-ds2';
 
 function ensureCss() {
-  if (document.getElementById('incheck360-design-system-css')) return;
-  const link = document.createElement('link');
-  link.id = 'incheck360-design-system-css';
-  link.rel = 'stylesheet';
-  link.href = '/src/ui/design-system.css?v=20260904-ds1';
-  document.head.appendChild(link);
+  const styles = [
+    ['incheck360-design-system-css', '/src/ui/design-system.css?v=20260904-ds2'],
+    ['incheck360-module-page-css', '/src/ui/module-page.css?v=20260904-ds2']
+  ];
+
+  styles.forEach(([id, href]) => {
+    if (document.getElementById(id)) return;
+    const link = document.createElement('link');
+    link.id = id;
+    link.rel = 'stylesheet';
+    link.href = href;
+    document.head.appendChild(link);
+  });
 }
 
 function install() {
   ensureCss();
   if (!document.body || document.body.classList.contains('auth-locked')) return;
   installLegacyBridge();
+  installModulePageSystem();
 }
 
 function watchAuth() {
@@ -45,6 +54,10 @@ if (document.readyState === 'loading') {
 
 window.InCheck360UI = Object.freeze({
   Components: UIComponents,
+  ModulePage,
   Bridge: LegacyBridge,
-  refresh: () => LegacyBridge.refresh()
+  refresh() {
+    LegacyBridge.refresh();
+    ModulePage.refresh();
+  }
 });
