@@ -4,7 +4,8 @@
     contextChip: null,
     profileMenu: null,
     profileButton: null,
-    logoutButton: null
+    logoutButton: null,
+    authObserver: null
   };
 
   function text(value) {
@@ -151,18 +152,20 @@
   }
 
   function hideLegacyTopbarControls(actions) {
-    const languageControl = actions.querySelector('.topbar-language');
-    const onlineControl = actions.querySelector('.topbar-online');
-    const logoutButton = document.getElementById('logoutBtn') || actions.querySelector('.topbar-logout');
+    const controls = [
+      actions.querySelector('.topbar-language'),
+      actions.querySelector('.topbar-online'),
+      document.getElementById('logoutBtn') || actions.querySelector('.topbar-logout')
+    ].filter(Boolean);
 
-    [languageControl, onlineControl, logoutButton].filter(Boolean).forEach(control => {
-      control.style.setProperty('display', 'none', 'important');
-      control.hidden = true;
-      control.setAttribute('aria-hidden', 'true');
-      control.setAttribute('tabindex', '-1');
+    controls.forEach(control => {
+      if (control.style.display !== 'none') control.style.display = 'none';
+      if (!control.hidden) control.hidden = true;
+      if (control.getAttribute('aria-hidden') !== 'true') control.setAttribute('aria-hidden', 'true');
+      if (control.getAttribute('tabindex') !== '-1') control.setAttribute('tabindex', '-1');
     });
 
-    STATE.logoutButton = logoutButton;
+    STATE.logoutButton = document.getElementById('logoutBtn') || actions.querySelector('.topbar-logout');
   }
 
   function syncProfileMenuIdentity() {
@@ -270,19 +273,12 @@
       const observer = new MutationObserver(syncProfileMenuIdentity);
       identityTargets.forEach(node => observer.observe(node, { childList: true, subtree: true, characterData: true }));
     }
-
-    if (typeof MutationObserver !== 'undefined') {
-      new MutationObserver(() => hideLegacyTopbarControls(actions)).observe(actions, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ['style', 'hidden', 'class']
-      });
-    }
   }
 
   function install() {
     if (STATE.installed) return;
+    if (document.body?.classList.contains('auth-locked')) return;
+
     const header = document.getElementById('appHeader');
     const actions = header?.querySelector('.topbar-actions');
     const search = document.getElementById('searchInput');
@@ -328,9 +324,27 @@
     }
   }
 
+  function watchForAuthenticatedShell() {
+    if (STATE.installed || !document.body || typeof MutationObserver === 'undefined') return;
+    if (!document.body.classList.contains('auth-locked')) {
+      install();
+      return;
+    }
+    if (STATE.authObserver) return;
+
+    STATE.authObserver = new MutationObserver(() => {
+      if (!document.body.classList.contains('auth-locked')) {
+        STATE.authObserver.disconnect();
+        STATE.authObserver = null;
+        global.setTimeout(install, 0);
+      }
+    });
+    STATE.authObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  }
+
   function start() {
     install();
-    if (!STATE.installed) global.setTimeout(install, 250);
+    watchForAuthenticatedShell();
   }
 
   if (document.readyState === 'loading') {
