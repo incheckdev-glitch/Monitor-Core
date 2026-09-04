@@ -1,0 +1,59 @@
+/* Keep List View / Grid View controls on the same action row as Create/New/Add buttons. */
+body:not(.auth-locked) .ic-view-switch-create-cluster{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:flex-end!important;
+  gap:8px!important;
+  min-width:0!important;
+  max-width:100%!important;
+  margin-left:auto!important;
+  flex:0 0 auto!important;
+  white-space:nowrap!important;
+}
+body:not(.auth-locked) .ic-view-switch-create-cluster>.ic-crm-view-switch,
+body:not(.auth-locked) .ic-view-switch-create-cluster>.ic-all-view-switch{
+  width:auto!important;
+  min-width:0!important;
+  display:inline-flex!important;
+  grid-template-columns:none!important;
+  margin:0!important;
+  flex:0 0 auto!important;
+}
+body:not(.auth-locked) .ic-view-switch-create-cluster>.ic-crm-view-switch .ic-crm-view-btn,
+body:not(.auth-locked) .ic-view-switch-create-cluster>.ic-all-view-switch .ic-crm-view-btn{
+  width:auto!important;
+  flex:0 0 auto!important;
+}
+body:not(.auth-locked) .ic-table-view-toolbar{
+  width:100%;
+  min-width:0;
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:8px;
+  margin:0 0 10px;
+}
+@media(max-width:760px){
+  body:not(.auth-locked) .ic-view-switch-create-cluster{
+    width:100%!important;
+    justify-content:flex-start!important;
+    margin-left:0!important;
+    overflow-x:auto!important;
+    overscroll-behavior-inline:contain;
+    -webkit-overflow-scrolling:touch;
+    padding-bottom:2px;
+  }
+  body:not(.auth-locked) .ic-view-switch-create-cluster>.ic-crm-view-switch,
+  body:not(.auth-locked) .ic-view-switch-create-cluster>.ic-all-view-switch{
+    width:auto!important;
+    display:inline-flex!important;
+    margin:0!important;
+  }
+  body:not(.auth-locked) .ic-view-switch-create-cluster .ic-crm-view-btn{
+    min-height:44px!important;
+  }
+  body:not(.auth-locked) .ic-table-view-toolbar{
+    justify-content:flex-start;
+    overflow-x:auto;
+  }
+}

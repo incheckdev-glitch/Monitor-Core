@@ -4,7 +4,7 @@ import './sidebarModern.js?v=20260904-menustyle1';
 import './sidebarLightTheme.js?v=20260904-menulight1';
 import './workspaceModuleFilters.js?v=20260904-modulefilters2';
 import './crmGridView.js?v=20260904-crmgrid1';
-import './allModuleGridView.js?v=20260904-allgrid1';
+import './allModuleGridView.js?v=20260904-allgrid2';
 import '../ui/index.js?v=20260904-ds4';
 
 (function installInCheck360DarkModeSafetyPatch() {
@@ -14,7 +14,8 @@ import '../ui/index.js?v=20260904-ds4';
     ['incheck360-modern-topbar-css', '/topbar-modern.css?v=20260904-topnav1'],
     ['incheck360-responsive-shell-css', '/src/ui/responsive-shell.css?v=20260904-responsive2'],
     ['incheck360-crm-grid-view-css', '/src/ui/crm-grid-view.css?v=20260904-crmgrid1'],
-    ['incheck360-all-module-grid-view-css', '/src/ui/all-module-grid-view.css?v=20260904-allgrid1']
+    ['incheck360-all-module-grid-view-css', '/src/ui/all-module-grid-view.css?v=20260904-allgrid1'],
+    ['incheck360-all-module-grid-layout-css', '/src/ui/all-module-grid-layout.css?v=20260904-allgrid2']
   ];
 
   for (const [id, href] of styles) {
