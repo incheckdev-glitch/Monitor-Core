@@ -1,182 +1,268 @@
-/* Responsive authenticated ERP shell overrides.
-   Keeps the top navigation in normal document flow and makes the unified module surface responsive. */
+/* InCheck360 Operations Portal — global responsive hardening for web + installed PWA. */
+:root{
+  --ic-safe-top:env(safe-area-inset-top,0px);
+  --ic-safe-right:env(safe-area-inset-right,0px);
+  --ic-safe-bottom:env(safe-area-inset-bottom,0px);
+  --ic-safe-left:env(safe-area-inset-left,0px);
+  --ic-visual-width:100vw;
+  --ic-visual-height:100dvh;
+  --ic-layout-height:100dvh;
+}
+html{max-width:100%;overflow-x:clip;-webkit-text-size-adjust:100%;text-size-adjust:100%;}
+body:not(.auth-locked){max-width:100%;overflow-x:clip;overscroll-behavior-x:none;}
+body:not(.auth-locked) *,body:not(.auth-locked) *::before,body:not(.auth-locked) *::after{box-sizing:border-box;}
+body:not(.auth-locked) img,body:not(.auth-locked) svg,body:not(.auth-locked) video,body:not(.auth-locked) canvas{max-width:100%;}
+body:not(.auth-locked) img,body:not(.auth-locked) video{height:auto;}
 
+/* Top navigation always stays in normal page flow. */
 body:not(.auth-locked) #appHeader.app-topbar{
-  position:relative!important;
-  inset:auto!important;
-  top:auto!important;
-  right:auto!important;
-  bottom:auto!important;
-  left:auto!important;
-  width:100%!important;
-  max-width:100%!important;
-  box-sizing:border-box!important;
-  z-index:40!important;
+  position:relative!important;inset:auto!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;
+  width:100%!important;max-width:100%!important;z-index:40!important;
 }
 
+/* Shell/content cannot force page-level horizontal scrolling. */
+body:not(.auth-locked) #app,
+body:not(.auth-locked) .wrap,
+body:not(.auth-locked) .content,
+body:not(.auth-locked) .content-layout,
 body:not(.auth-locked) .icds-app-shell,
-body:not(.auth-locked) .icds-module-page,
-body:not(.auth-locked) .icds-module-page *{
-  box-sizing:border-box;
-}
-body:not(.auth-locked) .icds-app-shell,
+body:not(.auth-locked) .icds-page,
 body:not(.auth-locked) .icds-module-page{
-  min-width:0!important;
-  max-width:100%!important;
+  min-width:0!important;max-width:100%!important;
 }
+body:not(.auth-locked) .content{overflow:visible!important;}
+body:not(.auth-locked) .icds-module-page{overflow:visible!important;}
+
+/* Text resilience for long ERP identifiers and values. */
+body:not(.auth-locked) .icds-module-page p,
+body:not(.auth-locked) .icds-module-page dd,
+body:not(.auth-locked) .icds-module-page .muted,
+body:not(.auth-locked) .icds-module-page [class*="value"],
+body:not(.auth-locked) .icds-module-page [class*="email"],
+body:not(.auth-locked) .icds-module-page [class*="number"]{overflow-wrap:anywhere;word-break:break-word;}
+
+/* Tables scroll inside their component, never the full page. */
 body:not(.auth-locked) .icds-table-shell,
-body:not(.auth-locked) .icds-module-data{
-  max-width:100%!important;
-  overflow-x:auto!important;
-  overscroll-behavior-inline:contain;
-  -webkit-overflow-scrolling:touch;
+body:not(.auth-locked) .icds-module-data,
+body:not(.auth-locked) .table-wrap,
+body:not(.auth-locked) .table-wrapper,
+body:not(.auth-locked) .table-responsive,
+body:not(.auth-locked) .table-container,
+body:not(.auth-locked) [class*="table-wrap"],
+body:not(.auth-locked) [class*="table-container"]{
+  width:100%!important;max-width:100%!important;min-width:0!important;overflow-x:auto!important;overflow-y:visible;
+  overscroll-behavior-inline:contain;-webkit-overflow-scrolling:touch;scrollbar-gutter:stable;
 }
-body:not(.auth-locked) .icds-form input,
+body:not(.auth-locked) table{max-width:none;}
+body:not(.auth-locked) table.icds-table{min-width:max-content;}
+body:not(.auth-locked) table.icds-table th,body:not(.auth-locked) table.icds-table td{max-width:360px;}
+body:not(.auth-locked) table.icds-table td{overflow-wrap:anywhere;}
+
+/* Filters/forms use fluid tracks instead of fixed widths. */
+body:not(.auth-locked) [data-icds-filter-fields],
+body:not(.auth-locked) .filter-grid,
+body:not(.auth-locked) [class*="filter-grid"]{
+  grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),1fr))!important;
+}
+body:not(.auth-locked) .icds-form,
+body:not(.auth-locked) .icds-form label,
+body:not(.auth-locked) .icds-form .field,
+body:not(.auth-locked) .icds-form [class*="field"]{min-width:0;max-width:100%;}
+body:not(.auth-locked) .icds-form input:not([type="checkbox"]):not([type="radio"]),
 body:not(.auth-locked) .icds-form select,
 body:not(.auth-locked) .icds-form textarea{
-  max-width:100%!important;
+  width:100%;min-width:0!important;max-width:100%!important;
+}
+body:not(.auth-locked) .icds-form textarea{resize:vertical;}
+body:not(.auth-locked) .icds-form .form-grid,
+body:not(.auth-locked) .icds-form .fields-grid,
+body:not(.auth-locked) .icds-form [class*="form-grid"],
+body:not(.auth-locked) .icds-form [class*="fields-grid"],
+body:not(.auth-locked) .icds-form [class*="form-row"]{
+  min-width:0;max-width:100%;
 }
 
-/* Drawers/forms sit above the non-sticky navigation rather than underneath it. */
-body:not(.auth-locked) .icds-drawer{
-  z-index:2200!important;
+/* Responsive action bars and tabs. */
+body:not(.auth-locked) .icds-toolbar,
+body:not(.auth-locked) .icds-module-actions,
+body:not(.auth-locked) .icds-module-actions-in-header,
+body:not(.auth-locked) .form-actions,
+body:not(.auth-locked) .modal-actions,
+body:not(.auth-locked) .dialog-actions{max-width:100%;}
+body:not(.auth-locked) .tabs,
+body:not(.auth-locked) [role="tablist"]:not(.grouped-view-tabs),
+body:not(.auth-locked) [class*="tabs-row"]{
+  max-width:100%;overflow-x:auto;overscroll-behavior-inline:contain;-webkit-overflow-scrolling:touch;
 }
 
-@media (max-width:1100px){
+/* Charts, analytics and calendars scale within the module. */
+body:not(.auth-locked) .chart-container,
+body:not(.auth-locked) .chart-wrap,
+body:not(.auth-locked) [class*="chart-container"],
+body:not(.auth-locked) [class*="chart-wrap"],
+body:not(.auth-locked) .analytics-chart,
+body:not(.auth-locked) .fc{width:100%!important;max-width:100%!important;min-width:0!important;}
+body:not(.auth-locked) canvas{width:100%!important;max-width:100%!important;}
+body:not(.auth-locked) .fc .fc-toolbar{flex-wrap:wrap;gap:8px;}
+body:not(.auth-locked) .fc .fc-toolbar-chunk{display:flex;flex-wrap:wrap;gap:4px;}
+body:not(.auth-locked) .fc-scroller{max-width:100%;}
+
+/* Drawers/modals honor the real visual viewport and mobile keyboard. */
+body:not(.auth-locked) .icds-drawer{z-index:2200!important;}
+body:not(.auth-locked) .modal,
+body:not(.auth-locked) [role="dialog"],
+body:not(.auth-locked) .dialog{
+  max-width:100vw;max-height:var(--ic-visual-height,100dvh);
+}
+body:not(.auth-locked) .modal-content,
+body:not(.auth-locked) .dialog-content{
+  max-width:calc(100vw - 24px);max-height:calc(var(--ic-visual-height,100dvh) - 24px);
+}
+body:not(.auth-locked) .icds-drawer>.modal-content,
+body:not(.auth-locked) .icds-drawer>.dialog-content,
+body:not(.auth-locked) .icds-drawer .modal-content:first-child{
+  height:var(--ic-visual-height,100dvh)!important;max-height:var(--ic-visual-height,100dvh)!important;
+  overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+}
+html.ic-keyboard-open body:not(.auth-locked) .icds-drawer>.modal-content,
+html.ic-keyboard-open body:not(.auth-locked) .icds-drawer>.dialog-content{height:var(--ic-visual-height)!important;max-height:var(--ic-visual-height)!important;}
+
+/* Popovers/dropdowns stay inside the visible screen. */
+body:not(.auth-locked) .icds-dropdown,
+body:not(.auth-locked) .dropdown-menu,
+body:not(.auth-locked) .actions-menu,
+body:not(.auth-locked) [class*="dropdown-menu"],
+body:not(.auth-locked) [class*="popover"]{
+  max-width:min(360px,calc(100vw - 24px))!important;max-height:calc(var(--ic-visual-height,100dvh) - 24px)!important;overflow:auto!important;
+  overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+}
+body:not(.auth-locked) .notification-preview-panel,
+body:not(.auth-locked) .notifications-panel{
+  width:min(420px,calc(100vw - 20px))!important;max-width:calc(100vw - 20px)!important;
+  max-height:calc(var(--ic-visual-height,100dvh) - 24px)!important;overflow:auto!important;
+}
+body:not(.auth-locked) .icds-command-overlay{padding-left:max(12px,var(--ic-safe-left));padding-right:max(12px,var(--ic-safe-right));}
+body:not(.auth-locked) .icds-command{max-width:calc(100vw - 24px);}
+body:not(.auth-locked) .icds-command-results{max-height:min(54vh,calc(var(--ic-visual-height,100dvh) - 150px));}
+
+/* PWA safe-area support. */
+@media (display-mode:standalone),(display-mode:fullscreen){
+  body:not(.auth-locked){padding-bottom:var(--ic-safe-bottom);}
   body:not(.auth-locked) #appHeader.app-topbar{
-    height:auto!important;
-    min-height:0!important;
-    padding:10px 12px!important;
-    display:grid!important;
+    padding-top:max(10px,var(--ic-safe-top))!important;
+    padding-left:max(12px,var(--ic-safe-left))!important;
+    padding-right:max(12px,var(--ic-safe-right))!important;
+  }
+  body:not(.auth-locked) .icds-module-page{padding-bottom:max(14px,var(--ic-safe-bottom))!important;}
+  body:not(.auth-locked) .icds-drawer>.modal-content,
+  body:not(.auth-locked) .icds-drawer>.dialog-content{
+    padding-bottom:var(--ic-safe-bottom)!important;
+  }
+  body:not(.auth-locked) .pwa-install-banner{padding-bottom:max(12px,var(--ic-safe-bottom))!important;}
+}
+
+/* Touch ergonomics. */
+@media (pointer:coarse),(any-pointer:coarse){
+  body:not(.auth-locked) button,
+  body:not(.auth-locked) .btn,
+  body:not(.auth-locked) a[role="button"],
+  body:not(.auth-locked) select,
+  body:not(.auth-locked) input:not([type="checkbox"]):not([type="radio"]){min-height:44px;}
+  body:not(.auth-locked) input[type="checkbox"],body:not(.auth-locked) input[type="radio"]{min-width:20px;min-height:20px;}
+  body:not(.auth-locked) .view-tab,body:not(.auth-locked) .view-menu-group-title{min-height:44px!important;}
+}
+
+/* Laptop/tablet. */
+@media (max-width:1199px){
+  body:not(.auth-locked) #appHeader.app-topbar{
+    height:auto!important;min-height:0!important;padding:10px 12px!important;display:grid!important;
     grid-template-columns:auto auto minmax(0,1fr) auto!important;
-    grid-template-areas:
-      "menu brand context actions"
-      "search search search search"!important;
-    align-items:center!important;
-    gap:9px 10px!important;
+    grid-template-areas:"menu brand context actions" "search search search search"!important;
+    align-items:center!important;gap:9px 10px!important;
   }
   body:not(.auth-locked) #appHeader .topbar-menu-btn{grid-area:menu!important;}
   body:not(.auth-locked) #appHeader .topbar-brand{grid-area:brand!important;min-width:0!important;}
   body:not(.auth-locked) #appHeader .topbar-context-chip{grid-area:context!important;max-width:none!important;justify-self:start!important;}
   body:not(.auth-locked) #appHeader .topbar-actions{grid-area:actions!important;margin-left:0!important;justify-self:end!important;}
-  body:not(.auth-locked) #appHeader .topbar-search{
-    grid-area:search!important;
-    width:100%!important;
-    min-width:0!important;
-    max-width:none!important;
-    margin:0!important;
-  }
-
+  body:not(.auth-locked) #appHeader .topbar-search{grid-area:search!important;width:100%!important;min-width:0!important;max-width:none!important;margin:0!important;}
   body:not(.auth-locked) .icds-module-page{padding:14px!important;}
-  body:not(.auth-locked) .icds-module-page .icds-toolbar,
-  body:not(.auth-locked) .icds-module-page .icds-module-header .icds-toolbar{
-    align-items:flex-start!important;
-  }
-  body:not(.auth-locked) .icds-kpi-grid{
-    grid-template-columns:repeat(2,minmax(0,1fr))!important;
-  }
+  body:not(.auth-locked) .icds-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;}
   body:not(.auth-locked) .icds-form .form-grid,
   body:not(.auth-locked) .icds-form .fields-grid,
   body:not(.auth-locked) .icds-form [class*="form-grid"],
-  body:not(.auth-locked) .icds-form [class*="fields-grid"]{
-    grid-template-columns:repeat(2,minmax(0,1fr))!important;
-  }
+  body:not(.auth-locked) .icds-form [class*="fields-grid"]{grid-template-columns:repeat(2,minmax(0,1fr))!important;}
 }
 
-@media (max-width:760px){
+/* Mobile. */
+@media (max-width:767px){
   body:not(.auth-locked) #appHeader.app-topbar{
     grid-template-columns:auto minmax(0,1fr) auto!important;
-    grid-template-areas:
-      "menu brand actions"
-      "search search search"!important;
-    padding:9px 10px!important;
-    gap:8px!important;
+    grid-template-areas:"menu brand actions" "search search search"!important;
+    padding:9px 10px!important;gap:8px!important;
   }
   body:not(.auth-locked) #appHeader .topbar-context-chip{display:none!important;}
-  body:not(.auth-locked) #appHeader .topbar-brand{min-width:0!important;}
-  body:not(.auth-locked) #appHeader .topbar-logo img,
-  body:not(.auth-locked) #appHeader .ui-brand-logo{
-    width:132px!important;
-    max-width:132px!important;
-    height:42px!important;
-    max-height:42px!important;
-  }
-  body:not(.auth-locked) #appHeader .topbar-actions{gap:5px!important;}
-  body:not(.auth-locked) #appHeader .topbar-icon-btn,
-  body:not(.auth-locked) #appHeader .topbar-menu-btn{
-    width:38px!important;
-    min-width:38px!important;
-    height:38px!important;
-  }
-  body:not(.auth-locked) #appHeader .topbar-profile{
-    min-width:44px!important;
-    max-width:44px!important;
-    width:44px!important;
-    padding:4px!important;
-    justify-content:center!important;
-  }
-  body:not(.auth-locked) #appHeader .topbar-user-info,
-  body:not(.auth-locked) #appHeader .topbar-profile-arrow{display:none!important;}
-  body:not(.auth-locked) #appHeader .topbar-search-shortcut{display:none!important;}
+  body:not(.auth-locked) #appHeader .topbar-logo img,body:not(.auth-locked) #appHeader .ui-brand-logo{width:132px!important;max-width:132px!important;height:42px!important;max-height:42px!important;}
+  body:not(.auth-locked) #appHeader .topbar-actions{gap:4px!important;}
+  body:not(.auth-locked) #appHeader .topbar-profile{min-width:44px!important;max-width:44px!important;width:44px!important;padding:4px!important;justify-content:center!important;}
+  body:not(.auth-locked) #appHeader .topbar-user-info,body:not(.auth-locked) #appHeader .topbar-profile-arrow,body:not(.auth-locked) #appHeader .topbar-search-shortcut{display:none!important;}
 
-  body:not(.auth-locked) .icds-module-page{
-    padding:11px!important;
-    border-left:0!important;
-    border-right:0!important;
-    border-radius:0!important;
-  }
-  body:not(.auth-locked) .icds-module-page .icds-module-header .icds-toolbar,
-  body:not(.auth-locked) .icds-module-page .icds-toolbar{
-    display:grid!important;
-    grid-template-columns:minmax(0,1fr)!important;
-    align-items:stretch!important;
-  }
-  body:not(.auth-locked) .icds-module-page .icds-module-actions-in-header,
-  body:not(.auth-locked) .icds-module-page .icds-module-actions{
-    width:100%!important;
-    justify-content:flex-start!important;
-    overflow-x:auto!important;
-    padding-bottom:2px!important;
-  }
-  body:not(.auth-locked) .icds-kpi-grid{
-    grid-template-columns:minmax(0,1fr)!important;
-  }
+  body:not(.auth-locked) .content-layout.ic-modern-nav-layout,
+  body:not(.auth-locked) .content-layout.ic-modern-nav-layout.ic-nav-collapsed{grid-template-columns:minmax(0,1fr)!important;gap:10px!important;}
+  body:not(.auth-locked) .view-menu.ic-modern-nav,
+  body:not(.auth-locked) .view-menu.ic-modern-nav.ic-nav-collapsed,
+  body:not(.auth-locked) .view-menu.ic-modern-nav.ic-nav-collapsed:hover{position:relative!important;top:auto!important;width:100%!important;max-height:none!important;}
+
+  body:not(.auth-locked) .icds-module-page{padding:11px!important;border-left:0!important;border-right:0!important;border-radius:0!important;}
+  body:not(.auth-locked) .icds-module-page .icds-toolbar,
+  body:not(.auth-locked) .icds-module-page .icds-module-header .icds-toolbar{display:grid!important;grid-template-columns:minmax(0,1fr)!important;align-items:stretch!important;}
+  body:not(.auth-locked) .icds-module-actions,body:not(.auth-locked) .icds-module-actions-in-header{width:100%!important;justify-content:flex-start!important;overflow-x:auto!important;flex-wrap:nowrap!important;padding-bottom:3px!important;}
+  body:not(.auth-locked) .icds-module-actions>*{flex:0 0 auto;}
+  body:not(.auth-locked) .icds-kpi-grid{grid-template-columns:minmax(0,1fr)!important;}
   body:not(.auth-locked) [data-icds-filter-fields],
+  body:not(.auth-locked) .filter-grid,
+  body:not(.auth-locked) [class*="filter-grid"],
   body:not(.auth-locked) .icds-form .form-grid,
   body:not(.auth-locked) .icds-form .fields-grid,
   body:not(.auth-locked) .icds-form [class*="form-grid"],
-  body:not(.auth-locked) .icds-form [class*="fields-grid"]{
-    grid-template-columns:minmax(0,1fr)!important;
-  }
-  body:not(.auth-locked) .icds-pagination{
-    justify-content:flex-start!important;
-    overflow-x:auto!important;
-  }
+  body:not(.auth-locked) .icds-form [class*="fields-grid"]{grid-template-columns:minmax(0,1fr)!important;}
+  body:not(.auth-locked) .icds-pagination{justify-content:flex-start!important;overflow-x:auto!important;flex-wrap:nowrap!important;padding-bottom:3px;}
+
   body:not(.auth-locked) .icds-drawer>.modal-content,
   body:not(.auth-locked) .icds-drawer>.dialog-content,
   body:not(.auth-locked) .icds-drawer .modal-content:first-child{
-    width:100vw!important;
-    max-width:100vw!important;
-    height:100dvh!important;
-    max-height:100dvh!important;
-    border-radius:0!important;
+    width:100vw!important;max-width:100vw!important;height:var(--ic-visual-height,100dvh)!important;max-height:var(--ic-visual-height,100dvh)!important;
+    margin:0!important;border-radius:0!important;padding-left:max(12px,var(--ic-safe-left));padding-right:max(12px,var(--ic-safe-right));
   }
+  body:not(.auth-locked) .modal:not(.icds-drawer) .modal-content,
+  body:not(.auth-locked) [role="dialog"]:not(.icds-drawer) .dialog-content{width:calc(100vw - 16px)!important;max-width:calc(100vw - 16px)!important;max-height:calc(var(--ic-visual-height,100dvh) - 16px)!important;}
+  body:not(.auth-locked) .notification-preview-panel{position:fixed!important;left:10px!important;right:10px!important;top:auto;max-width:none!important;width:auto!important;}
+  body:not(.auth-locked) .icds-command-overlay{padding-top:max(7vh,var(--ic-safe-top));}
+  body:not(.auth-locked) .fc .fc-toolbar{align-items:flex-start;}
+  body:not(.auth-locked) .fc .fc-toolbar-title{font-size:1.05rem;}
 }
 
-@media (max-width:480px){
-  body:not(.auth-locked) #appHeader .topbar-logo img,
-  body:not(.auth-locked) #appHeader .ui-brand-logo{
-    width:112px!important;
-    max-width:112px!important;
-  }
-  body:not(.auth-locked) #appHeader .topbar-search{
-    height:40px!important;
-    padding:0 10px!important;
-  }
-  body:not(.auth-locked) #appHeader #searchInput{font-size:13px!important;}
+/* Small phones. */
+@media (max-width:479px){
+  body:not(.auth-locked) #appHeader .topbar-logo img,body:not(.auth-locked) #appHeader .ui-brand-logo{width:108px!important;max-width:108px!important;}
+  body:not(.auth-locked) #appHeader .topbar-search{height:40px!important;padding:0 9px!important;}
+  body:not(.auth-locked) #appHeader #searchInput{font-size:16px!important;} /* prevents iOS input zoom */
   body:not(.auth-locked) .icds-module-page{padding:9px!important;}
-  body:not(.auth-locked) .icds-module-page .btn,
-  body:not(.auth-locked) .icds-module-page button{
-    max-width:100%;
-  }
+  body:not(.auth-locked) .icds-breadcrumb{font-size:10.5px;}
+  body:not(.auth-locked) .icds-module-page h1,body:not(.auth-locked) .icds-module-page h2{font-size:clamp(18px,5.5vw,24px)!important;}
+  body:not(.auth-locked) .icds-form input:not([type="checkbox"]):not([type="radio"]),body:not(.auth-locked) .icds-form select,body:not(.auth-locked) .icds-form textarea{font-size:16px!important;}
+  body:not(.auth-locked) .icds-module-page .btn,body:not(.auth-locked) .icds-module-page button{max-width:100%;}
+  body:not(.auth-locked) table.icds-table th,body:not(.auth-locked) table.icds-table td{padding-left:9px!important;padding-right:9px!important;}
+}
+
+/* Short-height landscape phones/PWA. */
+@media (max-height:520px) and (orientation:landscape){
+  body:not(.auth-locked) #appHeader.app-topbar{padding-top:6px!important;padding-bottom:6px!important;}
+  body:not(.auth-locked) #appHeader .topbar-search{height:38px!important;}
+  body:not(.auth-locked) .icds-command-overlay{padding-top:8px!important;}
+  body:not(.auth-locked) .icds-command-results{max-height:calc(var(--ic-visual-height,100dvh) - 92px);}
+  body:not(.auth-locked) .icds-drawer>.modal-content,body:not(.auth-locked) .icds-drawer>.dialog-content{height:var(--ic-visual-height,100dvh)!important;}
+}
+
+@media (prefers-reduced-motion:reduce){
+  body:not(.auth-locked) *,body:not(.auth-locked) *::before,body:not(.auth-locked) *::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;}
 }

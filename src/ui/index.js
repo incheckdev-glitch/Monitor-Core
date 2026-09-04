@@ -1,6 +1,7 @@
 import { UIComponents } from './components.js?v=20260904-ds2';
 import { installLegacyBridge, LegacyBridge } from './legacyBridge.js?v=20260904-ds2';
 import { installModulePageSystem, ModulePage } from './modulePage.js?v=20260904-ds2';
+import { installResponsiveRuntime, ResponsiveRuntime } from './responsiveRuntime.js?v=20260904-responsive2';
 
 function ensureCss() {
   const styles = [
@@ -20,6 +21,7 @@ function ensureCss() {
 
 function install() {
   ensureCss();
+  installResponsiveRuntime();
   if (!document.body || document.body.classList.contains('auth-locked')) return;
   installLegacyBridge();
   installModulePageSystem();
@@ -42,6 +44,7 @@ function watchAuth() {
 
 function start() {
   ensureCss();
+  installResponsiveRuntime();
   install();
   watchAuth();
 }
@@ -56,7 +59,9 @@ window.InCheck360UI = Object.freeze({
   Components: UIComponents,
   ModulePage,
   Bridge: LegacyBridge,
+  Responsive: ResponsiveRuntime,
   refresh() {
+    ResponsiveRuntime.refresh();
     LegacyBridge.refresh();
     ModulePage.refresh();
   }

@@ -1,12 +1,16 @@
 {
+  "id": "/",
   "name": "InCheck360 Operations Portal",
   "short_name": "Operations Portal",
   "description": "InCheck360 Operations Portal business operations platform",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
   "start_url": "/",
   "scope": "/",
   "background_color": "#ffffff",
   "theme_color": "#ffffff",
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/icons/icon-192.png",
