@@ -3,6 +3,7 @@ import './collapsibleFilters.js?v=20260904-filtertoggle3';
 import './sidebarModern.js?v=20260904-menustyle1';
 import './sidebarLightTheme.js?v=20260904-menulight1';
 import './workspaceModuleFilters.js?v=20260904-modulefilters2';
+import './erpUiEnhancements.js?v=20260904-enterprise-ui1';
 
 (function installInCheck360DarkModeSafetyPatch() {
   const styles = [
