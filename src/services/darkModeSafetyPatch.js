@@ -4,7 +4,8 @@ import './sidebarModern.js?v=20260904-menustyle1';
 import './sidebarLightTheme.js?v=20260904-menulight1';
 import './workspaceModuleFilters.js?v=20260904-modulefilters2';
 import './crmGridView.js?v=20260904-crmgrid1';
-import './allModuleGridView.js?v=20260904-allgrid3';
+import './allModuleGridView.js?v=20260904-allgrid4';
+import './statusGridGrouping.js?v=20260904-statusgrid1';
 import '../ui/index.js?v=20260904-ds4';
 
 (function installInCheck360DarkModeSafetyPatch() {
