@@ -1,5 +1,5 @@
 import './topbarModern.js?v=20260904-topnav2';
-import './collapsibleFilters.js?v=20260904-filtertoggle1';
+import './collapsibleFilters.js?v=20260904-filtertoggle2';
 
 (function installInCheck360DarkModeSafetyPatch() {
   const styles = [
