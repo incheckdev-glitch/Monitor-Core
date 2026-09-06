@@ -1,0 +1,65 @@
+/* Final dark-mode module readability overrides. Load last. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .company-summary-card,
+  .contacts-summary-card,
+  .payment-forecast-summary-card,
+  .biners-summary-card,
+  [class$="-summary-card"],
+  [class*="-summary-card "],
+  [class$="-kpi-card"],
+  [class*="-kpi-card "],
+  [class$="-metric-card"],
+  [class*="-metric-card "],
+  [class$="-stat-card"],
+  [class*="-stat-card "]
+) > :where(div,section) > span:not([class*="icon"]),
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .company-summary-card,
+  .contacts-summary-card,
+  .payment-forecast-summary-card,
+  .biners-summary-card
+) :where(.summary-label,.summary-subtitle){
+  color:#9aa9bc!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .company-summary-card,
+  .contacts-summary-card,
+  .payment-forecast-summary-card,
+  .biners-summary-card,
+  [class$="-summary-card"],
+  [class*="-summary-card "],
+  [class$="-kpi-card"],
+  [class*="-kpi-card "],
+  [class$="-metric-card"],
+  [class*="-metric-card "],
+  [class$="-stat-card"],
+  [class*="-stat-card "]
+) :where(strong,b,.value,.summary-value,.kpi-value,.metric-value,.stat-value){
+  color:#f8fafc!important;
+}
+
+/* Descriptions and record counts should remain clearly legible. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  [class$="-page-header"],
+  [class*="-page-header "],
+  [class$="-table-toolbar"],
+  [class*="-table-toolbar "],
+  [class$="-table-footer"],
+  [class*="-table-footer "]
+) :where(p,small,span:not(.badge):not(.chip):not([class*="status"])){
+  color:#aab7c8!important;
+}
+
+/* Keep paper/document descendants light after all module rules. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .document-preview,.document-sheet,.doc-sheet,.print-preview,.pdf-preview,
+  .report-page,.report-document,.invoice-preview,.invoice-document,
+  .receipt-preview,.receipt-document,.agreement-preview,.agreement-document,
+  .proposal-preview,.proposal-document,.credit-note-preview,.credit-note-document,
+  .statement-preview,.statement-document,.accounting-print-area,.backup-print-area,
+  .hr-payslip-preview,.hr-receipt-preview,.hr-statement-print,
+  [data-document-preview="true"],[data-print-preview="true"]
+) :where(h1,h2,h3,h4,h5,h6,p,span,div,strong,b,small,label,li,th,td){
+  color:#0f172a!important;
+}
