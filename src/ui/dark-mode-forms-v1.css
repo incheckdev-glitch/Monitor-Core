@@ -1,0 +1,332 @@
+/* InCheck360 Operations Portal — dark forms hardening.
+   CSS-only safety layer. No auth, navigation, observers, grid, calendar or data logic.
+   Login is excluded by body:not(.auth-locked). Official document previews remain light. */
+
+:root:not([data-theme="light"]) body:not(.auth-locked){
+  --ic-form-bg:#08111f;
+  --ic-form-surface:#0f172a;
+  --ic-form-surface-2:#111827;
+  --ic-form-surface-3:#162033;
+  --ic-form-border:#2b3a50;
+  --ic-form-border-strong:#3a4b63;
+  --ic-form-text:#f8fafc;
+  --ic-form-text-soft:#d8e1ee;
+  --ic-form-muted:#9aa9bc;
+  --ic-form-input:#0b1424;
+}
+
+/* Shared create / view / edit shells. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .modal-content,
+  .dialog-content,
+  .drawer-panel,
+  .record-details-panel,
+  .lead-details-panel,
+  .deal-details-panel,
+  .company-details-panel,
+  .contact-details-panel
+){
+  background:var(--ic-form-surface)!important;
+  color:var(--ic-form-text)!important;
+  border-color:var(--ic-form-border)!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .modal-header,
+  .modal-body,
+  .modal-footer,
+  .dialog-header,
+  .dialog-body,
+  .dialog-footer,
+  .record-details-content
+){
+  background-color:transparent!important;
+  color:var(--ic-form-text)!important;
+  border-color:var(--ic-form-border)!important;
+}
+
+/* Generic form sections used by Tickets, CRM, Users, Workflow and smaller modules. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .form-section,
+  .form-card,
+  .form-panel,
+  .form-block,
+  .form-section-header,
+  fieldset
+){
+  background:var(--ic-form-surface)!important;
+  color:var(--ic-form-text-soft)!important;
+  border-color:var(--ic-form-border)!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) fieldset legend,
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(.form-section,.form-card,.form-panel) :where(h2,h3,h4,strong,b){
+  color:var(--ic-form-text)!important;
+}
+
+/* Invoice create / view / edit form. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .invoice-modern-form,
+  .invoice-form-section,
+  .invoice-sub-card,
+  .invoice-items-block,
+  .invoice-customer-summary,
+  .invoice-form-table-wrap,
+  .invoice-form-footer-actions,
+  .invoice-schedule-state,
+  .invoice-conclusion-field
+){
+  background:var(--ic-form-surface)!important;
+  color:var(--ic-form-text-soft)!important;
+  border-color:var(--ic-form-border)!important;
+  box-shadow:none!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) .invoice-form-section-title :where(strong,h2,h3),
+:root:not([data-theme="light"]) body:not(.auth-locked) .invoice-table-section-head strong{
+  color:var(--ic-form-text)!important;
+}
+:root:not([data-theme="light"]) body:not(.auth-locked) .invoice-form-section-title p{
+  color:var(--ic-form-muted)!important;
+}
+
+/* Receipt create / view / edit form. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .receipt-modern-form,
+  .receipt-form-section,
+  .receipt-form-card,
+  .receipt-form-summary,
+  .receipt-form-summary-card,
+  .receipt-section-table-wrap,
+  .receipt-form-modal-shell,
+  .receipt-form-footer,
+  .receipt-form-footer-actions
+){
+  background:var(--ic-form-surface)!important;
+  color:var(--ic-form-text-soft)!important;
+  border-color:var(--ic-form-border)!important;
+  box-shadow:none!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .receipt-form-title-wrap h2,
+  .receipt-form-section h3,
+  .receipt-form-section strong
+){color:var(--ic-form-text)!important;}
+:root:not([data-theme="light"]) body:not(.auth-locked) .receipt-form-title-wrap p{
+  color:var(--ic-form-muted)!important;
+}
+
+/* Proposal create / view / edit form. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .proposal-modal-body,
+  .proposal-modal-scroll,
+  .proposal-modal-header,
+  .proposal-modal-footer,
+  .proposal-section-card,
+  .proposal-info-card,
+  .proposal-item-card,
+  .proposal-summary-card,
+  .proposal-grand-total
+){
+  background:var(--ic-form-surface)!important;
+  color:var(--ic-form-text-soft)!important;
+  border-color:var(--ic-form-border)!important;
+  box-shadow:none!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .proposal-section-title,
+  .proposal-item-heading h3,
+  .proposal-item-heading strong
+){color:var(--ic-form-text)!important;}
+:root:not([data-theme="light"]) body:not(.auth-locked) .proposal-item-heading p{
+  color:var(--ic-form-muted)!important;
+}
+
+/* Agreement create / view / edit form. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .agreement-modern-form,
+  .agreement-scroll-body,
+  .agreement-section-card,
+  .agreement-modal-header,
+  .agreement-modal-footer,
+  .agreement-annex-wizard .modal-content
+){
+  background:var(--ic-form-surface)!important;
+  color:var(--ic-form-text-soft)!important;
+  border-color:var(--ic-form-border)!important;
+  box-shadow:none!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) .agreement-section-title{
+  color:var(--ic-form-text)!important;
+}
+
+/* Accounting / Backup / HR / Client Success / Commission / Biners forms. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .accounting-form-grid,
+  .backup-form-grid,
+  .hr-form-grid,
+  .hr-inline-form,
+  .cs-form,
+  .commission-form-grid,
+  .commission-modal .modal-content,
+  .biners-form-grid,
+  .biners-dialog
+){
+  background-color:var(--ic-form-surface)!important;
+  color:var(--ic-form-text-soft)!important;
+  border-color:var(--ic-form-border)!important;
+}
+
+/* Shared record detail cards used by view actions. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .record-details-field,
+  .lead-details-field,
+  .deal-details-field,
+  .company-details-field,
+  .contact-details-field,
+  .detail-field,
+  .detail-item
+){
+  background:var(--ic-form-surface-2)!important;
+  color:var(--ic-form-text-soft)!important;
+  border-color:var(--ic-form-border)!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .record-details-field,
+  .lead-details-field,
+  .deal-details-field,
+  .company-details-field,
+  .contact-details-field,
+  .detail-field,
+  .detail-item
+) :where(strong,b,.value){
+  color:var(--ic-form-text)!important;
+}
+
+/* Form labels, helper copy and required/read-only summaries. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .modal-content,
+  .dialog-content,
+  .drawer-panel,
+  .record-details-panel,
+  .form-section,
+  .invoice-modern-form,
+  .receipt-modern-form,
+  .proposal-modal-body,
+  .agreement-modern-form
+) label{
+  color:var(--ic-form-text-soft)!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .modal-content,
+  .dialog-content,
+  .drawer-panel,
+  .record-details-panel
+) :where(.muted,.hint,.help,.helper,small){
+  color:var(--ic-form-muted)!important;
+}
+
+/* Inputs inside forms: explicit override for module CSS that hard-codes white. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .modal-content,
+  .dialog-content,
+  .drawer-panel,
+  .record-details-panel,
+  .invoice-modern-form,
+  .receipt-modern-form,
+  .proposal-modal-body,
+  .agreement-modern-form,
+  .accounting-form-grid,
+  .backup-form-grid,
+  .hr-form-grid,
+  .cs-form,
+  .commission-form-grid,
+  .biners-form-grid
+) :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  select,
+  textarea,
+  .input,
+  .select
+){
+  background:var(--ic-form-input)!important;
+  color:var(--ic-form-text)!important;
+  border-color:var(--ic-form-border-strong)!important;
+  -webkit-text-fill-color:var(--ic-form-text)!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .modal-content,
+  .dialog-content,
+  .drawer-panel,
+  .record-details-panel
+) :where(input[readonly],textarea[readonly],input:disabled,select:disabled,textarea:disabled,.readonly-field,.locked-field){
+  background:var(--ic-form-surface-2)!important;
+  color:#aab7c8!important;
+  -webkit-text-fill-color:#aab7c8!important;
+  border-color:var(--ic-form-border)!important;
+  opacity:1!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .modal-content,
+  .dialog-content,
+  .drawer-panel,
+  .record-details-panel
+) ::placeholder{
+  color:#7f8da3!important;
+  opacity:1!important;
+}
+
+/* Tables embedded in create/view/edit forms. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .invoice-form-table-wrap,
+  .receipt-section-table-wrap,
+  .proposal-modal-body,
+  .agreement-modern-form,
+  .modal-content
+) table:not(.document-table){
+  background:var(--ic-form-surface)!important;
+  color:var(--ic-form-text-soft)!important;
+  border-color:var(--ic-form-border)!important;
+}
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .invoice-form-table-wrap,
+  .receipt-section-table-wrap,
+  .proposal-modal-body,
+  .agreement-modern-form,
+  .modal-content
+) table:not(.document-table) thead th{
+  background:var(--ic-form-surface-2)!important;
+  color:#cbd5e1!important;
+  border-color:var(--ic-form-border)!important;
+}
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .invoice-form-table-wrap,
+  .receipt-section-table-wrap,
+  .proposal-modal-body,
+  .agreement-modern-form,
+  .modal-content
+) table:not(.document-table) tbody td{
+  background:var(--ic-form-surface)!important;
+  color:var(--ic-form-text-soft)!important;
+  border-color:var(--ic-form-border)!important;
+}
+
+/* Keep official paper/document previews white. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .document-preview,.document-sheet,.doc-sheet,.print-preview,.pdf-preview,
+  .report-page,.report-document,.invoice-preview,.invoice-document,
+  .receipt-preview,.receipt-document,.agreement-preview,.agreement-document,
+  .proposal-preview,.proposal-document,.credit-note-preview,.credit-note-document,
+  .statement-preview,.statement-document,[data-document-preview="true"],[data-print-preview="true"]
+){
+  color-scheme:light!important;
+  background:#fff!important;
+  color:#0f172a!important;
+}
