@@ -1,5 +1,6 @@
 /* InCheck360 Operations Portal — Employee Calendar */
 body:not(.auth-locked) #employeeCalendarTab{display:flex}
+body:not(.ic-employee-calendar-active) #employeeCalendarView{display:none!important;visibility:hidden!important;opacity:0!important}
 body.ic-employee-calendar-active .content-panels>.view,body.ic-employee-calendar-active .content-panels>[id$="View"]{display:none!important}
 body.ic-employee-calendar-active #employeeCalendarView{display:block!important;visibility:visible!important;opacity:1!important}
 body.ec-modal-open{overflow:hidden}
