@@ -2,12 +2,15 @@
   'use strict';
 
   const TAB_ID = 'employeeCalendarTab';
+  const VIEW_ID = 'employeeCalendarView';
   const STYLE_ID = 'incheck360-employee-calendar-css';
   const HASH = '#employee-calendar';
   let loadPromise = null;
   let openPromise = null;
   let bodyObserver = null;
+  let navigationObserver = null;
   let initialHashHandled = false;
+  let closeScheduled = false;
 
   function isUnlocked() {
     return !!document.body && !document.body.classList.contains('auth-locked');
@@ -34,6 +37,43 @@
     return document.getElementById('crmMenuGroupBody');
   }
 
+  function closeCalendarView({ callApi = true } = {}) {
+    const view = document.getElementById(VIEW_ID);
+    const tab = document.getElementById(TAB_ID);
+
+    if (callApi) {
+      try { global.InCheck360EmployeeCalendar?.hide?.(); } catch (_) {}
+    }
+
+    if (view) {
+      view.hidden = true;
+      view.classList.remove('active');
+      view.setAttribute('aria-hidden', 'true');
+      view.querySelectorAll('.ec-modal').forEach(modal => {
+        modal.hidden = true;
+        modal.setAttribute('aria-hidden', 'true');
+      });
+    }
+
+    if (tab) {
+      tab.classList.remove('active');
+      tab.setAttribute('aria-selected', 'false');
+    }
+
+    document.body?.classList.remove('ic-employee-calendar-active', 'ec-modal-open');
+  }
+
+  function scheduleCloseCalendarView() {
+    if (closeScheduled) return;
+    closeScheduled = true;
+    queueMicrotask(() => {
+      closeScheduled = false;
+      const tab = document.getElementById(TAB_ID);
+      const calendarSelected = tab?.classList.contains('active') || tab?.getAttribute('aria-selected') === 'true';
+      if (!calendarSelected) closeCalendarView();
+    });
+  }
+
   function bindTab(tab) {
     if (!tab || tab.dataset.employeeCalendarLauncherBound === 'true') return;
     tab.dataset.employeeCalendarLauncherBound = 'true';
@@ -53,7 +93,7 @@
       tab.dataset.view = 'employeeCalendar';
       tab.setAttribute('role', 'tab');
       tab.setAttribute('aria-selected', 'false');
-      tab.setAttribute('aria-controls', 'employeeCalendarView');
+      tab.setAttribute('aria-controls', VIEW_ID);
       tab.innerHTML = '<span class="icon" aria-hidden="true">🗓️</span> Calendar';
 
       const dealsTab = document.getElementById('dealsTab');
@@ -150,6 +190,8 @@
       try {
         const api = await loadCalendar();
         api.open();
+        const view = document.getElementById(VIEW_ID);
+        if (view) view.setAttribute('aria-hidden', 'false');
       } catch (error) {
         notify(error?.message || 'Unable to open Calendar', 'error');
       } finally {
@@ -170,11 +212,40 @@
     openCalendar();
   }
 
+  function onAnyNavigationClick(event) {
+    const target = event.target instanceof Element ? event.target.closest('.view-tab,[role="tab"][data-view]') : null;
+    if (!target || target.id === TAB_ID || target.dataset.view === 'employeeCalendar') return;
+    closeCalendarView();
+  }
+
+  function installNavigationObserver() {
+    if (navigationObserver || typeof MutationObserver === 'undefined') return;
+    navigationObserver = new MutationObserver(records => {
+      const calendarView = document.getElementById(VIEW_ID);
+      if (!calendarView || calendarView.hidden) return;
+
+      const changedToOtherActiveTab = records.some(record => {
+        const target = record.target instanceof Element ? record.target : null;
+        if (!target?.matches?.('.view-tab,[role="tab"][data-view]')) return false;
+        if (target.id === TAB_ID || target.dataset.view === 'employeeCalendar') return false;
+        return target.classList.contains('active') || target.getAttribute('aria-selected') === 'true';
+      });
+
+      if (changedToOtherActiveTab) scheduleCloseCalendarView();
+    });
+    navigationObserver.observe(document.body, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'aria-selected']
+    });
+  }
+
   function syncAuthState() {
     const tab = ensureTab();
     if (!tab) return;
 
     if (!isUnlocked()) {
+      closeCalendarView();
       tab.hidden = true;
       tab.style.display = 'none';
       return;
@@ -193,6 +264,8 @@
   function boot() {
     syncAuthState();
     handleInitialHash();
+    document.addEventListener('click', onAnyNavigationClick, true);
+    installNavigationObserver();
 
     if (document.body && global.MutationObserver && !bodyObserver) {
       bodyObserver = new MutationObserver(() => {
@@ -204,7 +277,13 @@
     }
 
     global.addEventListener('hashchange', () => {
-      if (isUnlocked() && location.hash.startsWith(HASH)) openCalendar();
+      if (!isUnlocked()) return;
+      if (location.hash.startsWith(HASH)) openCalendar();
+      else closeCalendarView();
+    });
+
+    global.addEventListener('popstate', () => {
+      if (!location.hash.startsWith(HASH)) closeCalendarView();
     });
   }
 
@@ -216,6 +295,7 @@
 
   global.InCheck360EmployeeCalendarLauncher = Object.freeze({
     open: openCalendar,
+    close: closeCalendarView,
     load: loadCalendar
   });
 })(window);
