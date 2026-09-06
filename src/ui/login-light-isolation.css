@@ -1,0 +1,136 @@
+/* InCheck360 Operations Portal — login page light-theme isolation.
+   The authentication screen must never inherit ERP dark-mode styling.
+   This file is CSS-only and intentionally affects body.auth-locked only. */
+
+body.auth-locked{
+  color-scheme:light!important;
+  background:#ffffff!important;
+  color:#0f172a!important;
+  overflow:auto!important;
+}
+
+body.auth-locked::before,
+body.auth-locked::after{
+  content:none!important;
+  display:none!important;
+  pointer-events:none!important;
+}
+
+body.auth-locked #loginSection{
+  color-scheme:light!important;
+  position:relative!important;
+  z-index:10!important;
+  min-height:100vh;
+  background:#ffffff!important;
+  color:#0f172a!important;
+  opacity:1!important;
+  visibility:visible!important;
+  pointer-events:auto!important;
+}
+
+body.auth-locked #loginSection .container,
+body.auth-locked #loginSection .hero-grid,
+body.auth-locked #loginSection .hero-card,
+body.auth-locked #loginSection .login-card,
+body.auth-locked #loginSection .login-form{
+  color-scheme:light!important;
+  color:#0f172a!important;
+  opacity:1!important;
+  visibility:visible!important;
+  pointer-events:auto!important;
+}
+
+body.auth-locked #loginSection .login-card{
+  background:#ffffff!important;
+  border-color:#e2e8f0!important;
+  box-shadow:0 18px 50px rgba(15,23,42,.10)!important;
+}
+
+body.auth-locked #loginSection h1,
+body.auth-locked #loginSection h2,
+body.auth-locked #loginSection h3,
+body.auth-locked #loginSection strong,
+body.auth-locked #loginSection .hero-eyebrow{
+  color:#0f172a!important;
+}
+
+body.auth-locked #loginSection p,
+body.auth-locked #loginSection small,
+body.auth-locked #loginSection .muted,
+body.auth-locked #loginSection .login-hint{
+  color:#64748b!important;
+}
+
+body.auth-locked #loginSection input,
+body.auth-locked #loginSection .input,
+body.auth-locked #loginSection select,
+body.auth-locked #loginSection textarea{
+  color-scheme:light!important;
+  background:#ffffff!important;
+  color:#0f172a!important;
+  -webkit-text-fill-color:#0f172a!important;
+  border-color:#cbd5e1!important;
+  caret-color:#0f172a!important;
+  box-shadow:none!important;
+  opacity:1!important;
+  pointer-events:auto!important;
+}
+
+body.auth-locked #loginSection input::placeholder,
+body.auth-locked #loginSection textarea::placeholder{
+  color:#94a3b8!important;
+  opacity:1!important;
+}
+
+body.auth-locked #loginSection input:focus,
+body.auth-locked #loginSection .input:focus,
+body.auth-locked #loginSection select:focus,
+body.auth-locked #loginSection textarea:focus{
+  outline:none!important;
+  border-color:#2563eb!important;
+  box-shadow:0 0 0 3px rgba(37,99,235,.14)!important;
+}
+
+body.auth-locked #loginSection input:-webkit-autofill,
+body.auth-locked #loginSection input:-webkit-autofill:hover,
+body.auth-locked #loginSection input:-webkit-autofill:focus{
+  -webkit-text-fill-color:#0f172a!important;
+  -webkit-box-shadow:0 0 0 1000px #ffffff inset!important;
+  box-shadow:0 0 0 1000px #ffffff inset!important;
+  caret-color:#0f172a!important;
+}
+
+body.auth-locked #loginSection #loginBtn{
+  background:#1546e8!important;
+  color:#ffffff!important;
+  border-color:#1546e8!important;
+  opacity:1!important;
+  visibility:visible!important;
+  pointer-events:auto!important;
+  cursor:pointer!important;
+}
+
+body.auth-locked #loginSection #loginBtn:hover{
+  background:#123bc3!important;
+  border-color:#123bc3!important;
+}
+
+body.auth-locked #loginSection #loginBtn:disabled{
+  opacity:.65!important;
+  cursor:wait!important;
+}
+
+/* Nothing from the authenticated application may sit above or intercept the login screen. */
+body.auth-locked #appHeader,
+body.auth-locked #app,
+body.auth-locked #sidebar,
+body.auth-locked #icMobileNavBackdrop,
+body.auth-locked .modal,
+body.auth-locked .modal-overlay,
+body.auth-locked .drawer-backdrop,
+body.auth-locked .record-details-backdrop,
+body.auth-locked .payment-forecast-details-backdrop{
+  display:none!important;
+  visibility:hidden!important;
+  pointer-events:none!important;
+}
