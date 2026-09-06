@@ -1,7 +1,7 @@
 import { UIComponents } from './components.js?v=20260904-ds2';
 import { installLegacyBridge, LegacyBridge } from './legacyBridge.js?v=20260904-ds2';
 import { installModulePageSystem, ModulePage } from './modulePage.js?v=20260904-ds2';
-import { installResponsiveRuntime, ResponsiveRuntime } from './responsiveRuntime.js?v=20260904-responsive2';
+import { installResponsiveRuntime, ResponsiveRuntime } from './responsiveRuntime.js?v=20260906-appshell1';
 
 function ensureCss() {
   const styles = [
