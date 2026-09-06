@@ -1,0 +1,210 @@
+/* InCheck360 Operations Portal — Calendar dark-mode correction
+   Scoped to the authenticated Calendar UI only. No login-page selectors. */
+
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView{
+  color:#f8fafc;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-head h1,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-side-title strong,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-kpis strong,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-owner strong,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-upcoming strong,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-section strong,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-field>span,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .fc,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-head h1,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-side-title strong,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-kpis strong,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-owner strong,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-upcoming strong,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-section strong,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-field>span,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .fc{
+  color:#f8fafc!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-head p,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-eyebrow,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-kpis span,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-kpis small,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-side-title small,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-owner small,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-upcoming small,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-upcoming em,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-empty,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-empty small,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-section small,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-check,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-head p,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-eyebrow,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-kpis span,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-kpis small,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-side-title small,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-owner small,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-upcoming small,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-upcoming em,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-empty,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-empty small,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-section small,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-check{
+  color:#9aa9bc!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-card,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-kpis article,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-card,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-kpis article{
+  background:#0f172a!important;
+  border-color:#2c3b52!important;
+  color:#f8fafc!important;
+  box-shadow:0 5px 16px rgba(0,0,0,.18)!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-filters input,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-filters select,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-filters button,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-search,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-field input,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-field select,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-field textarea,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-share-row select,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-filters input,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-filters select,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-filters button,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-search,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-field input,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-field select,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-field textarea,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-share-row select{
+  background:#0b1424!important;
+  border-color:#2c3b52!important;
+  color:#f8fafc!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-search input,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-search input{
+  background:transparent!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-field input:disabled,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-field select:disabled,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-field textarea:disabled,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-field input:disabled,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-field select:disabled,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-field textarea:disabled{
+  background:#111c30!important;
+  color:#9aa9bc!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-channels,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-share-create,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-settings-row,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-share-row,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-owner:hover,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-upcoming:hover,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-channels,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-share-create,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-settings-row,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-share-row,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-owner:hover,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-upcoming:hover{
+  background:#111c30!important;
+  border-color:#2c3b52!important;
+  color:#f8fafc!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) .ec-modal .ec-dialog,
+:root[data-theme="dark"] body:not(.auth-locked) .ec-modal .ec-dialog{
+  background:#0f172a!important;
+  border-color:#2c3b52!important;
+  color:#f8fafc!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) .ec-modal .ec-modal-head,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-side-title,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-section,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .ec-modal-actions,
+:root[data-theme="dark"] body:not(.auth-locked) .ec-modal .ec-modal-head,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-side-title,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-section,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .ec-modal-actions{
+  border-color:#2c3b52!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) .ec-modal .ec-modal-head h2,
+:root:not([data-theme="light"]) body:not(.auth-locked) .ec-modal .ec-field>span,
+:root:not([data-theme="light"]) body:not(.auth-locked) .ec-modal .ec-section strong,
+:root[data-theme="dark"] body:not(.auth-locked) .ec-modal .ec-modal-head h2,
+:root[data-theme="dark"] body:not(.auth-locked) .ec-modal .ec-field>span,
+:root[data-theme="dark"] body:not(.auth-locked) .ec-modal .ec-section strong{
+  color:#f8fafc!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) .ec-modal .ec-modal-head p,
+:root:not([data-theme="light"]) body:not(.auth-locked) .ec-modal .ec-section small,
+:root:not([data-theme="light"]) body:not(.auth-locked) .ec-modal .ec-check,
+:root[data-theme="dark"] body:not(.auth-locked) .ec-modal .ec-modal-head p,
+:root[data-theme="dark"] body:not(.auth-locked) .ec-modal .ec-section small,
+:root[data-theme="dark"] body:not(.auth-locked) .ec-modal .ec-check{
+  color:#9aa9bc!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) .ec-modal .ec-x,
+:root[data-theme="dark"] body:not(.auth-locked) .ec-modal .ec-x{
+  background:#111c30!important;
+  border-color:#2c3b52!important;
+  color:#d8e1ee!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .fc .fc-button,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .fc .fc-button{
+  background:#111c30!important;
+  border-color:#3b4b63!important;
+  color:#d8e1ee!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .fc .fc-button-primary:not(:disabled).fc-button-active,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .fc .fc-button-primary:not(:disabled).fc-button-active{
+  background:#155eef!important;
+  border-color:#155eef!important;
+  color:#fff!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .fc .fc-col-header-cell,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .fc .fc-list-day-cushion,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .fc .fc-day-today,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .fc .fc-col-header-cell,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .fc .fc-list-day-cushion,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .fc .fc-day-today{
+  background:#111c30!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .fc-theme-standard td,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .fc-theme-standard th,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .fc-theme-standard .fc-scrollgrid,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .fc-theme-standard .fc-list,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .fc-theme-standard td,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .fc-theme-standard th,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .fc-theme-standard .fc-scrollgrid,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .fc-theme-standard .fc-list{
+  border-color:#2c3b52!important;
+  background:#0f172a!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .fc .fc-daygrid-day-number,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .fc .fc-col-header-cell-cushion,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .fc .fc-list-day-text,
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .fc .fc-list-day-side-text,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .fc .fc-daygrid-day-number,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .fc .fc-col-header-cell-cushion,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .fc .fc-list-day-text,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .fc .fc-list-day-side-text{
+  color:#d8e1ee!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) #employeeCalendarView .fc .fc-list-event:hover td,
+:root[data-theme="dark"] body:not(.auth-locked) #employeeCalendarView .fc .fc-list-event:hover td{
+  background:#162238!important;
+}
