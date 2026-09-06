@@ -3,8 +3,8 @@ import './collapsibleFilters.js?v=20260904-filtertoggle3';
 import './sidebarModern.js?v=20260904-menustyle1';
 import './sidebarLightTheme.js?v=20260904-menulight1';
 import './workspaceModuleFilters.js?v=20260904-modulefilters2';
-import './crmGridView.js?v=20260904-crmgrid1';
-import './allModuleGridView.js?v=20260904-allgrid4';
+import './crmGridViewStable.js?v=20260906-gridstable1';
+import './allModuleGridViewStable.js?v=20260906-gridstable1';
 import './statusGridGrouping.js?v=20260904-statusgrid1';
 import './employeeCalendarLauncher.js?v=20260904-employeecalendar3';
 import '../ui/index.js?v=20260906-appshell2';
@@ -17,9 +17,9 @@ import '../ui/index.js?v=20260906-appshell2';
     ['incheck360-responsive-shell-css', '/src/ui/responsive-shell.css?v=20260904-responsive2'],
     ['incheck360-app-like-shell-css', '/src/ui/app-like-shell.css?v=20260906-appshell1'],
     ['incheck360-app-like-shell-v2-css', '/src/ui/app-like-shell-v2.css?v=20260906-appshell4'],
-    ['incheck360-crm-grid-view-css', '/src/ui/crm-grid-view.css?v=20260904-crmgrid1'],
-    ['incheck360-all-module-grid-view-css', '/src/ui/all-module-grid-view.css?v=20260904-allgrid1'],
-    ['incheck360-grid-view-final-css', '/src/ui/grid-view-final.css?v=20260904-allgrid3'],
+    ['incheck360-crm-grid-view-css', '/src/ui/crm-grid-view.css?v=20260906-gridstable1'],
+    ['incheck360-all-module-grid-view-css', '/src/ui/all-module-grid-view.css?v=20260906-gridstable1'],
+    ['incheck360-grid-view-final-css', '/src/ui/grid-view-final.css?v=20260906-gridstable1'],
     ['incheck360-dark-mode-global-v2-css', '/src/ui/dark-mode-global-v2.css?v=20260906-darkmode1']
   ];
 
