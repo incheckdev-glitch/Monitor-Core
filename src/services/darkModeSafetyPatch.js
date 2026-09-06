@@ -6,7 +6,7 @@ import './workspaceModuleFilters.js?v=20260904-modulefilters2';
 import './crmGridViewStable.js?v=20260906-gridstable1';
 import './allModuleGridViewStable.js?v=20260906-gridstable1';
 import './statusGridGrouping.js?v=20260904-statusgrid1';
-import './employeeCalendarLauncher.js?v=20260904-employeecalendar3';
+import './employeeCalendarLauncher.js?v=20260906-calendarclose2';
 import '../ui/index.js?v=20260906-appshell2';
 
 (function installInCheck360DarkModeSafetyPatch() {
