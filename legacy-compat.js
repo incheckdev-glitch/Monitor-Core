@@ -73,7 +73,7 @@
   if (!document.getElementById('incheck360-login-recovery-script')) {
     const recoveryScript = document.createElement('script');
     recoveryScript.id = 'incheck360-login-recovery-script';
-    recoveryScript.src = '/login-recovery.js?v=20260906-login-recovery1';
+    recoveryScript.src = '/login-recovery.js?v=20260906-login-recovery2';
     recoveryScript.async = true;
     recoveryScript.onerror = () => console.error('[legacy-compat] Unable to load login recovery');
     document.head.appendChild(recoveryScript);
