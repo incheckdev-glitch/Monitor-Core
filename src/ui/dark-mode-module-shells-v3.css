@@ -1,0 +1,481 @@
+/* InCheck360 Operations Portal — global dark module-shell coverage.
+   Load after dark-mode-global-v2.css. This targets ERP/module chrome that still
+   hard-codes light surfaces while keeping official documents paper-white. */
+
+:root:not([data-theme="light"]){
+  --ic-module-bg:#08111f;
+  --ic-module-surface:#0f172a;
+  --ic-module-surface-2:#111827;
+  --ic-module-surface-3:#162033;
+  --ic-module-border:#2b3a50;
+  --ic-module-border-strong:#3a4b63;
+  --ic-module-text:#f8fafc;
+  --ic-module-text-soft:#d8e1ee;
+  --ic-module-muted:#9aa9bc;
+}
+
+/* Whole authenticated application workspace. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  #app,
+  .app,
+  .app-shell,
+  .content,
+  .content-layout,
+  .content-main,
+  .main-content,
+  .workspace,
+  .workspace-content,
+  .workspace-main,
+  .module-content,
+  .module-body,
+  .page-content,
+  .view-content,
+  .icds-page,
+  .icds-module-page
+){
+  background-color:var(--ic-module-bg)!important;
+  color:var(--ic-module-text)!important;
+}
+
+/* All ERP views get the same dark page canvas. */
+:root:not([data-theme="light"]) body:not(.auth-locked) [id$="View"]:not(.document-preview):not(.print-preview):not(.pdf-preview){
+  background-color:var(--ic-module-bg)!important;
+  color:var(--ic-module-text)!important;
+}
+
+/* Common module shells and workspace wrappers. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  [class$="-workspace"],
+  [class*="-workspace "],
+  [class$="-page-shell"],
+  [class*="-page-shell "],
+  [class$="-module-shell"],
+  [class*="-module-shell "],
+  [class$="-module-body"],
+  [class*="-module-body "],
+  [class$="-content-shell"],
+  [class*="-content-shell "]
+){
+  background-color:var(--ic-module-bg)!important;
+  color:var(--ic-module-text)!important;
+}
+
+/* Page/header/toolbar chrome should not remain white in dark mode. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .page-header,
+  .section-header,
+  .view-header,
+  .module-header,
+  [class$="-page-header"],
+  [class*="-page-header "],
+  [class$="-view-header"],
+  [class*="-view-header "],
+  [class$="-section-header"],
+  [class*="-section-header "],
+  [class$="-module-header"],
+  [class*="-module-header "],
+  [class$="-toolbar"],
+  [class*="-toolbar "],
+  .actions-bar,
+  .page-actions,
+  .section-actions,
+  .module-actions
+){
+  background-color:transparent!important;
+  color:var(--ic-module-text)!important;
+  border-color:var(--ic-module-border)!important;
+}
+
+/* KPI / summary / metric cards across CRM, finance, operations and analytics. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .company-summary-card,
+  .contacts-summary-card,
+  .payment-forecast-summary-card,
+  .biners-summary-card,
+  [class$="-summary-card"],
+  [class*="-summary-card "],
+  [class$="-kpi-card"],
+  [class*="-kpi-card "],
+  [class$="-metric-card"],
+  [class*="-metric-card "],
+  [class$="-stat-card"],
+  [class*="-stat-card "],
+  [class$="-overview-card"],
+  [class*="-overview-card "],
+  [class$="-analytics-card"],
+  [class*="-analytics-card "]
+){
+  background:var(--ic-module-surface)!important;
+  color:var(--ic-module-text)!important;
+  border-color:var(--ic-module-border)!important;
+  box-shadow:0 10px 28px rgba(0,0,0,.20)!important;
+}
+
+/* Preserve semantic colored icon tiles while fixing text around them. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .company-summary-card,
+  .contacts-summary-card,
+  .payment-forecast-summary-card,
+  .biners-summary-card,
+  [class$="-summary-card"],
+  [class*="-summary-card "],
+  [class$="-kpi-card"],
+  [class*="-kpi-card "],
+  [class$="-metric-card"],
+  [class*="-metric-card "],
+  [class$="-stat-card"],
+  [class*="-stat-card "]
+) :where(strong,b,.value,.summary-value,.kpi-value,.metric-value,.stat-value){
+  color:var(--ic-module-text)!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .company-summary-card,
+  .contacts-summary-card,
+  .payment-forecast-summary-card,
+  .biners-summary-card,
+  [class$="-summary-card"],
+  [class*="-summary-card "],
+  [class$="-kpi-card"],
+  [class*="-kpi-card "],
+  [class$="-metric-card"],
+  [class*="-metric-card "],
+  [class$="-stat-card"],
+  [class*="-stat-card "]
+) :where(.label,.summary-label,.summary-subtitle,.kpi-label,.metric-label,.stat-label,small){
+  color:var(--ic-module-muted)!important;
+}
+
+/* Table/list containers and their surrounding white panels. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .table-panel,
+  .table-card,
+  .table-section,
+  .table-shell,
+  .table-container,
+  .table-wrapper,
+  .table-responsive,
+  .table-wrap,
+  .data-table-wrap,
+  [class$="-table-panel"],
+  [class*="-table-panel "],
+  [class$="-table-card"],
+  [class*="-table-card "],
+  [class$="-table-section"],
+  [class*="-table-section "],
+  [class$="-table-shell"],
+  [class*="-table-shell "],
+  [class$="-table-container"],
+  [class*="-table-container "],
+  [class$="-table-wrapper"],
+  [class*="-table-wrapper "],
+  [class$="-table-wrap"],
+  [class*="-table-wrap "],
+  [class$="-table-toolbar"],
+  [class*="-table-toolbar "],
+  [class$="-table-footer"],
+  [class*="-table-footer "]
+){
+  background-color:var(--ic-module-surface)!important;
+  color:var(--ic-module-text-soft)!important;
+  border-color:var(--ic-module-border)!important;
+}
+
+/* Generic module panels/cards missed by older module-specific rules. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .module-card,
+  .workspace-card,
+  .content-card,
+  .filter-card,
+  .filters-card,
+  .details-card,
+  .detail-card,
+  .info-card,
+  .form-card,
+  [class$="-panel"],
+  [class*="-panel "],
+  [class$="-filter-card"],
+  [class*="-filter-card "],
+  [class$="-details-card"],
+  [class*="-details-card "],
+  [class$="-detail-card"],
+  [class*="-detail-card "],
+  [class$="-info-card"],
+  [class*="-info-card "],
+  [class$="-form-card"],
+  [class*="-form-card "]
+){
+  background-color:var(--ic-module-surface)!important;
+  color:var(--ic-module-text-soft)!important;
+  border-color:var(--ic-module-border)!important;
+}
+
+/* Filters/controls embedded inside module shells. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  [class$="-filters"],
+  [class*="-filters "],
+  [class$="-filter-panel"],
+  [class*="-filter-panel "],
+  [class$="-filter-grid"],
+  [class*="-filter-grid "]
+){
+  color:var(--ic-module-text-soft)!important;
+  border-color:var(--ic-module-border)!important;
+}
+
+/* Pagination/page-size/record counters surrounding tables. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .pagination,
+  .table-actions,
+  .table-tools,
+  [class$="-pagination"],
+  [class*="-pagination "],
+  [class$="-page-size"],
+  [class*="-page-size "],
+  [class$="-record-count"],
+  [class*="-record-count "]
+){
+  color:var(--ic-module-muted)!important;
+  border-color:var(--ic-module-border)!important;
+}
+
+/* Modals/drawers opened from any module. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .modal-content,
+  .dialog-content,
+  .drawer-content,
+  .drawer-panel,
+  [class$="-modal-card"],
+  [class*="-modal-card "],
+  [class$="-dialog"],
+  [class*="-dialog "],
+  [class$="-drawer"],
+  [class*="-drawer "]
+){
+  background-color:var(--ic-module-surface)!important;
+  color:var(--ic-module-text)!important;
+  border-color:var(--ic-module-border)!important;
+}
+
+/* Companies / Contacts — exact wrappers shown in the reported mixed-theme page. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  #companyView,
+  #contactsView,
+  #companyView .company-summary-card,
+  #contactsView .contacts-summary-card,
+  #companyView .company-table-wrap,
+  #contactsView .contacts-table-wrap,
+  #companyView .company-table-toolbar,
+  #contactsView .contacts-table-toolbar,
+  #companyView .company-table-footer,
+  #contactsView .contacts-table-footer
+){
+  background-color:var(--ic-module-surface)!important;
+  color:var(--ic-module-text)!important;
+  border-color:var(--ic-module-border)!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(#companyView,#contactsView){
+  background-color:var(--ic-module-bg)!important;
+}
+
+/* Keep semantic badge/chip colors; only ensure neutral text around them is readable. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .company-page-header,
+  .contacts-page-header,
+  .company-table-toolbar,
+  .contacts-table-toolbar,
+  .company-table-footer,
+  .contacts-table-footer
+) :where(span,p,small,label){
+  color:var(--ic-module-muted)!important;
+}
+
+/* --------------------------------------------------------------------------
+   PAPER / DOCUMENT EXCLUSION
+   These selectors intentionally come LAST so module-wide dark rules can never
+   turn invoices, agreements, receipts, reports or print previews dark.
+   -------------------------------------------------------------------------- */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .document-preview,
+  .document-sheet,
+  .doc-sheet,
+  .print-preview,
+  .pdf-preview,
+  .report-page,
+  .report-document,
+  .invoice-preview,
+  .invoice-document,
+  .receipt-preview,
+  .receipt-document,
+  .agreement-preview,
+  .agreement-document,
+  .proposal-preview,
+  .proposal-document,
+  .credit-note-preview,
+  .credit-note-document,
+  .statement-preview,
+  .statement-document,
+  .accounting-print-area,
+  .backup-print-area,
+  .hr-payslip-preview,
+  .hr-receipt-preview,
+  .hr-statement-print,
+  #hrPayslipPreview,
+  #hrSalaryReceiptPreview,
+  #hrEmployeeStatementPrint,
+  [data-document-preview="true"],
+  [data-print-preview="true"]
+),
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .document-preview,
+  .document-sheet,
+  .doc-sheet,
+  .print-preview,
+  .pdf-preview,
+  .report-page,
+  .report-document,
+  .invoice-preview,
+  .invoice-document,
+  .receipt-preview,
+  .receipt-document,
+  .agreement-preview,
+  .agreement-document,
+  .proposal-preview,
+  .proposal-document,
+  .credit-note-preview,
+  .credit-note-document,
+  .statement-preview,
+  .statement-document,
+  .accounting-print-area,
+  .backup-print-area,
+  .hr-payslip-preview,
+  .hr-receipt-preview,
+  .hr-statement-print,
+  #hrPayslipPreview,
+  #hrSalaryReceiptPreview,
+  #hrEmployeeStatementPrint,
+  [data-document-preview="true"],
+  [data-print-preview="true"]
+) *{
+  color-scheme:light!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .document-preview,
+  .document-sheet,
+  .doc-sheet,
+  .print-preview,
+  .pdf-preview,
+  .report-page,
+  .report-document,
+  .invoice-preview,
+  .invoice-document,
+  .receipt-preview,
+  .receipt-document,
+  .agreement-preview,
+  .agreement-document,
+  .proposal-preview,
+  .proposal-document,
+  .credit-note-preview,
+  .credit-note-document,
+  .statement-preview,
+  .statement-document,
+  .accounting-print-area,
+  .backup-print-area,
+  .hr-payslip-preview,
+  .hr-receipt-preview,
+  .hr-statement-print,
+  #hrPayslipPreview,
+  #hrSalaryReceiptPreview,
+  #hrEmployeeStatementPrint,
+  [data-document-preview="true"],
+  [data-print-preview="true"]
+){
+  background:#fff!important;
+  color:#0f172a!important;
+  border-color:#d8dee8!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .document-preview,
+  .document-sheet,
+  .doc-sheet,
+  .print-preview,
+  .pdf-preview,
+  .report-page,
+  .report-document,
+  .invoice-preview,
+  .invoice-document,
+  .receipt-preview,
+  .receipt-document,
+  .agreement-preview,
+  .agreement-document,
+  .proposal-preview,
+  .proposal-document,
+  .credit-note-preview,
+  .credit-note-document,
+  .statement-preview,
+  .statement-document,
+  .accounting-print-area,
+  .backup-print-area,
+  .hr-payslip-preview,
+  .hr-receipt-preview,
+  .hr-statement-print,
+  #hrPayslipPreview,
+  #hrSalaryReceiptPreview,
+  #hrEmployeeStatementPrint,
+  [data-document-preview="true"],
+  [data-print-preview="true"]
+) :where(
+  .card,.panel,.section-card,.summary-card,.table-panel,.table-card,.table-section,
+  .table-shell,.table-container,.table-wrapper,.table-responsive,.table-wrap,
+  table,thead,tbody,tr,th,td,.modal-content,.dialog-content
+){
+  background:#fff!important;
+  color:#0f172a!important;
+  border-color:#d8dee8!important;
+  box-shadow:none!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .document-preview,
+  .document-sheet,
+  .doc-sheet,
+  .print-preview,
+  .pdf-preview,
+  .report-page,
+  .report-document,
+  .invoice-preview,
+  .invoice-document,
+  .receipt-preview,
+  .receipt-document,
+  .agreement-preview,
+  .agreement-document,
+  .proposal-preview,
+  .proposal-document,
+  .credit-note-preview,
+  .credit-note-document,
+  .statement-preview,
+  .statement-document,
+  .accounting-print-area,
+  .backup-print-area,
+  .hr-payslip-preview,
+  .hr-receipt-preview,
+  .hr-statement-print,
+  #hrPayslipPreview,
+  #hrSalaryReceiptPreview,
+  #hrEmployeeStatementPrint,
+  [data-document-preview="true"],
+  [data-print-preview="true"]
+) :where(h1,h2,h3,h4,h5,h6,p,span,div,strong,b,small,label,li,th,td){
+  color:#0f172a!important;
+}
+
+@media print{
+  :root:not([data-theme="light"]) body{
+    background:#fff!important;
+    color:#000!important;
+    color-scheme:light!important;
+  }
+}
