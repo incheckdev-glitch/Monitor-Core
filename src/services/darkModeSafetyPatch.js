@@ -20,7 +20,8 @@ import '../ui/index.js?v=20260906-appshell2';
     ['incheck360-crm-grid-view-css', '/src/ui/crm-grid-view.css?v=20260906-gridstable1'],
     ['incheck360-all-module-grid-view-css', '/src/ui/all-module-grid-view.css?v=20260906-gridstable1'],
     ['incheck360-grid-view-final-css', '/src/ui/grid-view-final.css?v=20260906-gridstable1'],
-    ['incheck360-dark-mode-global-v2-css', '/src/ui/dark-mode-global-v2.css?v=20260906-darkmode1']
+    ['incheck360-dark-mode-global-v2-css', '/src/ui/dark-mode-global-v2.css?v=20260906-darkmode2'],
+    ['incheck360-dark-mode-module-shells-v3-css', '/src/ui/dark-mode-module-shells-v3.css?v=20260906-darkmode3']
   ];
 
   for (const [id, href] of styles) {
