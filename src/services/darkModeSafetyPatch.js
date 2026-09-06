@@ -7,7 +7,7 @@ import './crmGridView.js?v=20260904-crmgrid1';
 import './allModuleGridView.js?v=20260904-allgrid4';
 import './statusGridGrouping.js?v=20260904-statusgrid1';
 import './employeeCalendarLauncher.js?v=20260904-employeecalendar3';
-import '../ui/index.js?v=20260904-ds4';
+import '../ui/index.js?v=20260906-appshell1';
 
 (function installInCheck360DarkModeSafetyPatch() {
   const styles = [
@@ -15,6 +15,7 @@ import '../ui/index.js?v=20260904-ds4';
     ['incheck360-dark-modern-workspaces-css', '/dark-modern-workspaces.css?v=20260701-dark-modern1'],
     ['incheck360-modern-topbar-css', '/topbar-modern.css?v=20260904-topnav1'],
     ['incheck360-responsive-shell-css', '/src/ui/responsive-shell.css?v=20260904-responsive2'],
+    ['incheck360-app-like-shell-css', '/src/ui/app-like-shell.css?v=20260906-appshell1'],
     ['incheck360-crm-grid-view-css', '/src/ui/crm-grid-view.css?v=20260904-crmgrid1'],
     ['incheck360-all-module-grid-view-css', '/src/ui/all-module-grid-view.css?v=20260904-allgrid1'],
     ['incheck360-grid-view-final-css', '/src/ui/grid-view-final.css?v=20260904-allgrid3']
