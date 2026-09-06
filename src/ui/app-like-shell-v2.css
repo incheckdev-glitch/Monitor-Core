@@ -1,7 +1,7 @@
 /* InCheck360 Operations Portal — mobile/tablet app-shell refinement. */
 
-/* Keep theme control available on every phone size. */
-@media (max-width:767px){
+/* Keep theme control available on every phone and tablet size. */
+@media (max-width:980px){
   body:not(.auth-locked) #appHeader #themeSelect{
     display:inline-flex!important;
     visibility:visible!important;
