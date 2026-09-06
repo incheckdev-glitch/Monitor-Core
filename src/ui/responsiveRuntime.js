@@ -50,6 +50,7 @@ function setMobileNavOpen(open, { focus = false } = {}) {
   const menu = ensureMainMenuId();
   const button = document.getElementById('mobileAppNavBtn');
   const backdrop = document.getElementById('icMobileNavBackdrop');
+  const closeButton = document.getElementById('icMobileNavCloseBtn');
   const canOpen = Boolean(open && body && menu && isCompactNav() && !body.classList.contains('auth-locked'));
 
   if (canOpen) closeFilterDrawer();
@@ -59,6 +60,7 @@ function setMobileNavOpen(open, { focus = false } = {}) {
   button?.setAttribute('aria-label', canOpen ? 'Close modules menu' : 'Open modules menu');
   button?.setAttribute('title', canOpen ? 'Close modules' : 'Modules');
   backdrop?.setAttribute('aria-hidden', String(!canOpen));
+  closeButton?.setAttribute('aria-hidden', String(!canOpen));
   menu?.setAttribute('aria-hidden', String(!canOpen && isCompactNav()));
 
   if (canOpen) {
@@ -68,6 +70,25 @@ function setMobileNavOpen(open, { focus = false } = {}) {
   } else if (menu && !isCompactNav()) {
     menu.removeAttribute('aria-hidden');
   }
+}
+
+function ensureMobileMenuCloseButton(menu) {
+  const header = menu?.querySelector('.view-menu-header');
+  if (!header) return null;
+
+  let closeButton = header.querySelector('#icMobileNavCloseBtn');
+  if (!closeButton) {
+    closeButton = document.createElement('button');
+    closeButton.id = 'icMobileNavCloseBtn';
+    closeButton.className = 'ic-mobile-nav-close';
+    closeButton.type = 'button';
+    closeButton.setAttribute('aria-label', 'Close modules menu');
+    closeButton.setAttribute('aria-hidden', 'true');
+    closeButton.title = 'Close';
+    closeButton.innerHTML = '<span aria-hidden="true">×</span>';
+    header.appendChild(closeButton);
+  }
+  return closeButton;
 }
 
 function ensureMobileNavControls() {
@@ -101,6 +122,8 @@ function ensureMobileNavControls() {
     body.appendChild(backdrop);
   }
 
+  const closeButton = ensureMobileMenuCloseButton(menu);
+
   if (!STATE.navInstalled) {
     STATE.navInstalled = true;
 
@@ -112,6 +135,10 @@ function ensureMobileNavControls() {
     });
 
     backdrop.addEventListener('click', () => setMobileNavOpen(false));
+    closeButton?.addEventListener('click', () => {
+      setMobileNavOpen(false);
+      button?.focus?.({ preventScroll: true });
+    });
 
     document.addEventListener('click', event => {
       const target = event.target instanceof Element ? event.target : null;
