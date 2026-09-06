@@ -2,7 +2,6 @@
   'use strict';
 
   const TAB_ID = 'employeeCalendarTab';
-  const VIEW_ID = 'employeeCalendarView';
   const STYLE_ID = 'incheck360-employee-calendar-css';
   const HASH = '#employee-calendar';
   let loadPromise = null;
@@ -35,31 +34,6 @@
     return document.getElementById('crmMenuGroupBody');
   }
 
-  function closeCalendarView({ callApi = true } = {}) {
-    if (callApi) {
-      try { global.InCheck360EmployeeCalendar?.hide?.(); } catch (_) {}
-    }
-
-    const view = document.getElementById(VIEW_ID);
-    if (view) {
-      view.hidden = true;
-      view.classList.remove('active');
-      view.setAttribute('aria-hidden', 'true');
-      view.querySelectorAll('.ec-modal').forEach(modal => {
-        modal.hidden = true;
-        modal.setAttribute('aria-hidden', 'true');
-      });
-    }
-
-    const tab = document.getElementById(TAB_ID);
-    if (tab) {
-      tab.classList.remove('active');
-      tab.setAttribute('aria-selected', 'false');
-    }
-
-    document.body?.classList.remove('ic-employee-calendar-active', 'ec-modal-open');
-  }
-
   function bindTab(tab) {
     if (!tab || tab.dataset.employeeCalendarLauncherBound === 'true') return;
     tab.dataset.employeeCalendarLauncherBound = 'true';
@@ -79,7 +53,7 @@
       tab.dataset.view = 'employeeCalendar';
       tab.setAttribute('role', 'tab');
       tab.setAttribute('aria-selected', 'false');
-      tab.setAttribute('aria-controls', VIEW_ID);
+      tab.setAttribute('aria-controls', 'employeeCalendarView');
       tab.innerHTML = '<span class="icon" aria-hidden="true">🗓️</span> Calendar';
 
       const dealsTab = document.getElementById('dealsTab');
@@ -176,8 +150,6 @@
       try {
         const api = await loadCalendar();
         api.open();
-        const view = document.getElementById(VIEW_ID);
-        if (view) view.setAttribute('aria-hidden', 'false');
       } catch (error) {
         notify(error?.message || 'Unable to open Calendar', 'error');
       } finally {
@@ -198,20 +170,11 @@
     openCalendar();
   }
 
-  function onAnyNavigationClick(event) {
-    const target = event.target instanceof Element
-      ? event.target.closest('.view-tab,[role="tab"][data-view]')
-      : null;
-    if (!target || target.id === TAB_ID || target.dataset.view === 'employeeCalendar') return;
-    closeCalendarView();
-  }
-
   function syncAuthState() {
     const tab = ensureTab();
     if (!tab) return;
 
     if (!isUnlocked()) {
-      closeCalendarView();
       tab.hidden = true;
       tab.style.display = 'none';
       return;
@@ -231,7 +194,6 @@
     syncAuthState();
     handleInitialHash();
 
-    // Safe auth-state observer only: watches body.class itself, never the full DOM subtree.
     if (document.body && global.MutationObserver && !bodyObserver) {
       bodyObserver = new MutationObserver(() => {
         const wasUnlocked = isUnlocked();
@@ -241,17 +203,8 @@
       bodyObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
     }
 
-    // Event-driven navigation cleanup. No subtree/global navigation observer.
-    document.addEventListener('click', onAnyNavigationClick, true);
-
     global.addEventListener('hashchange', () => {
-      if (!isUnlocked()) return;
-      if (location.hash.startsWith(HASH)) openCalendar();
-      else closeCalendarView();
-    });
-
-    global.addEventListener('popstate', () => {
-      if (!location.hash.startsWith(HASH)) closeCalendarView();
+      if (isUnlocked() && location.hash.startsWith(HASH)) openCalendar();
     });
   }
 
@@ -263,7 +216,6 @@
 
   global.InCheck360EmployeeCalendarLauncher = Object.freeze({
     open: openCalendar,
-    close: closeCalendarView,
     load: loadCalendar
   });
 })(window);
