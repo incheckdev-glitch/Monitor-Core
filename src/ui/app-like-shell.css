@@ -1,0 +1,335 @@
+/* InCheck360 Monitor Core — app-like responsive layer.
+   Loaded after responsive-shell.css so this file can safely specialize phone/tablet behavior
+   without touching ERP module business logic. */
+
+:root{
+  --ic-app-nav-width:min(86vw,340px);
+  --ic-app-shell-radius:18px;
+  --ic-app-touch:44px;
+}
+
+body:not(.auth-locked){
+  min-height:100dvh;
+  overscroll-behavior-y:none;
+}
+
+body:not(.auth-locked) button,
+body:not(.auth-locked) .btn,
+body:not(.auth-locked) [role="button"]{
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+}
+
+body:not(.auth-locked) .ic-mobile-app-nav-btn{
+  display:none!important;
+}
+
+#icMobileNavBackdrop{
+  display:none;
+}
+
+/* Installed PWA should read like an application shell, not a floating web page. */
+@media (display-mode:standalone),(display-mode:fullscreen){
+  body:not(.auth-locked) #appHeader.app-topbar{
+    position:sticky!important;
+    top:0!important;
+    margin:0!important;
+    width:100%!important;
+    border-radius:0 0 var(--ic-app-shell-radius) var(--ic-app-shell-radius)!important;
+    padding-top:max(10px,var(--ic-safe-top))!important;
+    box-shadow:0 10px 30px rgba(15,23,42,.10)!important;
+  }
+
+  body:not(.auth-locked) #app{
+    padding-bottom:max(8px,var(--ic-safe-bottom))!important;
+  }
+}
+
+/* Tablet + phone: main ERP navigation becomes an app drawer. */
+@media (max-width:980px){
+  body:not(.auth-locked) #appHeader.app-topbar{
+    position:sticky!important;
+    top:0!important;
+    margin:0!important;
+    width:100%!important;
+    border-radius:0 0 var(--ic-app-shell-radius) var(--ic-app-shell-radius)!important;
+    padding-left:max(10px,var(--ic-safe-left))!important;
+    padding-right:max(10px,var(--ic-safe-right))!important;
+  }
+
+  body:not(.auth-locked) .ic-mobile-app-nav-btn{
+    display:inline-flex!important;
+    flex:0 0 auto!important;
+  }
+
+  body:not(.auth-locked) .content-layout.ic-modern-nav-layout,
+  body:not(.auth-locked) .content-layout.ic-modern-nav-layout.ic-nav-collapsed{
+    grid-template-columns:minmax(0,1fr)!important;
+    gap:0!important;
+  }
+
+  body:not(.auth-locked) .view-menu.ic-modern-nav,
+  body:not(.auth-locked) .view-menu.ic-modern-nav.ic-nav-collapsed,
+  body:not(.auth-locked) .view-menu.ic-modern-nav.ic-nav-collapsed:hover{
+    position:fixed!important;
+    top:max(10px,var(--ic-safe-top))!important;
+    right:auto!important;
+    bottom:max(10px,var(--ic-safe-bottom))!important;
+    left:max(10px,var(--ic-safe-left))!important;
+    z-index:2800!important;
+    width:var(--ic-app-nav-width)!important;
+    max-width:calc(100vw - max(20px,var(--ic-safe-left)) - max(10px,var(--ic-safe-right)))!important;
+    height:auto!important;
+    max-height:none!important;
+    padding:12px!important;
+    border-radius:22px!important;
+    overflow:hidden!important;
+    transform:translate3d(calc(-100% - 34px),0,0)!important;
+    opacity:.98!important;
+    visibility:hidden!important;
+    pointer-events:none!important;
+    transition:transform .22s cubic-bezier(.2,.8,.2,1),visibility .22s ease,opacity .18s ease!important;
+    box-shadow:0 28px 70px rgba(2,15,32,.42)!important;
+  }
+
+  body:not(.auth-locked).ic-mobile-nav-open .view-menu.ic-modern-nav,
+  body:not(.auth-locked).ic-mobile-nav-open .view-menu.ic-modern-nav.ic-nav-collapsed,
+  body:not(.auth-locked).ic-mobile-nav-open .view-menu.ic-modern-nav.ic-nav-collapsed:hover{
+    transform:translate3d(0,0,0)!important;
+    visibility:visible!important;
+    pointer-events:auto!important;
+    opacity:1!important;
+  }
+
+  body:not(.auth-locked) .view-menu.ic-modern-nav .view-menu-header,
+  body:not(.auth-locked) .view-menu.ic-modern-nav.ic-nav-collapsed:not(:hover) .view-menu-header{
+    display:block!important;
+  }
+
+  body:not(.auth-locked) .view-menu.ic-modern-nav .view-tabs{
+    min-height:0!important;
+    max-height:calc(var(--ic-visual-height,100dvh) - max(62px,var(--ic-safe-top)) - max(42px,var(--ic-safe-bottom)))!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    overscroll-behavior:contain!important;
+    -webkit-overflow-scrolling:touch;
+  }
+
+  body:not(.auth-locked) .view-menu.ic-modern-nav .ic-nav-collapse-btn{
+    display:none!important;
+  }
+
+  #icMobileNavBackdrop{
+    position:fixed;
+    inset:0;
+    z-index:2750;
+    display:block;
+    border:0;
+    padding:0;
+    margin:0;
+    background:rgba(2,12,27,.52);
+    backdrop-filter:blur(3px);
+    -webkit-backdrop-filter:blur(3px);
+    opacity:0;
+    visibility:hidden;
+    pointer-events:none;
+    transition:opacity .18s ease,visibility .18s ease;
+  }
+
+  body:not(.auth-locked).ic-mobile-nav-open #icMobileNavBackdrop{
+    opacity:1;
+    visibility:visible;
+    pointer-events:auto;
+  }
+
+  body:not(.auth-locked).ic-mobile-nav-open{
+    overflow:hidden!important;
+  }
+
+  /* Existing filter drawer becomes a proper right-side app drawer. */
+  body:not(.auth-locked) #sidebar.sidebar{
+    position:fixed!important;
+    top:0!important;
+    right:0!important;
+    bottom:0!important;
+    left:auto!important;
+    z-index:2700!important;
+    width:min(92vw,370px)!important;
+    max-width:calc(100vw - var(--ic-safe-left))!important;
+    height:var(--ic-visual-height,100dvh)!important;
+    max-height:var(--ic-visual-height,100dvh)!important;
+    padding-top:max(16px,var(--ic-safe-top))!important;
+    padding-right:max(16px,var(--ic-safe-right))!important;
+    padding-bottom:max(16px,var(--ic-safe-bottom))!important;
+    padding-left:16px!important;
+    overflow:auto!important;
+    overscroll-behavior:contain!important;
+    -webkit-overflow-scrolling:touch;
+  }
+
+  body:not(.auth-locked).drawer-open::before{
+    content:"";
+    position:fixed;
+    inset:0;
+    z-index:2650;
+    background:rgba(2,12,27,.42);
+    backdrop-filter:blur(2px);
+    -webkit-backdrop-filter:blur(2px);
+  }
+
+  body:not(.auth-locked) .content,
+  body:not(.auth-locked) .icds-module-page{
+    width:100%!important;
+    min-width:0!important;
+  }
+}
+
+/* Phones: reduce chrome and prioritize actual work. */
+@media (max-width:767px){
+  body:not(.auth-locked) #appHeader.app-topbar{
+    padding-top:max(8px,var(--ic-safe-top))!important;
+    box-shadow:0 7px 24px rgba(15,23,42,.10)!important;
+  }
+
+  body:not(.auth-locked) #appHeader .topbar-language,
+  body:not(.auth-locked) #appHeader .topbar-online,
+  body:not(.auth-locked) #appHeader #refreshNow{
+    display:none!important;
+  }
+
+  body:not(.auth-locked) #appHeader .topbar-actions{
+    min-width:0!important;
+    gap:4px!important;
+  }
+
+  body:not(.auth-locked) #appHeader .topbar-icon-btn,
+  body:not(.auth-locked) #appHeader .topbar-logout,
+  body:not(.auth-locked) #appHeader .topbar-profile{
+    min-width:40px!important;
+    width:40px!important;
+    height:40px!important;
+    border-radius:13px!important;
+  }
+
+  body:not(.auth-locked) #appHeader .topbar-profile{
+    max-width:40px!important;
+  }
+
+  body:not(.auth-locked) #appHeader .topbar-search{
+    height:42px!important;
+    border-radius:14px!important;
+  }
+
+  body:not(.auth-locked) #appHeader #searchInput,
+  body:not(.auth-locked) .content input:not([type="checkbox"]):not([type="radio"]),
+  body:not(.auth-locked) .content select,
+  body:not(.auth-locked) .content textarea,
+  body.auth-locked #loginSection input{
+    font-size:16px!important;
+  }
+
+  body:not(.auth-locked) .content-layout{
+    width:100%!important;
+    min-width:0!important;
+  }
+
+  body:not(.auth-locked) .icds-module-page{
+    padding:10px!important;
+    padding-bottom:max(12px,var(--ic-safe-bottom))!important;
+  }
+
+  body:not(.auth-locked) .icds-card,
+  body:not(.auth-locked) .icds-module-data{
+    border-radius:14px!important;
+  }
+
+  body:not(.auth-locked) .icds-toolbar,
+  body:not(.auth-locked) .icds-module-actions,
+  body:not(.auth-locked) .form-actions,
+  body:not(.auth-locked) .modal-actions,
+  body:not(.auth-locked) .dialog-actions{
+    gap:7px!important;
+  }
+
+  body:not(.auth-locked) [role="dialog"] .modal-content,
+  body:not(.auth-locked) .modal .modal-content,
+  body:not(.auth-locked) .dialog .dialog-content{
+    margin:max(8px,var(--ic-safe-top)) max(8px,var(--ic-safe-right)) max(8px,var(--ic-safe-bottom)) max(8px,var(--ic-safe-left))!important;
+  }
+
+  body:not(.auth-locked) table th,
+  body:not(.auth-locked) table td{
+    white-space:nowrap;
+  }
+
+  body:not(.auth-locked) table td .muted,
+  body:not(.auth-locked) table td [class*="description"],
+  body:not(.auth-locked) table td [class*="notes"]{
+    white-space:normal;
+  }
+
+  body.auth-locked #loginSection{
+    min-height:100dvh!important;
+    padding-top:max(18px,var(--ic-safe-top))!important;
+    padding-right:max(14px,var(--ic-safe-right))!important;
+    padding-bottom:max(18px,var(--ic-safe-bottom))!important;
+    padding-left:max(14px,var(--ic-safe-left))!important;
+  }
+
+  body.auth-locked #loginSection .container,
+  body.auth-locked #loginSection .hero-grid,
+  body.auth-locked #loginSection .login-card{
+    width:100%!important;
+    max-width:440px!important;
+  }
+}
+
+/* Very small phones: keep the header usable down to ~320px. */
+@media (max-width:479px){
+  body:not(.auth-locked) #appHeader.app-topbar{
+    grid-template-columns:auto minmax(80px,1fr) auto!important;
+    gap:6px!important;
+  }
+
+  body:not(.auth-locked) #appHeader .topbar-logo,
+  body:not(.auth-locked) #appHeader .topbar-logo img,
+  body:not(.auth-locked) #appHeader .ui-brand-logo{
+    width:96px!important;
+    max-width:96px!important;
+    height:38px!important;
+  }
+
+  body:not(.auth-locked) #appHeader #themeSelect{
+    display:none!important;
+  }
+
+  body:not(.auth-locked) #appHeader .topbar-menu-btn{
+    width:42px!important;
+    height:42px!important;
+  }
+
+  body:not(.auth-locked) #appHeader .topbar-icon-btn,
+  body:not(.auth-locked) #appHeader .topbar-logout,
+  body:not(.auth-locked) #appHeader .topbar-profile{
+    min-width:38px!important;
+    width:38px!important;
+    height:38px!important;
+  }
+
+  body:not(.auth-locked) .view-menu.ic-modern-nav,
+  body:not(.auth-locked) .view-menu.ic-modern-nav.ic-nav-collapsed,
+  body:not(.auth-locked) .view-menu.ic-modern-nav.ic-nav-collapsed:hover{
+    --ic-app-nav-width:calc(100vw - max(16px,var(--ic-safe-left)) - max(8px,var(--ic-safe-right)));
+    left:max(8px,var(--ic-safe-left))!important;
+    top:max(8px,var(--ic-safe-top))!important;
+    bottom:max(8px,var(--ic-safe-bottom))!important;
+    border-radius:18px!important;
+  }
+}
+
+@media (prefers-reduced-motion:reduce){
+  body:not(.auth-locked) .view-menu.ic-modern-nav,
+  #icMobileNavBackdrop{
+    transition:none!important;
+  }
+}
