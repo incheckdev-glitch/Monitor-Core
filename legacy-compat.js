@@ -67,4 +67,15 @@
     normalizeTicketStatus
   });
   global.normalizeTicketStatus = normalizeTicketStatus;
+
+  // Authentication recovery is intentionally loaded from this early, stable classic script.
+  // It keeps login available even when a later dashboard/UI enhancement fails to initialize.
+  if (!document.getElementById('incheck360-login-recovery-script')) {
+    const recoveryScript = document.createElement('script');
+    recoveryScript.id = 'incheck360-login-recovery-script';
+    recoveryScript.src = '/login-recovery.js?v=20260906-login-recovery1';
+    recoveryScript.async = true;
+    recoveryScript.onerror = () => console.error('[legacy-compat] Unable to load login recovery');
+    document.head.appendChild(recoveryScript);
+  }
 })(window);
