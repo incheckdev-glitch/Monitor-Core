@@ -287,6 +287,32 @@
   border-color:var(--ic-form-final-border)!important;
 }
 
+/* Dark record views must preserve the light-mode right-side drawer perspective.
+   Only reduce the dark overlay; do not redefine the drawer geometry. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .payment-forecast-details-drawer,
+  .record-details-drawer
+){
+  background:transparent!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .payment-forecast-details-backdrop,
+  .record-details-backdrop
+){
+  background:rgba(2,6,23,.12)!important;
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .payment-forecast-details-panel,
+  .record-details-panel
+){
+  border-left:1px solid var(--ic-form-final-border)!important;
+  box-shadow:-24px 0 60px rgba(0,0,0,.32)!important;
+}
+
 /* Final paper guard — must stay after every form rule. */
 :root:not([data-theme="light"]) body:not(.auth-locked) :where(
   .document-preview,.document-sheet,.doc-sheet,.print-preview,.pdf-preview,
