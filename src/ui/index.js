@@ -12,7 +12,7 @@ function ensureCss() {
     ['incheck360-management-command-center-css', '/src/ui/management-command-center.css?v=20260907-mcc1'],
     ['incheck360-system-health-css', '/src/ui/system-health.css?v=20260907-health1'],
     ['incheck360-authenticated-dark-forms-final-css', '/src/ui/authenticated-dark-forms-final.css?v=20260907-darkforms5'],
-    ['incheck360-record-view-drawer-dark-fix-css', '/src/ui/record-view-drawer-dark-fix.css?v=20260907-recorddrawer1']
+    ['incheck360-record-view-drawer-dark-fix-css', '/src/ui/record-view-drawer-dark-fix.css?v=20260907-recorddrawer2']
   ];
 
   styles.forEach(([id, href]) => {

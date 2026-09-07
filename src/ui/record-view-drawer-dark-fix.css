@@ -1,32 +1,8 @@
-/* InCheck360 Operations Portal — dark record-view drawer geometry.
-   Keeps View screens as compact right-side drawers so the underlying module remains visible.
-   Auth/login is excluded; Payment Forecast analytical drill-down keeps its own wider geometry. */
+/* Monitor Core — dark record-view visual treatment only.
+   IMPORTANT: dark mode must preserve the exact light-mode drawer geometry and behavior.
+   Do not set width, max-width, height, position, display, overflow, transform, inset or z-index here.
+   The base/light-mode CSS remains the single source of truth for drawer layout. */
 
-@media (min-width:1201px){
-  :root:not([data-theme="light"]) body:not(.auth-locked) #recordDetailsDrawer .record-details-panel.payment-forecast-details-panel,
-  :root:not([data-theme="light"]) body:not(.auth-locked) #leadDetailsDrawer .lead-details-panel{
-    width:min(760px,46vw)!important;
-    max-width:760px!important;
-  }
-}
-
-@media (min-width:801px) and (max-width:1200px){
-  :root:not([data-theme="light"]) body:not(.auth-locked) #recordDetailsDrawer .record-details-panel.payment-forecast-details-panel,
-  :root:not([data-theme="light"]) body:not(.auth-locked) #leadDetailsDrawer .lead-details-panel{
-    width:min(720px,68vw)!important;
-    max-width:720px!important;
-  }
-}
-
-@media (max-width:800px){
-  :root:not([data-theme="light"]) body:not(.auth-locked) #recordDetailsDrawer .record-details-panel.payment-forecast-details-panel,
-  :root:not([data-theme="light"]) body:not(.auth-locked) #leadDetailsDrawer .lead-details-panel{
-    width:100vw!important;
-    max-width:100vw!important;
-  }
-}
-
-/* Preserve the real module/table visually behind the drawer. The backdrop remains clickable. */
 :root:not([data-theme="light"]) body:not(.auth-locked) #recordDetailsDrawer,
 :root:not([data-theme="light"]) body:not(.auth-locked) #leadDetailsDrawer{
   background:transparent!important;
@@ -34,13 +10,22 @@
 
 :root:not([data-theme="light"]) body:not(.auth-locked) #recordDetailsDrawer .record-details-backdrop,
 :root:not([data-theme="light"]) body:not(.auth-locked) #leadDetailsDrawer .payment-forecast-details-backdrop{
-  background:rgba(2,6,23,.035)!important;
+  background:rgba(2,6,23,.10)!important;
   backdrop-filter:none!important;
   -webkit-backdrop-filter:none!important;
 }
 
 :root:not([data-theme="light"]) body:not(.auth-locked) #recordDetailsDrawer .record-details-panel,
 :root:not([data-theme="light"]) body:not(.auth-locked) #leadDetailsDrawer .lead-details-panel{
-  border-left:1px solid #2b3a50!important;
+  background:#0f172a!important;
+  color:#f8fafc!important;
+  border-color:#2b3a50!important;
   box-shadow:-14px 0 36px rgba(0,0,0,.28)!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) #recordDetailsDrawer :where(.record-details-header,.record-details-content,.record-details-section,.record-details-actions),
+:root:not([data-theme="light"]) body:not(.auth-locked) #leadDetailsDrawer :where(.lead-details-header,.lead-details-content,.lead-details-section,.lead-details-actions){
+  background-color:#0f172a!important;
+  color:#f8fafc!important;
+  border-color:#2b3a50!important;
 }
