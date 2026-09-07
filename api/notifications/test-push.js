@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-import { loadActiveSubscriptions, loadSubscriptionsByIds, sendWebPushToSubscriptions } from '../notification-delivery-worker.js';
 
 const ADMIN_ROLES = new Set(['admin', 'administrator', 'super_admin', 'dev']);
 
@@ -17,80 +16,31 @@ function extractBearerToken(req) {
     .trim();
 }
 
-function getCallerRole(profile, user) {
-  return lower(
-    profile?.role_key ||
-      profile?.role ||
-      profile?.user_role ||
-      profile?.app_role ||
-      user?.user_metadata?.role_key ||
-      user?.user_metadata?.role ||
-      user?.app_metadata?.role_key ||
-      user?.app_metadata?.role
-  );
-}
-
-async function loadProfileByColumn(supabaseAdmin, column, value) {
-  const normalized = text(value);
-  if (!normalized) return null;
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('profiles')
-      .select('*')
-      .eq(column, normalized)
-      .limit(1)
-      .maybeSingle();
-    if (error) return null;
-    return data || null;
-  } catch {
-    return null;
-  }
-}
-
-async function getCallerProfile(supabaseAdmin, user) {
-  if (!user?.id && !user?.email) return null;
-
-  const byId = await loadProfileByColumn(supabaseAdmin, 'id', user.id);
-  if (byId) return byId;
-
-  const byEmail = await loadProfileByColumn(supabaseAdmin, 'email', user.email);
-  if (byEmail) return byEmail;
-
-  return null;
-}
-
-async function authorize(req, supabaseAdmin) {
-  const configuredSecret = text(process.env.NOTIFICATION_QUEUE_WORKER_SECRET || process.env.CRON_SECRET);
-  const providedSecret = text(req.headers?.['x-worker-secret'] || req.headers?.['x-cron-secret'] || req.query?.secret);
-  if (configuredSecret && providedSecret && providedSecret === configuredSecret) return { ok: true, type: 'secret' };
-
-  const token = extractBearerToken(req);
-  if (!token) return { ok: false, status: 401, error: 'Missing authorization.' };
-
-  const { data, error } = await supabaseAdmin.auth.getUser(token);
-  if (error || !data?.user) return { ok: false, status: 401, error: 'Invalid authorization.' };
-
-  const profile = await getCallerProfile(supabaseAdmin, data.user);
-  const role = getCallerRole(profile, data.user);
-  return { ok: true, type: 'user', userId: data.user.id, role, isAdmin: ADMIN_ROLES.has(role) };
-}
-
 function getBody(req) {
   if (!req.body) return {};
   if (typeof req.body === 'object') return req.body;
   try { return JSON.parse(String(req.body)); } catch { return {}; }
 }
 
-function normalizeList(value) {
-  if (!value) return [];
-  if (Array.isArray(value)) return value.map(text).filter(Boolean);
-  return String(value).split(',').map(text).filter(Boolean);
-}
-
-function subscriptionBelongsToUser(subscription = {}, userId = '') {
-  const id = text(userId);
-  if (!id) return false;
-  return ['user_id', 'recipient_user_id', 'auth_user_id', 'profile_id'].some(column => text(subscription?.[column]) === id);
+async function findProfile(supabaseAdmin, user) {
+  const candidates = [
+    ['auth_user_id', user?.id],
+    ['id', user?.id],
+    ['email', user?.email]
+  ];
+  for (const [column, value] of candidates) {
+    if (!text(value)) continue;
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('profiles')
+        .select('*')
+        .eq(column, value)
+        .limit(1)
+        .maybeSingle();
+      if (!error && data) return data;
+    } catch {}
+  }
+  return null;
 }
 
 export default async function handler(req, res) {
@@ -99,60 +49,79 @@ export default async function handler(req, res) {
     return res.status(405).json({ ok: false, error: 'Method not allowed.' });
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseUrl = text(
+    process.env.SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL ||
+    'https://rewgbmfcrbgkzxcbrxjy.supabase.co'
+  );
+  const serviceRoleKey = text(process.env.SUPABASE_SERVICE_ROLE_KEY);
   if (!supabaseUrl || !serviceRoleKey) {
     return res.status(500).json({ ok: false, error: 'Server is missing Supabase admin configuration.' });
   }
 
+  const callerToken = extractBearerToken(req);
+  if (!callerToken) return res.status(401).json({ ok: false, error: 'Missing authorization.' });
+
   const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false }
   });
+  const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(callerToken);
+  if (userError || !userData?.user) {
+    return res.status(401).json({ ok: false, error: 'Invalid authorization.' });
+  }
 
-  const auth = await authorize(req, supabaseAdmin).catch(error => ({ ok: false, status: 401, error: text(error?.message || error) || 'Unauthorized.' }));
-  if (!auth?.ok) return res.status(auth?.status || 401).json({ ok: false, error: auth?.error || 'Unauthorized.' });
-
+  const profile = await findProfile(supabaseAdmin, userData.user);
+  const role = lower(
+    profile?.role_key ||
+    profile?.role ||
+    userData.user?.app_metadata?.role ||
+    userData.user?.user_metadata?.role
+  );
+  const isAdmin = ADMIN_ROLES.has(role);
   const body = getBody(req);
-  const subscriptionIds = normalizeList(body.subscription_ids || body.subscriptionIds);
-  const userIds = normalizeList(body.user_ids || body.userIds || body.user_id || body.userId);
+
+  const forwardBody = {
+    ...body,
+    title: text(body.title) || 'InCheck360 Server Test',
+    body: text(body.body) || 'Server push is working.',
+    url: text(body.url) || '/?pushTest=1',
+    tag: text(body.tag) || 'server-test-push',
+    data: body.data && typeof body.data === 'object' ? body.data : { test: true }
+  };
+
+  if (!isAdmin) {
+    delete forwardBody.subscription_ids;
+    delete forwardBody.subscription_id;
+    delete forwardBody.roles;
+    delete forwardBody.role;
+    delete forwardBody.allow_broadcast;
+    forwardBody.user_ids = [text(profile?.id || userData.user.id)];
+  }
 
   try {
-    let subscriptions = [];
-    if (subscriptionIds.length) {
-      subscriptions = await loadSubscriptionsByIds(supabaseAdmin, subscriptionIds);
-      if (auth.type === 'user' && !auth.isAdmin) {
-        const ownSubscriptions = subscriptions.filter(subscription => subscriptionBelongsToUser(subscription, auth.userId));
-        if (ownSubscriptions.length !== subscriptions.length) {
-          return res.status(403).json({ ok: false, error: 'Cannot test another user/device.' });
-        }
-        subscriptions = ownSubscriptions;
-      }
-    }
-
-    const targetUserIds = auth.type === 'user' && !auth.isAdmin
-      ? [auth.userId]
-      : userIds;
-
-    if (!subscriptions.length && targetUserIds.length) {
-      const groups = await Promise.all(targetUserIds.map(userId => loadActiveSubscriptions(supabaseAdmin, userId)));
-      subscriptions = groups.flat();
-    }
-
-    const result = await sendWebPushToSubscriptions({
-      supabase: supabaseAdmin,
-      subscriptions,
-      payload: {
-        title: text(body.title) || 'InCheck360 Server Test',
-        body: text(body.body) || 'Server push is working.',
-        url: text(body.url) || '/?pushTest=1',
-        deep_link: text(body.url) || '/?pushTest=1',
-        tag: text(body.tag) || 'server-test-push',
-        data: body.data && typeof body.data === 'object' ? body.data : { test: true }
-      }
+    const response = await fetch(`${supabaseUrl.replace(/\/$/, '')}/functions/v1/send-web-push-v2`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${serviceRoleKey}`,
+        apikey: serviceRoleKey
+      },
+      body: JSON.stringify(forwardBody)
     });
-
-    return res.status(200).json({ ok: true, subscriptions: subscriptions.length, ...result });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result?.ok === false) {
+      return res.status(response.status || 500).json({
+        ok: false,
+        error: text(result?.error || result?.message) || `Push sender failed with HTTP ${response.status}`,
+        ...result
+      });
+    }
+    return res.status(200).json({ ok: true, ...result });
   } catch (error) {
-    return res.status(500).json({ ok: false, error: text(error?.message || error) || 'Server push test failed.' });
+    return res.status(500).json({
+      ok: false,
+      error: text(error?.message || error) || 'Server push test failed.'
+    });
   }
 }
