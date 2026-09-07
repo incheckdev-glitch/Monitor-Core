@@ -2,11 +2,15 @@ import { UIComponents } from './components.js?v=20260904-ds2';
 import { installLegacyBridge, LegacyBridge } from './legacyBridge.js?v=20260904-ds2';
 import { installModulePageSystem, ModulePage } from './modulePage.js?v=20260904-ds2';
 import { installResponsiveRuntime, ResponsiveRuntime } from './responsiveRuntime.js?v=20260906-appshell2';
+import './managementCommandCenter.js?v=20260907-mcc1';
+import './systemHealth.js?v=20260907-health1';
 
 function ensureCss() {
   const styles = [
     ['incheck360-design-system-css', '/src/ui/design-system.css?v=20260904-ds2'],
-    ['incheck360-module-page-css', '/src/ui/module-page.css?v=20260904-ds2']
+    ['incheck360-module-page-css', '/src/ui/module-page.css?v=20260904-ds2'],
+    ['incheck360-management-command-center-css', '/src/ui/management-command-center.css?v=20260907-mcc1'],
+    ['incheck360-system-health-css', '/src/ui/system-health.css?v=20260907-health1']
   ];
 
   styles.forEach(([id, href]) => {
