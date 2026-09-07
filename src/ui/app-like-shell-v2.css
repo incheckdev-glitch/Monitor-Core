@@ -172,4 +172,32 @@
 
 @media (min-width:981px){
   body:not(.auth-locked) .ic-mobile-nav-close{display:none!important;}
+
+  /* Desktop collapsed menu: open immediately on hover, without width/padding animation. */
+  body:not(.auth-locked) .view-menu.ic-modern-nav.ic-nav-collapsed,
+  body:not(.auth-locked) .view-menu.ic-modern-nav.ic-nav-collapsed:hover{
+    transition:none!important;
+  }
+
+  body:not(.auth-locked) .view-menu.ic-modern-nav.ic-nav-collapsed:hover{
+    width:264px!important;
+    padding:12px!important;
+    box-shadow:0 18px 46px rgba(5,20,38,.28)!important;
+  }
+
+  /* Do not animate pieces that become visible while the pointer is moving through the menu. */
+  body:not(.auth-locked) .view-menu.ic-modern-nav.ic-nav-collapsed:hover .view-menu-header,
+  body:not(.auth-locked) .view-menu.ic-modern-nav.ic-nav-collapsed:hover .view-menu-group-title,
+  body:not(.auth-locked) .view-menu.ic-modern-nav.ic-nav-collapsed:hover .view-menu-group-label,
+  body:not(.auth-locked) .view-menu.ic-modern-nav.ic-nav-collapsed:hover .view-menu-group-chevron,
+  body:not(.auth-locked) .view-menu.ic-modern-nav.ic-nav-collapsed:hover .view-menu-group-body,
+  body:not(.auth-locked) .view-menu.ic-modern-nav.ic-nav-collapsed:hover .view-tab,
+  body:not(.auth-locked) .view-menu.ic-modern-nav.ic-nav-collapsed:hover .ic-nav-collapse-btn{
+    animation:none!important;
+  }
+
+  /* Keep the page column collapsed while the menu floats over it, so content never jumps. */
+  body:not(.auth-locked) .content-layout.ic-modern-nav-layout.ic-nav-collapsed{
+    grid-template-columns:76px minmax(0,1fr)!important;
+  }
 }
