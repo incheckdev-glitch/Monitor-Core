@@ -1,27 +1,452 @@
 /* Final dark-mode module readability overrides. Load last. */
-:root:not([data-theme="light"]) body:not(.auth-locked) :where(
-  .company-summary-card,
-  .contacts-summary-card,
-  .payment-forecast-summary-card,
-  .biners-summary-card,
-  [class$="-summary-card"],
-  [class*="-summary-card "],
-  [class$="-kpi-card"],
-  [class*="-kpi-card "],
-  [class$="-metric-card"],
-  [class*="-metric-card "],
-  [class$="-stat-card"],
-  [class*="-stat-card "]
-) > :where(div,section) > span:not([class*="icon"]),
-:root:not([data-theme="light"]) body:not(.auth-locked) :where(
-  .company-summary-card,
-  .contacts-summary-card,
-  .payment-forecast-summary-card,
-  .biners-summary-card
-) :where(.summary-label,.summary-subtitle){
-  color:#9aa9bc!important;
+:root:not([data-theme="light"]) body:not(.auth-locked){
+  --ic-final-bg:#08111f;
+  --ic-final-surface:#0f172a;
+  --ic-final-surface-2:#111827;
+  --ic-final-surface-3:#162033;
+  --ic-final-input:#0b1424;
+  --ic-final-border:#2b3a50;
+  --ic-final-border-strong:#3a4b63;
+  --ic-final-text:#f8fafc;
+  --ic-final-text-soft:#d8e1ee;
+  --ic-final-muted:#9aa9bc;
 }
 
+/* --------------------------------------------------------------------------
+   WHOLE PAGE CANVAS
+   Prevent the authenticated ERP from becoming half-white / half-dark.
+   -------------------------------------------------------------------------- */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  #app,
+  .content,
+  .content-layout,
+  .content-panels,
+  .content-panels > .view,
+  .content-panels > [id$="View"],
+  .view.active,
+  .page-content,
+  .view-content,
+  .workspace-content,
+  .workspace-main,
+  .module-content,
+  .module-body,
+  .page-body,
+  .icds-page,
+  .icds-module-page
+){
+  background-color:var(--ic-final-bg)!important;
+  color:var(--ic-final-text)!important;
+}
+
+/* Common page/workspace shells that frequently hard-code white. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .company-page-shell,
+  .contacts-page-shell,
+  .leads-page-shell,
+  .deals-page-shell,
+  .proposals-page-shell,
+  .agreements-page-shell,
+  .invoices-page-shell,
+  .receipts-page-shell,
+  .credit-notes-page-shell,
+  .payment-forecast-page-shell,
+  .renewal-forecast-page-shell,
+  .biners-page-shell,
+  .accounting-page-shell,
+  .hr-page-shell,
+  .cs-page-shell,
+  .commission-page-shell,
+  .management-dashboard-workspace,
+  .mcc-page-shell
+){
+  background:var(--ic-final-bg)!important;
+  color:var(--ic-final-text)!important;
+}
+
+/* Primary white surfaces across normal ERP pages. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .card,
+  .panel,
+  .section-card,
+  .module-card,
+  .workspace-card,
+  .content-card,
+  .filter-card,
+  .filters-card,
+  .details-card,
+  .detail-card,
+  .info-card,
+  .table-panel,
+  .table-card,
+  .table-section,
+  .table-shell,
+  .table-container,
+  .table-wrapper,
+  .table-responsive,
+  .table-wrap,
+  .data-table-wrap,
+  .company-panel,
+  .contacts-panel,
+  .lead-panel,
+  .deal-panel,
+  .proposal-panel,
+  .agreement-panel,
+  .invoice-panel,
+  .receipt-panel,
+  .credit-note-panel,
+  .payment-forecast-panel,
+  .renewal-forecast-panel,
+  .biners-panel,
+  .accounting-card,
+  .backup-card,
+  .hr-panel,
+  .cs-card
+){
+  background-color:var(--ic-final-surface)!important;
+  color:var(--ic-final-text-soft)!important;
+  border-color:var(--ic-final-border)!important;
+}
+
+/* Page headers stay integrated with the dark canvas. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .page-header,
+  .view-header,
+  .section-header,
+  .module-header,
+  .company-page-header,
+  .contacts-page-header,
+  .leads-page-header,
+  .deals-page-header,
+  .proposals-page-header,
+  .agreements-page-header,
+  .invoices-page-header,
+  .receipts-page-header,
+  .payment-forecast-page-header,
+  .renewal-forecast-page-header,
+  .accounting-page-header,
+  .backup-page-header,
+  .hr-page-header,
+  .cs-page-header,
+  .mcc-page-header
+){
+  color:var(--ic-final-text)!important;
+  border-color:var(--ic-final-border)!important;
+}
+
+/* --------------------------------------------------------------------------
+   CREATE / VIEW / EDIT FORMS + MODALS
+   -------------------------------------------------------------------------- */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .modal-content,
+  .dialog-content,
+  .drawer-content,
+  .drawer-panel,
+  .record-details-panel,
+  .lead-details-panel,
+  .deal-details-panel,
+  .company-details-panel,
+  .contact-details-panel,
+  .invoice-modern-form,
+  .receipt-modern-form,
+  .proposal-modal-body,
+  .proposal-modal-scroll,
+  .agreement-modern-form,
+  .agreement-scroll-body,
+  .commission-modal .modal-content,
+  .biners-dialog,
+  .hr-dialog,
+  .cs-modal-card
+){
+  background:var(--ic-final-surface)!important;
+  color:var(--ic-final-text)!important;
+  border-color:var(--ic-final-border)!important;
+  box-shadow:none!important;
+}
+
+/* Modal/header/footer bands must not stay white. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .modal-header,
+  .modal-body,
+  .modal-footer,
+  .dialog-header,
+  .dialog-body,
+  .dialog-footer,
+  .drawer-header,
+  .drawer-body,
+  .drawer-footer,
+  .proposal-modal-header,
+  .proposal-modal-footer,
+  .agreement-modal-header,
+  .agreement-modal-footer,
+  .receipt-form-footer,
+  .receipt-form-footer-actions,
+  .invoice-form-footer-actions,
+  .record-details-content
+){
+  background-color:var(--ic-final-surface)!important;
+  color:var(--ic-final-text)!important;
+  border-color:var(--ic-final-border)!important;
+}
+
+/* Generic form containers used across Tickets, CRM, Workflow, Users, HR, etc. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .modal-content form,
+  .dialog-content form,
+  .drawer-panel form,
+  .form-section,
+  .form-card,
+  .form-panel,
+  .form-block,
+  .form-section-header,
+  .form-grid,
+  .form-row,
+  .field-group,
+  fieldset
+){
+  background-color:var(--ic-final-surface)!important;
+  color:var(--ic-final-text-soft)!important;
+  border-color:var(--ic-final-border)!important;
+}
+
+/* Invoice create / view / edit. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .invoice-form-section,
+  .invoice-sub-card,
+  .invoice-items-block,
+  .invoice-customer-summary,
+  .invoice-form-table-wrap,
+  .invoice-schedule-state,
+  .invoice-conclusion-field,
+  .invoice-totals-grid,
+  .invoice-schedule-control-grid
+){
+  background:var(--ic-final-surface)!important;
+  color:var(--ic-final-text-soft)!important;
+  border-color:var(--ic-final-border)!important;
+  box-shadow:none!important;
+}
+
+/* Receipt create / view / edit. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .receipt-form-section,
+  .receipt-form-card,
+  .receipt-form-summary,
+  .receipt-form-summary-card,
+  .receipt-section-table-wrap,
+  .receipt-form-modal-shell
+){
+  background:var(--ic-final-surface)!important;
+  color:var(--ic-final-text-soft)!important;
+  border-color:var(--ic-final-border)!important;
+  box-shadow:none!important;
+}
+
+/* Proposal create / view / edit. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .proposal-section-card,
+  .proposal-info-card,
+  .proposal-item-card,
+  .proposal-summary-card,
+  .proposal-grand-total
+){
+  background:var(--ic-final-surface)!important;
+  color:var(--ic-final-text-soft)!important;
+  border-color:var(--ic-final-border)!important;
+  box-shadow:none!important;
+}
+
+/* Agreement create / view / edit. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .agreement-section-card,
+  .agreement-annex-wizard .modal-content,
+  .agreement-annex-section,
+  .agreement-form-section
+){
+  background:var(--ic-final-surface)!important;
+  color:var(--ic-final-text-soft)!important;
+  border-color:var(--ic-final-border)!important;
+  box-shadow:none!important;
+}
+
+/* Accounting / Backup / HR / Client Success / Commission / Biners forms. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .accounting-form-grid,
+  .backup-form-grid,
+  .hr-form-grid,
+  .hr-inline-form,
+  .cs-form,
+  .commission-form-grid,
+  .biners-form-grid
+){
+  background-color:var(--ic-final-surface)!important;
+  color:var(--ic-final-text-soft)!important;
+  border-color:var(--ic-final-border)!important;
+}
+
+/* View/detail cards. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .record-details-field,
+  .lead-details-field,
+  .deal-details-field,
+  .company-details-field,
+  .contact-details-field,
+  .detail-field,
+  .detail-item,
+  .details-row,
+  .details-section
+){
+  background:var(--ic-final-surface-2)!important;
+  color:var(--ic-final-text-soft)!important;
+  border-color:var(--ic-final-border)!important;
+}
+
+/* Labels / titles / helper copy inside forms. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .modal-content,
+  .dialog-content,
+  .drawer-panel,
+  .record-details-panel,
+  .invoice-modern-form,
+  .receipt-modern-form,
+  .proposal-modal-body,
+  .agreement-modern-form,
+  .form-section,
+  .form-card,
+  .form-panel
+) :where(h1,h2,h3,h4,h5,h6,strong,b,legend){
+  color:var(--ic-final-text)!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .modal-content,
+  .dialog-content,
+  .drawer-panel,
+  .record-details-panel,
+  .invoice-modern-form,
+  .receipt-modern-form,
+  .proposal-modal-body,
+  .agreement-modern-form,
+  .form-section,
+  .form-card,
+  .form-panel
+) :where(label,.label,.muted,.hint,.help,.helper,.form-hint,.field-hint,small,p){
+  color:var(--ic-final-muted)!important;
+}
+
+/* Inputs: override module CSS that hard-codes white form controls. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .modal-content,
+  .dialog-content,
+  .drawer-panel,
+  .record-details-panel,
+  .invoice-modern-form,
+  .receipt-modern-form,
+  .proposal-modal-body,
+  .agreement-modern-form,
+  .accounting-form-grid,
+  .backup-form-grid,
+  .hr-form-grid,
+  .hr-inline-form,
+  .cs-form,
+  .commission-form-grid,
+  .biners-form-grid,
+  .form-section,
+  .form-card,
+  .form-panel
+) :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  select,
+  textarea,
+  .input,
+  .select,
+  [contenteditable="true"]
+){
+  color-scheme:dark!important;
+  background:var(--ic-final-input)!important;
+  color:var(--ic-final-text)!important;
+  border-color:var(--ic-final-border-strong)!important;
+  -webkit-text-fill-color:var(--ic-final-text)!important;
+  box-shadow:none!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .modal-content,
+  .dialog-content,
+  .drawer-panel,
+  .record-details-panel,
+  .invoice-modern-form,
+  .receipt-modern-form,
+  .proposal-modal-body,
+  .agreement-modern-form,
+  .form-section,
+  .form-card,
+  .form-panel
+) :where(input[readonly],textarea[readonly],input:disabled,select:disabled,textarea:disabled,.readonly-field,.locked-field){
+  background:var(--ic-final-surface-2)!important;
+  color:#aab7c8!important;
+  -webkit-text-fill-color:#aab7c8!important;
+  border-color:var(--ic-final-border)!important;
+  opacity:1!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .modal-content,
+  .dialog-content,
+  .drawer-panel,
+  .record-details-panel,
+  .invoice-modern-form,
+  .receipt-modern-form,
+  .proposal-modal-body,
+  .agreement-modern-form,
+  .form-section,
+  .form-card,
+  .form-panel
+) ::placeholder{
+  color:#7f8da3!important;
+  opacity:1!important;
+}
+
+/* Tables inside create/view/edit forms. */
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .invoice-form-table-wrap,
+  .receipt-section-table-wrap,
+  .proposal-modal-body,
+  .agreement-modern-form,
+  .modal-content,
+  .dialog-content
+) table:not(.document-table){
+  background:var(--ic-final-surface)!important;
+  color:var(--ic-final-text-soft)!important;
+  border-color:var(--ic-final-border)!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .invoice-form-table-wrap,
+  .receipt-section-table-wrap,
+  .proposal-modal-body,
+  .agreement-modern-form,
+  .modal-content,
+  .dialog-content
+) table:not(.document-table) thead th{
+  background:var(--ic-final-surface-2)!important;
+  color:#cbd5e1!important;
+  border-color:var(--ic-final-border)!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .invoice-form-table-wrap,
+  .receipt-section-table-wrap,
+  .proposal-modal-body,
+  .agreement-modern-form,
+  .modal-content,
+  .dialog-content
+) table:not(.document-table) tbody td{
+  background:var(--ic-final-surface)!important;
+  color:var(--ic-final-text-soft)!important;
+  border-color:var(--ic-final-border)!important;
+}
+
+/* KPI values / labels remain readable. */
 :root:not([data-theme="light"]) body:not(.auth-locked) :where(
   .company-summary-card,
   .contacts-summary-card,
@@ -36,22 +461,48 @@
   [class$="-stat-card"],
   [class*="-stat-card "]
 ) :where(strong,b,.value,.summary-value,.kpi-value,.metric-value,.stat-value){
-  color:#f8fafc!important;
+  color:var(--ic-final-text)!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .company-summary-card,
+  .contacts-summary-card,
+  .payment-forecast-summary-card,
+  .biners-summary-card,
+  [class$="-summary-card"],
+  [class*="-summary-card "],
+  [class$="-kpi-card"],
+  [class*="-kpi-card "],
+  [class$="-metric-card"],
+  [class*="-metric-card "],
+  [class$="-stat-card"],
+  [class*="-stat-card "]
+) :where(.label,.summary-label,.summary-subtitle,.kpi-label,.metric-label,.stat-label,small){
+  color:var(--ic-final-muted)!important;
 }
 
 /* Descriptions and record counts should remain clearly legible. */
 :root:not([data-theme="light"]) body:not(.auth-locked) :where(
-  [class$="-page-header"],
-  [class*="-page-header "],
-  [class$="-table-toolbar"],
-  [class*="-table-toolbar "],
-  [class$="-table-footer"],
-  [class*="-table-footer "]
+  .company-page-header,
+  .contacts-page-header,
+  .leads-page-header,
+  .deals-page-header,
+  .invoices-page-header,
+  .receipts-page-header,
+  .table-toolbar,
+  .table-footer,
+  .company-table-toolbar,
+  .contacts-table-toolbar,
+  .company-table-footer,
+  .contacts-table-footer
 ) :where(p,small,span:not(.badge):not(.chip):not([class*="status"])){
   color:#aab7c8!important;
 }
 
-/* Keep paper/document descendants light after all module rules. */
+/* --------------------------------------------------------------------------
+   PAPER / OFFICIAL DOCUMENT EXCLUSION
+   Keep invoice/agreement/receipt/proposal/report/print previews intentionally light.
+   -------------------------------------------------------------------------- */
 :root:not([data-theme="light"]) body:not(.auth-locked) :where(
   .document-preview,.document-sheet,.doc-sheet,.print-preview,.pdf-preview,
   .report-page,.report-document,.invoice-preview,.invoice-document,
@@ -59,7 +510,39 @@
   .proposal-preview,.proposal-document,.credit-note-preview,.credit-note-document,
   .statement-preview,.statement-document,.accounting-print-area,.backup-print-area,
   .hr-payslip-preview,.hr-receipt-preview,.hr-statement-print,
+  #hrPayslipPreview,#hrSalaryReceiptPreview,#hrEmployeeStatementPrint,
+  [data-document-preview="true"],[data-print-preview="true"]
+){
+  color-scheme:light!important;
+  background:#fff!important;
+  color:#0f172a!important;
+  border-color:#d8dee8!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .document-preview,.document-sheet,.doc-sheet,.print-preview,.pdf-preview,
+  .report-page,.report-document,.invoice-preview,.invoice-document,
+  .receipt-preview,.receipt-document,.agreement-preview,.agreement-document,
+  .proposal-preview,.proposal-document,.credit-note-preview,.credit-note-document,
+  .statement-preview,.statement-document,.accounting-print-area,.backup-print-area,
+  .hr-payslip-preview,.hr-receipt-preview,.hr-statement-print,
+  #hrPayslipPreview,#hrSalaryReceiptPreview,#hrEmployeeStatementPrint,
   [data-document-preview="true"],[data-print-preview="true"]
 ) :where(h1,h2,h3,h4,h5,h6,p,span,div,strong,b,small,label,li,th,td){
   color:#0f172a!important;
+}
+
+:root:not([data-theme="light"]) body:not(.auth-locked) :where(
+  .document-preview,.document-sheet,.doc-sheet,.print-preview,.pdf-preview,
+  .report-page,.report-document,.invoice-preview,.invoice-document,
+  .receipt-preview,.receipt-document,.agreement-preview,.agreement-document,
+  .proposal-preview,.proposal-document,.credit-note-preview,.credit-note-document,
+  .statement-preview,.statement-document,
+  [data-document-preview="true"],[data-print-preview="true"]
+) :where(input,select,textarea){
+  color-scheme:light!important;
+  background:#fff!important;
+  color:#0f172a!important;
+  -webkit-text-fill-color:#0f172a!important;
+  border-color:#cbd5e1!important;
 }
