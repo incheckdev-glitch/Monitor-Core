@@ -155,6 +155,38 @@ async function runServerPushTestViaVercel(pushModule) {
   }
 }
 
+function ensurePushControlsWired() {
+  const pushModule = window?.PushNotifications;
+  const toggleBtn = document.getElementById('pushToggleBtn');
+  if (!pushModule || !toggleBtn) return false;
+
+  const boundToggle = pushModule?.els?.toggleBtn || null;
+  const staleWiredState = Boolean(pushModule?.state?.wired && boundToggle !== toggleBtn);
+
+  if (staleWiredState && pushModule?.state) {
+    pushModule.state.wired = false;
+  }
+
+  if (!pushModule?.state?.wired || boundToggle !== toggleBtn) {
+    pushModule.wire?.();
+  }
+
+  if (pushModule?.state) {
+    try {
+      pushModule.state.supported = Boolean(pushModule.isSupported?.());
+    } catch {}
+  }
+
+  pushModule.applyNotificationHubPermissions?.();
+  pushModule.renderButtonLabel?.();
+
+  if (!pushModule?.state?.busy && pushModule?.els?.toggleBtn) {
+    pushModule.els.toggleBtn.disabled = !pushModule.state.supported;
+  }
+
+  return pushModule?.els?.toggleBtn === toggleBtn && Boolean(pushModule?.state?.wired);
+}
+
 function installPushNotificationsPatch(attempt = 0) {
   const pushModule = window?.PushNotifications;
   if (pushModule && !pushModule.__incheck360FinalNotificationPatch) {
@@ -162,6 +194,7 @@ function installPushNotificationsPatch(attempt = 0) {
     pushModule.testServerPush = function patchedTestServerPush() {
       return runServerPushTestViaVercel(this);
     };
+    ensurePushControlsWired();
     return;
   }
   if (attempt < 80) {
@@ -175,9 +208,6 @@ function installBusinessNotificationPatch(attempt = 0) {
     const originalSafeSendBusinessPwaPush = api.safeSendBusinessPwaPush.bind(api);
     api.__incheck360CentralBusinessNotificationPatch = true;
     api.safeSendBusinessPwaPush = async function patchedSafeSendBusinessPwaPush(args = {}) {
-      // api.js marks business events such as leads:lead_created as backend managed and skips
-      // the old direct push fallback. The final notification system must still enter
-      // NotificationService so in-app, email, and PWA queue rows are created.
       if (window?.NotificationService?.sendBusinessNotification && typeof api.sendBusinessPwaPush === 'function') {
         try {
           return await api.sendBusinessPwaPush(args);
@@ -199,12 +229,24 @@ if (typeof window !== 'undefined') {
   window.dispatchNotification = dispatchNotification;
   installPushNotificationsPatch();
   installBusinessNotificationPatch();
+
   window.addEventListener?.('DOMContentLoaded', () => {
     installPushNotificationsPatch();
     installBusinessNotificationPatch();
+    window.setTimeout(() => ensurePushControlsWired(), 0);
   });
+
   window.addEventListener?.('load', () => {
     installPushNotificationsPatch();
     installBusinessNotificationPatch();
+    window.setTimeout(() => ensurePushControlsWired(), 0);
   });
+
+  document.addEventListener?.('click', event => {
+    const target = event.target?.closest?.(
+      '#notificationsTab, #notificationSetupTab, [data-view="notifications"], [data-view="notificationSetup"]'
+    );
+    if (!target) return;
+    window.setTimeout(() => ensurePushControlsWired(), 0);
+  }, true);
 }
