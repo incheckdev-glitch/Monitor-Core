@@ -1,17 +1,13 @@
-import { createClient } from '@supabase/supabase-js';
-
-const ADMIN_ROLES = new Set(['admin', 'administrator', 'super_admin', 'dev']);
-
 function text(value = '') {
   return String(value ?? '').trim();
 }
 
-function lower(value = '') {
-  return text(value).toLowerCase();
-}
-
 function extractBearerToken(req) {
-  return text(req.headers?.authorization || req.headers?.Authorization)
+  return text(
+    req.headers?.authorization ||
+    req.headers?.Authorization ||
+    req.headers?.['x-supabase-access-token']
+  )
     .replace(/^Bearer\s+/i, '')
     .trim();
 }
@@ -22,31 +18,15 @@ function getBody(req) {
   try { return JSON.parse(String(req.body)); } catch { return {}; }
 }
 
-async function findProfile(supabaseAdmin, user) {
-  const candidates = [
-    ['auth_user_id', user?.id],
-    ['id', user?.id],
-    ['email', user?.email]
-  ];
-  for (const [column, value] of candidates) {
-    if (!text(value)) continue;
-    try {
-      const { data, error } = await supabaseAdmin
-        .from('profiles')
-        .select('*')
-        .eq(column, value)
-        .limit(1)
-        .maybeSingle();
-      if (!error && data) return data;
-    } catch {}
-  }
-  return null;
-}
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     return res.status(405).json({ ok: false, error: 'Method not allowed.' });
+  }
+
+  const callerToken = extractBearerToken(req);
+  if (!callerToken) {
+    return res.status(401).json({ ok: false, error: 'Missing authorization.' });
   }
 
   const supabaseUrl = text(
@@ -54,33 +34,9 @@ export default async function handler(req, res) {
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     process.env.VITE_SUPABASE_URL ||
     'https://rewgbmfcrbgkzxcbrxjy.supabase.co'
-  );
-  const serviceRoleKey = text(process.env.SUPABASE_SERVICE_ROLE_KEY);
-  if (!supabaseUrl || !serviceRoleKey) {
-    return res.status(500).json({ ok: false, error: 'Server is missing Supabase admin configuration.' });
-  }
+  ).replace(/\/$/, '');
 
-  const callerToken = extractBearerToken(req);
-  if (!callerToken) return res.status(401).json({ ok: false, error: 'Missing authorization.' });
-
-  const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false }
-  });
-  const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(callerToken);
-  if (userError || !userData?.user) {
-    return res.status(401).json({ ok: false, error: 'Invalid authorization.' });
-  }
-
-  const profile = await findProfile(supabaseAdmin, userData.user);
-  const role = lower(
-    profile?.role_key ||
-    profile?.role ||
-    userData.user?.app_metadata?.role ||
-    userData.user?.user_metadata?.role
-  );
-  const isAdmin = ADMIN_ROLES.has(role);
   const body = getBody(req);
-
   const forwardBody = {
     ...body,
     title: text(body.title) || 'InCheck360 Server Test',
@@ -90,25 +46,25 @@ export default async function handler(req, res) {
     data: body.data && typeof body.data === 'object' ? body.data : { test: true }
   };
 
-  if (!isAdmin) {
-    delete forwardBody.subscription_ids;
-    delete forwardBody.subscription_id;
-    delete forwardBody.roles;
-    delete forwardBody.role;
-    delete forwardBody.allow_broadcast;
-    forwardBody.user_ids = [text(profile?.id || userData.user.id)];
-  }
-
   try {
-    const response = await fetch(`${supabaseUrl.replace(/\/$/, '')}/functions/v1/send-web-push-v2`, {
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${callerToken}`
+    };
+
+    const publicKey = text(
+      process.env.SUPABASE_ANON_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      process.env.VITE_SUPABASE_ANON_KEY
+    );
+    if (publicKey) headers.apikey = publicKey;
+
+    const response = await fetch(`${supabaseUrl}/functions/v1/send-web-push-v2`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${serviceRoleKey}`,
-        apikey: serviceRoleKey
-      },
+      headers,
       body: JSON.stringify(forwardBody)
     });
+
     const result = await response.json().catch(() => ({}));
     if (!response.ok || result?.ok === false) {
       return res.status(response.status || 500).json({
@@ -117,6 +73,7 @@ export default async function handler(req, res) {
         ...result
       });
     }
+
     return res.status(200).json({ ok: true, ...result });
   } catch (error) {
     return res.status(500).json({
