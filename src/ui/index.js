@@ -7,7 +7,7 @@ import './systemHealth.js?v=20260907-health1';
 import './userActivity.js?v=20260908-ua1';
 import './resellerManagement.js?v=20260908-rm1';
 import './resellerUserAccess.js?v=20260908-rua1';
-import './userProfile.js?v=20260908-profile1';
+import './userProfile.js?v=20260908-profile2';
 import './userProfileMenu.js?v=20260908-profile1';
 
 function ensureCss() {
@@ -18,7 +18,7 @@ function ensureCss() {
     ['incheck360-system-health-css', '/src/ui/system-health.css?v=20260907-health1'],
     ['incheck360-user-activity-css', '/src/ui/user-activity.css?v=20260908-ua1'],
     ['incheck360-reseller-management-css', '/src/ui/reseller-management.css?v=20260908-rm1'],
-    ['incheck360-user-profile-css', '/src/ui/user-profile.css?v=20260908-profile1'],
+    ['incheck360-user-profile-css', '/src/ui/user-profile.css?v=20260908-profile2'],
     ['incheck360-user-profile-menu-css', '/src/ui/user-profile-menu.css?v=20260908-profile1'],
     ['incheck360-authenticated-dark-forms-final-css', '/src/ui/authenticated-dark-forms-final.css?v=20260907-darkforms5'],
     ['incheck360-record-view-drawer-dark-fix-css', '/src/ui/record-view-drawer-dark-fix.css?v=20260907-recorddrawer2']
