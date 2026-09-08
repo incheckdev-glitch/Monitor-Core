@@ -9,6 +9,7 @@ import './resellerManagement.js?v=20260908-rm1';
 import './resellerUserAccess.js?v=20260908-rua1';
 import './resellerViewIsolation.js?v=20260908-rmviewfix1';
 import './userProfile.js?v=20260908-profile2';
+import './userProfileIsolation.js?v=20260908-profileisolation1';
 import './userAvatarPersistence.js?v=20260908-avatarfix1';
 import './userProfileMenu.js?v=20260908-profile1';
 import './workflowGuide.js?v=20260908-guide1';
@@ -23,6 +24,7 @@ function ensureCss() {
     ['incheck360-user-activity-css', '/src/ui/user-activity.css?v=20260908-ua1'],
     ['incheck360-reseller-management-css', '/src/ui/reseller-management.css?v=20260908-rm1'],
     ['incheck360-user-profile-css', '/src/ui/user-profile.css?v=20260908-profile2'],
+    ['incheck360-user-profile-polish-css', '/src/ui/user-profile-polish.css?v=20260908-profilepolish1'],
     ['incheck360-user-profile-menu-css', '/src/ui/user-profile-menu.css?v=20260908-profile1'],
     ['incheck360-workflow-guide-css', '/src/ui/workflow-guide.css?v=20260908-guide1'],
     ['incheck360-form-guide-css', '/src/ui/form-guide.css?v=20260908-formguide1'],
@@ -88,6 +90,7 @@ window.InCheck360UI = Object.freeze({
     window.WorkflowGuide?.refresh?.();
     window.FormGuide?.refresh?.();
     window.UserAvatarPersistence?.refresh?.();
+    window.UserProfileIsolation?.refresh?.();
     window.ResellerViewIsolation?.refresh?.();
   }
 });

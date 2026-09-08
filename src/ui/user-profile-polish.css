@@ -1,0 +1,82 @@
+/* Monitor Core — profile isolation + built-in avatar polish. */
+
+/* The profile picker is a modal only. It must never become part of a module page
+   (Tickets or otherwise) after navigation, rerendering, or a stale hidden state. */
+body:not(.user-profile-open) #userProfileRoot,
+body:not(.user-profile-open) .user-profile-root {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+body.user-profile-open #userProfileRoot:not([hidden]) {
+  display: block !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2600 !important;
+}
+
+/* Keep every illustrated choice at the same visual size and clipping behavior. */
+.user-profile-avatar-art {
+  width: 72px !important;
+  height: 72px !important;
+  flex: 0 0 72px !important;
+  border-radius: 20px !important;
+  overflow: hidden !important;
+  isolation: isolate;
+}
+
+.user-profile-avatar-art .user-profile-avatar-svg,
+.user-profile-preview .user-profile-avatar-svg,
+.has-user-profile-avatar .user-profile-avatar-svg {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+}
+
+.user-profile-avatar-choice {
+  min-height: 122px !important;
+}
+
+/* Built-in ERP avatars intentionally use one consistent light skin tone.
+   Hair, glasses, beard, outfit and accent theme still distinguish each style. */
+.user-profile-avatar-svg [fill="#D9A06B"],
+.user-profile-avatar-svg [fill="#B9784E"],
+.user-profile-avatar-svg [fill="#E1B082"],
+.user-profile-avatar-svg [fill="#C78B62"],
+.user-profile-avatar-svg [fill="#E5B98C"],
+.user-profile-avatar-svg [fill="#A96845"],
+.user-profile-avatar-svg [fill="#D99B70"],
+.user-profile-avatar-svg [fill="#E6B78F"],
+.user-profile-avatar-svg [fill="#B87957"],
+.user-profile-avatar-svg [fill="#E2AA80"],
+.user-profile-avatar-svg [fill="#C88B68"],
+.user-profile-avatar-svg [fill="#F0C09A"],
+.user-profile-avatar-svg [fill="#D8A27A"],
+.user-profile-avatar-svg [fill="#A96F50"],
+.user-profile-avatar-svg [fill="#E8B48B"],
+.user-profile-avatar-svg [fill="#B77B59"] {
+  fill: #f2c7a5 !important;
+}
+
+/* Slightly improve facial contrast after tone normalization. */
+.user-profile-avatar-svg {
+  shape-rendering: geometricPrecision;
+  text-rendering: geometricPrecision;
+}
+
+@media (max-width: 560px) {
+  .user-profile-avatar-art {
+    width: 66px !important;
+    height: 66px !important;
+    flex-basis: 66px !important;
+  }
+  .user-profile-avatar-choice {
+    min-height: 116px !important;
+  }
+}
