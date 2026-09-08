@@ -4,6 +4,7 @@ import { installModulePageSystem, ModulePage } from './modulePage.js?v=20260904-
 import { installResponsiveRuntime, ResponsiveRuntime } from './responsiveRuntime.js?v=20260906-appshell2';
 import './managementCommandCenter.js?v=20260907-mcc1';
 import './systemHealth.js?v=20260907-health1';
+import './userActivity.js?v=20260908-ua1';
 
 function ensureCss() {
   const styles = [
@@ -11,6 +12,7 @@ function ensureCss() {
     ['incheck360-module-page-css', '/src/ui/module-page.css?v=20260904-ds2'],
     ['incheck360-management-command-center-css', '/src/ui/management-command-center.css?v=20260907-mcc1'],
     ['incheck360-system-health-css', '/src/ui/system-health.css?v=20260907-health1'],
+    ['incheck360-user-activity-css', '/src/ui/user-activity.css?v=20260908-ua1'],
     ['incheck360-authenticated-dark-forms-final-css', '/src/ui/authenticated-dark-forms-final.css?v=20260907-darkforms5'],
     ['incheck360-record-view-drawer-dark-fix-css', '/src/ui/record-view-drawer-dark-fix.css?v=20260907-recorddrawer2']
   ];
