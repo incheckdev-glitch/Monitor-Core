@@ -1,0 +1,42 @@
+.ua-view{min-width:0}
+.ua-page-shell{display:flex;flex-direction:column;gap:14px;min-width:0}
+.ua-page-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ua-page-header h1{margin:0;font-size:clamp(1.45rem,2vw,2rem);line-height:1.15;color:var(--text,#0f172a)}
+.ua-page-header p{margin:5px 0 0;color:var(--muted,#64748b);max-width:760px}
+.ua-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.ua-summary-card{border:1px solid var(--line,#e2e8f0);border-radius:14px;background:var(--card,#fff);padding:16px;min-width:0;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+.ua-summary-card span{display:block;color:var(--muted,#64748b);font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.035em}
+.ua-summary-card strong{display:block;font-size:1.9rem;line-height:1.1;margin-top:8px;color:var(--text,#0f172a)}
+.ua-summary-card small{display:block;margin-top:5px;color:var(--muted,#64748b)}
+.ua-warning-card{border-style:dashed}
+.ua-filter-card{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.ua-filter-grid{display:grid;grid-template-columns:repeat(3,minmax(170px,1fr));gap:10px;flex:1;min-width:min(100%,620px)}
+.ua-filter-grid label{display:flex;flex-direction:column;gap:6px;color:var(--muted,#64748b);font-size:.82rem;font-weight:600}
+#uaState{padding-bottom:8px;white-space:nowrap}
+.ua-table-card{padding:0;overflow:hidden}
+.ua-card-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line,#e2e8f0)}
+.ua-card-heading>div{display:flex;flex-direction:column;gap:3px}
+.ua-card-heading strong{color:var(--text,#0f172a);font-size:1rem}
+.ua-card-heading span{color:var(--muted,#64748b);font-size:.82rem}
+.ua-table{width:100%;border-collapse:collapse}
+.ua-table th,.ua-table td{white-space:nowrap;vertical-align:middle}
+.ua-table tbody tr[data-user-id]{cursor:pointer}
+.ua-table tbody tr[data-user-id]:hover{background:rgba(100,116,139,.08)}
+.ua-table tbody tr.is-selected{outline:2px solid color-mix(in srgb,var(--accent,#2563eb) 55%,transparent);outline-offset:-2px;background:color-mix(in srgb,var(--accent,#2563eb) 7%,transparent)}
+.ua-cell-sub{font-size:.76rem;margin-top:3px;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+.ua-status{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line,#e2e8f0);border-radius:999px;padding:4px 9px;font-size:.75rem;font-weight:700;line-height:1.15;background:var(--card,#fff);color:var(--text,#0f172a)}
+.ua-status::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.8}
+.ua-status-active{color:#15803d}
+.ua-status-idle{color:#a16207}
+.ua-status-signed_in{color:#0369a1}
+.ua-status-offline{color:#64748b}
+.ua-detail-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(360px,.85fr);gap:14px;align-items:start}
+html:not([data-theme="light"]) .ua-page-header h1,
+html:not([data-theme="light"]) .ua-summary-card strong,
+html:not([data-theme="light"]) .ua-card-heading strong{color:var(--text,#f8fafc)}
+html:not([data-theme="light"]) .ua-summary-card{background:var(--card,#0f172a);border-color:var(--line,#334155);box-shadow:none}
+html:not([data-theme="light"]) .ua-table tbody tr[data-user-id]:hover{background:rgba(148,163,184,.08)}
+html:not([data-theme="light"]) .ua-status{background:rgba(15,23,42,.55);border-color:var(--line,#334155)}
+@media(max-width:1100px){.ua-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.ua-detail-grid{grid-template-columns:1fr}}
+@media(max-width:760px){.ua-page-shell{gap:10px}.ua-page-header{align-items:stretch}.ua-page-header .btn{width:100%}.ua-summary-grid{grid-template-columns:1fr 1fr;gap:8px}.ua-summary-card{padding:12px}.ua-summary-card strong{font-size:1.55rem}.ua-filter-grid{grid-template-columns:1fr}.ua-filter-card{align-items:stretch}#uaState{padding:0}.ua-detail-grid{display:block}.ua-detail-grid>.card+ .card{margin-top:10px}}
+@media(max-width:480px){.ua-summary-grid{grid-template-columns:1fr}.ua-summary-card{display:grid;grid-template-columns:1fr auto;grid-template-areas:"label value" "small value";align-items:center;gap:2px 10px}.ua-summary-card span{grid-area:label}.ua-summary-card strong{grid-area:value;margin:0}.ua-summary-card small{grid-area:small;margin:0}}
