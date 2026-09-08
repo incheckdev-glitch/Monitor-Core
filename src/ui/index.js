@@ -16,6 +16,7 @@ import './workflowGuide.js?v=20260908-guide1';
 import './formGuide.js?v=20260908-formguide1';
 import './clientSuccessCompletionOnly.js?v=20260908-csonly1';
 import './clientLifecycleOperations.js?v=20260908-clientlifecycle1';
+import './clientLifecycleResilience.js?v=20260908-clientlifecycle2';
 
 function ensureCss() {
   const styles = [
@@ -96,6 +97,7 @@ window.InCheck360UI = Object.freeze({
     window.FormGuide?.refresh?.();
     window.ClientSuccessCompletionOnly?.refresh?.();
     window.ClientLifecycleOperations?.refresh?.();
+    window.ClientLifecycleResilience?.refresh?.();
     window.UserAvatarPersistence?.refresh?.();
     window.UserProfileIsolation?.refresh?.();
     window.ResellerViewIsolation?.refresh?.();
