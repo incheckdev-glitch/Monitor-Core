@@ -102,7 +102,7 @@ create policy resellers_admin_update on public.resellers for update to authentic
 drop policy if exists resellers_admin_delete on public.resellers;
 create policy resellers_admin_delete on public.resellers for delete to authenticated using (private.reseller_is_admin());
 
--- Helper block for own-row SELECT policies.
+-- Own-row SELECT across every reseller-owned table.
 do $$
 declare t text;
 begin
@@ -116,7 +116,7 @@ begin
   end loop;
 end $$;
 
--- Own sub-CRM: reseller users may create/update their own records. Admin remains unrestricted.
+-- Own sub-CRM: reseller users may create/update/delete their own CRM records.
 do $$
 declare t text;
 begin
@@ -134,10 +134,7 @@ end $$;
 drop policy if exists reseller_ownerships_insert_admin_or_own on public.reseller_ownerships;
 create policy reseller_ownerships_insert_admin_or_own on public.reseller_ownerships
 for insert to authenticated
-with check (
-  private.reseller_is_admin()
-  or (private.reseller_can_access(reseller_id) and status='pending')
-);
+with check (private.reseller_is_admin() or (private.reseller_can_access(reseller_id) and status='pending'));
 drop policy if exists reseller_ownerships_admin_update on public.reseller_ownerships;
 create policy reseller_ownerships_admin_update on public.reseller_ownerships for update to authenticated using (private.reseller_is_admin()) with check (private.reseller_is_admin());
 drop policy if exists reseller_ownerships_admin_delete on public.reseller_ownerships;
@@ -147,18 +144,12 @@ create policy reseller_ownerships_admin_delete on public.reseller_ownerships for
 drop policy if exists reseller_activations_insert_admin_or_own on public.reseller_activations;
 create policy reseller_activations_insert_admin_or_own on public.reseller_activations
 for insert to authenticated
-with check (
-  private.reseller_is_admin()
-  or (private.reseller_can_access(reseller_id) and status in ('draft','submitted'))
-);
+with check (private.reseller_is_admin() or (private.reseller_can_access(reseller_id) and status in ('draft','submitted')));
 drop policy if exists reseller_activations_update_admin_or_own on public.reseller_activations;
 create policy reseller_activations_update_admin_or_own on public.reseller_activations
 for update to authenticated
 using (private.reseller_can_access(reseller_id))
-with check (
-  private.reseller_is_admin()
-  or (private.reseller_can_access(reseller_id) and status in ('draft','submitted'))
-);
+with check (private.reseller_is_admin() or (private.reseller_can_access(reseller_id) and status in ('draft','submitted')));
 drop policy if exists reseller_activations_delete_admin_or_draft_own on public.reseller_activations;
 create policy reseller_activations_delete_admin_or_draft_own on public.reseller_activations
 for delete to authenticated
@@ -168,18 +159,12 @@ using (private.reseller_is_admin() or (private.reseller_can_access(reseller_id) 
 drop policy if exists reseller_requests_insert_admin_or_own on public.reseller_requests;
 create policy reseller_requests_insert_admin_or_own on public.reseller_requests
 for insert to authenticated
-with check (
-  private.reseller_is_admin()
-  or (private.reseller_can_access(reseller_id) and status in ('draft','submitted'))
-);
+with check (private.reseller_is_admin() or (private.reseller_can_access(reseller_id) and status in ('draft','submitted')));
 drop policy if exists reseller_requests_update_admin_or_own on public.reseller_requests;
 create policy reseller_requests_update_admin_or_own on public.reseller_requests
 for update to authenticated
 using (private.reseller_can_access(reseller_id))
-with check (
-  private.reseller_is_admin()
-  or (private.reseller_can_access(reseller_id) and status in ('draft','submitted','waiting_on_reseller'))
-);
+with check (private.reseller_is_admin() or (private.reseller_can_access(reseller_id) and status in ('draft','submitted','waiting_on_reseller')));
 drop policy if exists reseller_requests_delete_admin_or_draft_own on public.reseller_requests;
 create policy reseller_requests_delete_admin_or_draft_own on public.reseller_requests
 for delete to authenticated
@@ -190,10 +175,7 @@ drop policy if exists reseller_renewals_update_admin_or_own on public.reseller_r
 create policy reseller_renewals_update_admin_or_own on public.reseller_renewals
 for update to authenticated
 using (private.reseller_can_access(reseller_id))
-with check (
-  private.reseller_is_admin()
-  or (private.reseller_can_access(reseller_id) and status in ('upcoming','contacting_customer','confirmed','not_renewing'))
-);
+with check (private.reseller_is_admin() or (private.reseller_can_access(reseller_id) and status in ('upcoming','contacting_customer','confirmed','not_renewing')));
 drop policy if exists reseller_renewals_admin_insert on public.reseller_renewals;
 create policy reseller_renewals_admin_insert on public.reseller_renewals for insert to authenticated with check (private.reseller_is_admin());
 drop policy if exists reseller_renewals_admin_delete on public.reseller_renewals;
@@ -213,120 +195,11 @@ begin
   end loop;
 end $$;
 
--- Market-check audit rows can be inserted only for the current reseller or by admin.
+-- Market-check audit rows may be inserted only for the current reseller or by admin.
 drop policy if exists reseller_market_checks_insert_admin_or_own on public.reseller_market_checks;
 create policy reseller_market_checks_insert_admin_or_own on public.reseller_market_checks
 for insert to authenticated
 with check (private.reseller_can_access(reseller_id));
 
--- Status-only market check for reseller users. The reseller id is resolved from the signed-in user and cannot be spoofed.
-create or replace function private.reseller_user_market_check_impl(
-  p_company_name text,
-  p_website text,
-  p_email text,
-  p_phone text
-)
-returns table(status text,status_label text)
-language plpgsql
-security definer
-set search_path=public,private,pg_temp
-as $$
-declare
-  rid uuid := private.reseller_current_reseller_id();
-  n text := private.reseller_norm(p_company_name);
-  d text := private.reseller_domain(coalesce(nullif(p_website,''),p_email));
-  em text := lower(btrim(coalesce(p_email,'')));
-  ph text := private.reseller_digits(p_phone);
-  result text := 'available';
-  label text := 'Available';
-begin
-  if private.reseller_current_role()<>'reseller_user' or rid is null then
-    raise exception 'Reseller account is not linked.';
-  end if;
-  if n='' and d='' and em='' and ph='' then
-    raise exception 'Enter a company name, website/email domain, email, or phone';
-  end if;
-
-  if exists(select 1 from public.clients c where
-       (n<>'' and private.reseller_norm(coalesce(c.company_name,c.client_name))=n)
-    or (d<>'' and private.reseller_domain(c.primary_email)=d)
-    or (em<>'' and lower(btrim(coalesce(c.primary_email,'')))=em)
-    or (ph<>'' and private.reseller_digits(c.primary_phone)=ph))
-  or exists(select 1 from public.reseller_activations a join public.reseller_companies c on c.id=a.company_id where a.status='activated' and (
-       (n<>'' and private.reseller_norm(c.company_name)=n)
-    or (d<>'' and (private.reseller_domain(c.website)=d or private.reseller_domain(c.main_email)=d))
-    or (em<>'' and lower(btrim(coalesce(c.main_email,'')))=em)
-    or (ph<>'' and private.reseller_digits(c.main_phone)=ph)))
-  or exists(select 1 from public.reseller_contacts rc join public.reseller_activations a on a.company_id=rc.company_id and a.status='activated' where
-       (em<>'' and lower(btrim(coalesce(rc.email,'')))=em)
-    or (ph<>'' and (private.reseller_digits(rc.phone)=ph or private.reseller_digits(rc.mobile)=ph))) then
-    result:='existing_customer'; label:='Existing Customer';
-  elsif exists(select 1 from public.reseller_ownerships o join public.reseller_companies c on c.id=o.company_id where o.status='pending' and (
-       (n<>'' and private.reseller_norm(c.company_name)=n)
-    or (d<>'' and (private.reseller_domain(c.website)=d or private.reseller_domain(c.main_email)=d))
-    or (em<>'' and lower(btrim(coalesce(c.main_email,'')))=em)
-    or (ph<>'' and private.reseller_digits(c.main_phone)=ph)))
-  or exists(select 1 from public.reseller_contacts rc join public.reseller_ownerships o on o.company_id=rc.company_id and o.status='pending' where
-       (em<>'' and lower(btrim(coalesce(rc.email,'')))=em)
-    or (ph<>'' and (private.reseller_digits(rc.phone)=ph or private.reseller_digits(rc.mobile)=ph))) then
-    result:='pending_registration'; label:='Pending Registration';
-  elsif exists(select 1 from public.reseller_ownerships o join public.reseller_companies c on c.id=o.company_id where o.status='approved' and (o.expires_at is null or o.expires_at>now()) and (
-       (n<>'' and private.reseller_norm(c.company_name)=n)
-    or (d<>'' and (private.reseller_domain(c.website)=d or private.reseller_domain(c.main_email)=d))
-    or (em<>'' and lower(btrim(coalesce(c.main_email,'')))=em)
-    or (ph<>'' and private.reseller_digits(c.main_phone)=ph)))
-  or exists(select 1 from public.contacts c where coalesce(lower(c.contact_status),'active') not in ('inactive','left_company') and (
-       (em<>'' and lower(btrim(coalesce(c.email,'')))=em)
-    or (ph<>'' and (private.reseller_digits(c.phone)=ph or private.reseller_digits(c.mobile)=ph)))
-  or exists(select 1 from public.companies c where coalesce(lower(c.company_status),'') not in ('inactive','archived','lost','released') and (
-       (n<>'' and private.reseller_norm(coalesce(c.company_name,c.name,c.legal_name))=n)
-    or (d<>'' and (private.reseller_domain(c.website)=d or private.reseller_domain(c.main_email)=d))
-    or (em<>'' and lower(btrim(coalesce(c.main_email,'')))=em)
-    or (ph<>'' and private.reseller_digits(c.main_phone)=ph)))
-  or exists(select 1 from public.leads l where coalesce(lower(l.status),'') not in ('lost','closed','converted','inactive') and (
-       (n<>'' and private.reseller_norm(coalesce(l.company_name,l.customer_name,l.full_name))=n)
-    or (d<>'' and private.reseller_domain(coalesce(l.contact_email,l.email))=d)
-    or (em<>'' and lower(btrim(coalesce(l.contact_email,l.email,'')))=em)
-    or (ph<>'' and private.reseller_digits(coalesce(l.contact_phone,l.phone))=ph)))
-  or exists(select 1 from public.deals x where coalesce(lower(x.stage),'')<>'lost' and (
-       (n<>'' and private.reseller_norm(coalesce(x.company_name,x.customer_name,x.full_name))=n)
-    or (d<>'' and private.reseller_domain(coalesce(x.contact_email,x.email))=d)
-    or (em<>'' and lower(btrim(coalesce(x.contact_email,x.email,'')))=em)
-    or (ph<>'' and private.reseller_digits(coalesce(x.contact_phone,x.phone))=ph))) then
-    result:='already_engaged'; label:='Already Engaged';
-  elsif exists(select 1 from public.reseller_companies c where c.company_status in ('released','inactive','lost') and (
-       (n<>'' and private.reseller_norm(c.company_name)=n)
-    or (d<>'' and (private.reseller_domain(c.website)=d or private.reseller_domain(c.main_email)=d))
-    or (em<>'' and lower(btrim(coalesce(c.main_email,'')))=em)
-    or (ph<>'' and private.reseller_digits(c.main_phone)=ph))) then
-    result:='released'; label:='Inactive / Released';
-  end if;
-
-  insert into public.reseller_market_checks(reseller_id,company_name,website,email,phone,result_status,checked_by)
-  values(rid,p_company_name,p_website,p_email,p_phone,result,(select auth.uid()));
-  return query select result,label;
-end;
-$$;
-
-create or replace function public.reseller_user_market_check(
-  p_company_name text default null,
-  p_website text default null,
-  p_email text default null,
-  p_phone text default null
-)
-returns table(status text,status_label text)
-language sql
-security invoker
-set search_path=public,private,pg_temp
-as $$
-  select * from private.reseller_user_market_check_impl(p_company_name,p_website,p_email,p_phone);
-$$;
-
-revoke all on function private.reseller_user_market_check_impl(text,text,text,text) from public,anon;
-revoke all on function public.reseller_user_market_check(text,text,text,text) from public,anon;
-grant execute on function private.reseller_user_market_check_impl(text,text,text,text) to authenticated;
-grant execute on function public.reseller_user_market_check(text,text,text,text) to authenticated;
-
--- Explicitly keep this role out of all ordinary ERP modules for now.
--- The reseller workspace is mounted separately and protected by reseller RLS.
+-- Keep reseller_user out of all ordinary ERP modules for now.
 delete from public.role_permissions where role_key='reseller_user';
