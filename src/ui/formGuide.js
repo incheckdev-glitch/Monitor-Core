@@ -33,14 +33,34 @@ const FormGuide = (() => {
     }
   };
 
+  function mergeList(a,b){ return [...new Set([...(Array.isArray(a)?a:[]),...(Array.isArray(b)?b:[])].map(clean).filter(Boolean))]; }
   function registerRules(formKey, rules={}){
     if(!formKey) return;
     const prev=S.rules.get(formKey)||{};
-    S.rules.set(formKey,{...prev,...rules});
+    S.rules.set(formKey,{
+      ...prev,...rules,
+      required:mergeList(prev.required,rules.required),
+      optional:mergeList(prev.optional,rules.optional),
+      readonly:mergeList(prev.readonly,rules.readonly),
+      notes:{...(prev.notes||{}),...(rules.notes||{})},
+      conditional:{...(prev.conditional||{}),...(rules.conditional||{})},
+      oneOf:[...(Array.isArray(prev.oneOf)?prev.oneOf:[]),...(Array.isArray(rules.oneOf)?rules.oneOf:[])]
+    });
     schedule(0);
   }
   function formKey(root){ return clean(root?.id || root?.dataset?.formGuideKey || root?.querySelector('form[id]')?.id || currentModule()); }
-  function rulesFor(root){ const key=formKey(root); return { ...(BUILTIN[key]||{}), ...(S.rules.get(key)||{}) }; }
+  function rulesFor(root){
+    const key=formKey(root), built=BUILTIN[key]||{}, custom=S.rules.get(key)||{};
+    return {
+      ...built,...custom,
+      required:mergeList(built.required,custom.required),
+      optional:mergeList(built.optional,custom.optional),
+      readonly:mergeList(built.readonly,custom.readonly),
+      notes:{...(built.notes||{}),...(custom.notes||{})},
+      conditional:{...(built.conditional||{}),...(custom.conditional||{})},
+      oneOf:[...(Array.isArray(built.oneOf)?built.oneOf:[]),...(Array.isArray(custom.oneOf)?custom.oneOf:[])]
+    };
+  }
   function controlId(el){ return clean(el.id||el.name||el.dataset?.field||''); }
   function labelFor(el, root){
     if(el.id){ const l=(root||document).querySelector(`label[for="${CSS.escape(el.id)}"]`); if(l)return l; }
@@ -56,6 +76,7 @@ const FormGuide = (() => {
   }
   function hasValue(el){
     if(el.type==='checkbox'||el.type==='radio') return Boolean(el.checked);
+    if(el.tagName==='SELECT'&&el.multiple) return Array.from(el.selectedOptions||[]).some(o=>clean(o.value));
     if(el.tagName==='SELECT') return clean(el.value)!=='';
     return clean(el.value)!=='';
   }
@@ -67,12 +88,40 @@ const FormGuide = (() => {
     if(!form||form.noValidate)return false;
     return qsa(form,'[required],[aria-required="true"],[data-required="true"],[data-guide-required="true"]').some(visible);
   }
+  function resolveControl(root,id){
+    if(!id)return null;
+    try{return (root||document).querySelector(`#${CSS.escape(id)}`)||document.getElementById(id);}catch{return document.getElementById(id);}
+  }
+  function oneOfGroups(root){
+    const r=rulesFor(root), groups=Array.isArray(r.oneOf)?r.oneOf:[];
+    return groups.map((group,index)=>{
+      const ids=mergeList([],group?.fields||group?.controls||[]);
+      const fields=ids.map(id=>resolveControl(root,id)).filter(el=>el&&visible(el));
+      if(!fields.length)return null;
+      let active=true;
+      try{if(typeof group?.when==='function')active=Boolean(group.when({root,module:currentModule(),fields}));}catch{active=true;}
+      if(!active)return null;
+      const min=Math.max(1,Number(group?.min)||1),filled=fields.filter(hasValue).length;
+      return {
+        id:clean(group?.id)||`group_${index+1}`,
+        label:clean(group?.label)||'Grouped requirement',
+        reason:clean(group?.reason)||`Complete at least ${min} field${min===1?'':'s'} in this group.`,
+        fields,min,filled,complete:filled>=min
+      };
+    }).filter(Boolean);
+  }
+  function groupForField(el,root){
+    const id=controlId(el); if(!id)return null;
+    return oneOfGroups(root).find(group=>group.fields.some(field=>controlId(field)===id))||null;
+  }
   function explicitRule(el, root){
     const r=rulesFor(root),id=controlId(el);
     const match=list=>Array.isArray(list)&&list.some(x=>clean(x)===id);
     if(match(r.readonly)) return {kind:'readonly',reason:r.notes?.[id]||'Controlled by the ERP.'};
     if(match(r.required)) return {kind:'required',reason:r.notes?.[id]||'Required by this ERP form rule.'};
     if(match(r.optional)) return {kind:'optional',reason:r.notes?.[id]||'Optional for this form.'};
+    const group=groupForField(el,root);
+    if(group) return {kind:'conditional',reason:group.reason};
     if(r.conditional && Object.prototype.hasOwnProperty.call(r.conditional,id)){
       const rule=r.conditional[id];
       try{
@@ -96,15 +145,17 @@ const FormGuide = (() => {
   function ensureBadge(el,root,meta){
     const label=labelFor(el,root); if(!label)return;
     let badge=label.querySelector(':scope > .form-guide-field-badge');
-    if(!badge){ badge=document.createElement('span'); badge.className='form-guide-field-badge'; label.appendChild(badge); }
-    badge.dataset.kind=meta.kind;
-    badge.textContent=meta.kind==='required'?'Required':meta.kind==='optional'?'Optional':meta.kind==='readonly'?'Read-only':'Conditional';
-    badge.title=meta.reason;
-    el.dataset.formGuideKind=meta.kind;
-    el.dataset.formGuideReason=meta.reason;
+    if(!badge){badge=document.createElement('span');badge.className='form-guide-field-badge';label.appendChild(badge);}
+    const text=meta.kind==='required'?'Required':meta.kind==='optional'?'Optional':meta.kind==='readonly'?'Read-only':'Conditional';
+    if(badge.dataset.kind!==meta.kind)badge.dataset.kind=meta.kind;
+    if(badge.textContent!==text)badge.textContent=text;
+    if(badge.title!==meta.reason)badge.title=meta.reason;
+    el.dataset.formGuideKind=meta.kind; el.dataset.formGuideReason=meta.reason;
     if(meta.kind==='required'){
-      if(el.getAttribute('aria-required')!=='true') el.dataset.formGuideAddedAriaRequired='true';
-      el.setAttribute('aria-required','true');
+      if(el.getAttribute('aria-required')!=='true'){
+        el.dataset.formGuideAddedAriaRequired='true';
+        el.setAttribute('aria-required','true');
+      }
     } else if(el.dataset.formGuideAddedAriaRequired==='true'){
       el.removeAttribute('aria-required'); delete el.dataset.formGuideAddedAriaRequired;
     }
@@ -112,14 +163,20 @@ const FormGuide = (() => {
   function rowFor(el){ return el.closest('.form-row,.field-row,.input-row,.rm-field,.form-group,.field,label') || el.parentElement; }
   function mark(el,root,meta){
     ensureBadge(el,root,meta);
-    const row=rowFor(el); if(row){ row.classList.add('form-guide-field'); row.dataset.formGuideKind=meta.kind; }
-    if(meta.kind==='required'&&!hasValue(el)) el.classList.add('form-guide-missing'); else el.classList.remove('form-guide-missing');
+    const row=rowFor(el); if(row){row.classList.add('form-guide-field');if(row.dataset.formGuideKind!==meta.kind)row.dataset.formGuideKind=meta.kind;}
+    if(meta.kind==='required'&&!hasValue(el))el.classList.add('form-guide-missing');else el.classList.remove('form-guide-missing');
   }
   function summary(root){
     const items=controls(root).map(el=>({el,label:labelText(el,root),...classify(el,root)}));
-    const req=items.filter(x=>x.kind==='required'), missing=req.filter(x=>!hasValue(x.el));
+    const req=items.filter(x=>x.kind==='required'),fieldMissing=req.filter(x=>!hasValue(x.el));
+    const groups=oneOfGroups(root);
+    const groupMissing=groups.filter(g=>!g.complete).map(g=>({
+      el:g.fields.find(field=>!hasValue(field))||g.fields[0],
+      label:g.label,kind:'required',reason:g.reason,isGroup:true,groupFields:g.fields
+    }));
+    const required=req.length+groups.length,requiredDone=(req.length-fieldMissing.length)+groups.filter(g=>g.complete).length;
     return {
-      root,total:items.length,required:req.length,requiredDone:req.length-missing.length,missing,
+      root,total:items.length,required,requiredDone,missing:[...fieldMissing,...groupMissing],groups,
       optional:items.filter(x=>x.kind==='optional').length,
       conditional:items.filter(x=>x.kind==='conditional').length,
       readonly:items.filter(x=>x.kind==='readonly').length,items
@@ -128,72 +185,57 @@ const FormGuide = (() => {
   function focusField(el){
     if(!el)return;
     try{el.scrollIntoView({behavior:'smooth',block:'center'});}catch{}
-    setTimeout(()=>{try{el.focus({preventScroll:true});}catch{} el.classList.add('form-guide-focus'); setTimeout(()=>el.classList.remove('form-guide-focus'),1800);},220);
+    setTimeout(()=>{try{el.focus({preventScroll:true});}catch{}el.classList.add('form-guide-focus');setTimeout(()=>el.classList.remove('form-guide-focus'),1800);},220);
   }
+  function summarySignature(s){return JSON.stringify([s.required,s.requiredDone,s.optional,s.conditional,s.readonly,s.groups?.map(g=>[g.id,g.complete]),s.missing.map(x=>x.label)]);}
   function ensureSummary(root,s){
     if(!s.total)return;
     let card=root.querySelector(':scope > .form-guide-summary');
-    if(!card){
-      card=document.createElement('section'); card.className='form-guide-summary'; card.setAttribute('aria-live','polite');
-      const first=root.firstElementChild; if(first)root.insertBefore(card,first); else root.appendChild(card);
-    }
-    const pct=s.required?Math.round((s.requiredDone/s.required)*100):100;
-    const next=s.missing[0];
-    card.innerHTML=`<div class="form-guide-summary-top"><div><span class="form-guide-kicker">Form Guide</span><strong>${s.missing.length?`${s.missing.length} required field${s.missing.length===1?'':'s'} missing`:'Required fields complete'}</strong></div><span class="form-guide-progress-label">${s.requiredDone}/${s.required} required</span></div><div class="form-guide-progress"><span style="width:${pct}%"></span></div><div class="form-guide-legend"><span data-kind="required">Required ${s.required}</span><span data-kind="optional">Optional ${s.optional}</span><span data-kind="conditional">Conditional ${s.conditional}</span><span data-kind="readonly">Read-only ${s.readonly}</span></div>${next?`<button type="button" class="form-guide-next-missing">Next required: ${clean(next.label)||'field'}</button>`:''}<p>Badges follow actual form validation and registered ERP rules. “Conditional” means the requirement depends on workflow state or legacy validation; the ERP’s save/approval rule always remains authoritative.</p>`;
+    if(!card){card=document.createElement('section');card.className='form-guide-summary';card.setAttribute('aria-live','polite');const first=root.firstElementChild;if(first)root.insertBefore(card,first);else root.appendChild(card);}
+    const signature=summarySignature(s); if(card.dataset.formGuideSignature===signature)return; card.dataset.formGuideSignature=signature;
+    const pct=s.required?Math.round((s.requiredDone/s.required)*100):100,next=s.missing[0],grouped=(s.groups||[]).length>0;
+    const missingText=s.missing.length?`${s.missing.length} ${grouped?'mandatory requirement':'required field'}${s.missing.length===1?'':'s'} missing`:'Required fields complete';
+    card.innerHTML=`<div class="form-guide-summary-top"><div><span class="form-guide-kicker">Form Guide</span><strong>${missingText}</strong></div><span class="form-guide-progress-label">${s.requiredDone}/${s.required} required</span></div><div class="form-guide-progress"><span style="width:${pct}%"></span></div><div class="form-guide-legend"><span data-kind="required">Required ${s.required}</span><span data-kind="optional">Optional ${s.optional}</span><span data-kind="conditional">Conditional ${s.conditional}</span><span data-kind="readonly">Read-only ${s.readonly}</span></div>${next?`<button type="button" class="form-guide-next-missing">Next required: ${clean(next.label)||'field'}</button>`:''}<p>Badges follow actual form validation and registered ERP rules. “Conditional” includes grouped rules such as “First Name OR Last Name”; the ERP’s save/approval rule always remains authoritative.</p>`;
     card.querySelector('.form-guide-next-missing')?.addEventListener('click',()=>focusField(next?.el));
   }
-  function rootTitle(root){ return clean(root.getAttribute('aria-label')||root.closest('[role="dialog"],.modal,.drawer')?.querySelector('h1,h2,h3,.modal-title,.drawer-title')?.textContent||root.querySelector('h1,h2,h3,.modal-title,.drawer-title')?.textContent||root.id||'Form'); }
+  function rootTitle(root){return clean(root.getAttribute('aria-label')||root.closest('[role="dialog"],.modal,.drawer')?.querySelector('h1,h2,h3,.modal-title,.drawer-title')?.textContent||root.querySelector('h1,h2,h3,.modal-title,.drawer-title')?.textContent||root.id||'Form');}
   function ensureWorkflowCard(s){
-    const body=document.querySelector('.workflow-guide-root:not([hidden]) .workflow-guide-panel-body');
-    if(!body)return;
-    let card=body.querySelector('.form-guide-workflow-card');
-    if(!s?.total){card?.remove();return;}
+    const body=document.querySelector('.workflow-guide-root:not([hidden]) .workflow-guide-panel-body'); if(!body)return;
+    let card=body.querySelector('.form-guide-workflow-card'); if(!s?.total){card?.remove();return;}
     if(!card){card=document.createElement('section');card.className='workflow-guide-section form-guide-workflow-card';body.prepend(card);}
-    const missing=s.missing[0];
+    const missing=s.missing[0],signature=JSON.stringify([rootTitle(s.root),summarySignature(s),missing?.label||'']);
+    if(card.dataset.formGuideSignature===signature)return; card.dataset.formGuideSignature=signature;
     card.innerHTML=`<div class="workflow-guide-section-head"><div><span class="workflow-guide-kicker">Open Form</span><h3>${rootTitle(s.root)}</h3></div><span class="workflow-guide-count">${s.requiredDone}/${s.required} required</span></div><div class="form-guide-workflow-stats"><span data-kind="required">Required ${s.required}</span><span data-kind="optional">Optional ${s.optional}</span><span data-kind="conditional">Conditional ${s.conditional}</span><span data-kind="readonly">Read-only ${s.readonly}</span></div>${missing?`<button type="button" class="btn primary sm form-guide-workflow-next">Go to ${clean(missing.label)||'next required field'}</button>`:'<p class="form-guide-workflow-complete">All currently required fields are complete.</p>'}`;
     card.querySelector('.form-guide-workflow-next')?.addEventListener('click',()=>{window.WorkflowGuide?.close?.();focusField(missing?.el);});
   }
   function eligibleRoot(root){
     if(!(root instanceof Element)||!visible(root)||root.closest('#loginSection,.workflow-guide-root'))return false;
     if(root.matches('[role="search"]')||root.closest('.topbar-search,.icds-filter-panel,.filter-panel,[class*="filter-panel"],[class*="filters-panel"]'))return false;
-    const list=controls(root); if(list.length<1)return false;
-    if(list.length===1&&list[0].type==='search')return false;
-    return true;
+    const list=controls(root); if(list.length<1)return false; if(list.length===1&&list[0].type==='search')return false; return true;
   }
   function enhance(root){
     if(!eligibleRoot(root))return;
-    const list=controls(root); list.forEach(el=>mark(el,root,classify(el,root)));
-    const s=summary(root); ensureSummary(root,s);
-    root.dataset.formGuideEnhanced='true'; root.dataset.formGuideTitle=rootTitle(root);
-    return s;
+    controls(root).forEach(el=>mark(el,root,classify(el,root)));
+    const s=summary(root); ensureSummary(root,s); root.dataset.formGuideEnhanced='true'; root.dataset.formGuideTitle=rootTitle(root); return s;
   }
   function candidateRoots(){
     const roots=[];
     qsa(document,'form').forEach(f=>{if(eligibleRoot(f))roots.push(f)});
-    qsa(document,'.modal.show,.modal.active,[role="dialog"],.drawer.open,.drawer.active,.icds-drawer').forEach(d=>{
-      if(eligibleRoot(d)&&!roots.some(r=>d.contains(r)||r.contains(d)))roots.push(d);
-    });
+    qsa(document,'.modal.show,.modal.active,[role="dialog"],.drawer.open,.drawer.active,.icds-drawer').forEach(d=>{if(eligibleRoot(d)&&!roots.some(r=>d.contains(r)||r.contains(d)))roots.push(d)});
     return roots;
   }
-  function activeRoot(){
-    const roots=candidateRoots();
-    return roots.find(r=>r.closest('.modal.show,.modal.active,[role="dialog"],.drawer.open,.drawer.active,.icds-drawer'))||roots[0]||null;
-  }
-  function scan(){
-    S.timer=null; if(document.body?.classList.contains('auth-locked'))return;
-    const roots=candidateRoots(); roots.forEach(enhance);
-    const active=activeRoot(); ensureWorkflowCard(active?summary(active):null);
-  }
-  function schedule(delay=70){ if(S.timer)clearTimeout(S.timer); S.timer=setTimeout(scan,delay); }
+  function activeRoot(){const roots=candidateRoots();return roots.find(r=>r.closest('.modal.show,.modal.active,[role="dialog"],.drawer.open,.drawer.active,.icds-drawer'))||roots[0]||null;}
+  function scan(){S.timer=null;if(document.body?.classList.contains('auth-locked'))return;const roots=candidateRoots();roots.forEach(enhance);const active=activeRoot();ensureWorkflowCard(active?summary(active):null);}
+  function schedule(delay=70){if(S.timer)clearTimeout(S.timer);S.timer=setTimeout(scan,delay);}
   function bind(){
-    if(S.bound)return; S.bound=true;
+    if(S.bound)return;S.bound=true;
     document.addEventListener('input',e=>{if(e.target?.matches?.('input,select,textarea'))schedule(35)},true);
     document.addEventListener('change',e=>{if(e.target?.matches?.('input,select,textarea'))schedule(20)},true);
     document.addEventListener('click',()=>schedule(90),true);
     document.addEventListener('submit',e=>{
-      const root=e.target?.matches?.('form')?e.target:e.target?.closest?.('form'); if(!root||!eligibleRoot(root))return;
-      enhance(root); const s=summary(root);
-      if(s.missing.length){s.missing.forEach(x=>x.el.classList.add('form-guide-missing'));focusField(s.missing[0].el);}
+      const root=e.target?.matches?.('form')?e.target:e.target?.closest?.('form');if(!root||!eligibleRoot(root))return;
+      enhance(root);const s=summary(root);
+      if(s.missing.length){s.missing.forEach(x=>{if(x.groupFields?.length)x.groupFields.forEach(el=>el.classList.add('form-guide-missing'));else x.el?.classList.add('form-guide-missing');});focusField(s.missing[0].el);}
     },true);
     window.addEventListener('hashchange',()=>schedule(80));
     window.addEventListener('incheck360:ui:ready',()=>schedule(30));
@@ -204,14 +246,8 @@ const FormGuide = (() => {
     }
     schedule(0);
   }
-  function init(){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bind,{once:true}); else bind(); }
+  function init(){if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bind,{once:true});else bind();}
   init();
-  return Object.freeze({
-    registerRules,
-    refresh:()=>schedule(0),
-    summary:root=>summary(root||activeRoot()||document),
-    activeRoot,
-    focusNextRequired(){const root=activeRoot();if(!root)return false;const s=summary(root);if(!s.missing.length)return false;focusField(s.missing[0].el);return true;}
-  });
+  return Object.freeze({registerRules,refresh:()=>schedule(0),summary:root=>summary(root||activeRoot()||document),activeRoot,focusNextRequired(){const root=activeRoot();if(!root)return false;const s=summary(root);if(!s.missing.length)return false;focusField(s.missing[0].el);return true;}});
 })();
 window.FormGuide=FormGuide;
