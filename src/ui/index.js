@@ -5,6 +5,7 @@ import { installResponsiveRuntime, ResponsiveRuntime } from './responsiveRuntime
 import './managementCommandCenter.js?v=20260907-mcc1';
 import './systemHealth.js?v=20260907-health1';
 import './userActivity.js?v=20260908-ua1';
+import './resellerManagement.js?v=20260908-rm1';
 
 function ensureCss() {
   const styles = [
@@ -13,6 +14,7 @@ function ensureCss() {
     ['incheck360-management-command-center-css', '/src/ui/management-command-center.css?v=20260907-mcc1'],
     ['incheck360-system-health-css', '/src/ui/system-health.css?v=20260907-health1'],
     ['incheck360-user-activity-css', '/src/ui/user-activity.css?v=20260908-ua1'],
+    ['incheck360-reseller-management-css', '/src/ui/reseller-management.css?v=20260908-rm1'],
     ['incheck360-authenticated-dark-forms-final-css', '/src/ui/authenticated-dark-forms-final.css?v=20260907-darkforms5'],
     ['incheck360-record-view-drawer-dark-fix-css', '/src/ui/record-view-drawer-dark-fix.css?v=20260907-recorddrawer2']
   ];
