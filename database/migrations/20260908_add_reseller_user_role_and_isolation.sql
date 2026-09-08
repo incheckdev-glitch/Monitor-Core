@@ -200,7 +200,7 @@ drop policy if exists reseller_renewals_admin_delete on public.reseller_renewals
 create policy reseller_renewals_admin_delete on public.reseller_renewals for delete to authenticated using (private.reseller_is_admin());
 
 -- Settlements/payments are financial records: reseller is read-only, admin writes.
-foreach_unused: do $$
+do $$
 declare t text;
 begin
   foreach t in array array['reseller_settlements','reseller_payments'] loop
