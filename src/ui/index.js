@@ -7,6 +7,7 @@ import './systemHealth.js?v=20260907-health1';
 import './userActivity.js?v=20260908-ua1';
 import './resellerManagement.js?v=20260908-rm1';
 import './resellerUserAccess.js?v=20260908-rua1';
+import './resellerViewIsolation.js?v=20260908-rmviewfix1';
 import './userProfile.js?v=20260908-profile2';
 import './userAvatarPersistence.js?v=20260908-avatarfix1';
 import './userProfileMenu.js?v=20260908-profile1';
@@ -87,5 +88,6 @@ window.InCheck360UI = Object.freeze({
     window.WorkflowGuide?.refresh?.();
     window.FormGuide?.refresh?.();
     window.UserAvatarPersistence?.refresh?.();
+    window.ResellerViewIsolation?.refresh?.();
   }
 });
