@@ -1,0 +1,5 @@
+/* Tickets: remove the legacy summary strip shown above the ticket KPIs/table. */
+#issuesView #issuesSummaryCard,
+#issuesView .summary-bar#issuesSummaryCard {
+  display: none !important;
+}

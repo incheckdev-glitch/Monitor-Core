@@ -19,6 +19,7 @@ function ensureCss() {
   const styles = [
     ['incheck360-design-system-css', '/src/ui/design-system.css?v=20260904-ds2'],
     ['incheck360-module-page-css', '/src/ui/module-page.css?v=20260904-ds2'],
+    ['incheck360-tickets-summary-strip-removal-css', '/src/ui/tickets-summary-strip-removal.css?v=20260908-ticketsbar1'],
     ['incheck360-management-command-center-css', '/src/ui/management-command-center.css?v=20260907-mcc1'],
     ['incheck360-system-health-css', '/src/ui/system-health.css?v=20260907-health1'],
     ['incheck360-user-activity-css', '/src/ui/user-activity.css?v=20260908-ua1'],
