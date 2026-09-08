@@ -6,6 +6,7 @@ import './managementCommandCenter.js?v=20260907-mcc1';
 import './systemHealth.js?v=20260907-health1';
 import './userActivity.js?v=20260908-ua1';
 import './resellerManagement.js?v=20260908-rm1';
+import './resellerUserAccess.js?v=20260908-rua1';
 
 function ensureCss() {
   const styles = [
