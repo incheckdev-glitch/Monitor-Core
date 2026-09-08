@@ -1,0 +1,19 @@
+/* Monitor Core ERP — permission-aware sidebar visibility.
+   The permission engine already sets unauthorized module tabs to inline display:none.
+   Modern sidebar styling uses display:flex!important, so this final layer restores the
+   security/navigation contract: inaccessible modules are not rendered in the sidebar.
+   This is presentation-only; Permissions.canAccessTab and route guards remain authoritative. */
+
+body:not(.auth-locked) .view-menu.ic-modern-nav .view-tab[style*="display: none"],
+body:not(.auth-locked) .view-menu.ic-modern-nav .view-tab[style*="display:none"],
+body:not(.auth-locked) .view-menu.ic-modern-nav .view-tab[hidden],
+body:not(.auth-locked) .view-menu.ic-modern-nav .view-tab[aria-hidden="true"],
+body:not(.auth-locked) .view-menu.ic-modern-nav .view-tab[data-permission-hidden="true"] {
+  display:none!important;
+  pointer-events:none!important;
+}
+
+/* Remove empty navigation categories after role filtering. */
+body:not(.auth-locked) .view-menu.ic-modern-nav .view-menu-group:has(.view-tab):not(:has(.view-tab:not([style*="display: none"]):not([style*="display:none"]):not([hidden]):not([aria-hidden="true"]):not([data-permission-hidden="true"]))) {
+  display:none!important;
+}
