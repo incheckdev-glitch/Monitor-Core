@@ -11,6 +11,7 @@ import './userProfile.js?v=20260908-profile2';
 import './userProfileMenu.js?v=20260908-profile1';
 import './workflowGuide.js?v=20260908-guide1';
 import './formGuide.js?v=20260908-formguide1';
+import './crmJourneyGuide.js?v=20260908-crmjourney1';
 
 function ensureCss() {
   const styles = [
@@ -24,6 +25,7 @@ function ensureCss() {
     ['incheck360-user-profile-menu-css', '/src/ui/user-profile-menu.css?v=20260908-profile1'],
     ['incheck360-workflow-guide-css', '/src/ui/workflow-guide.css?v=20260908-guide1'],
     ['incheck360-form-guide-css', '/src/ui/form-guide.css?v=20260908-formguide1'],
+    ['incheck360-crm-journey-guide-css', '/src/ui/crm-journey-guide.css?v=20260908-crmjourney1'],
     ['incheck360-authenticated-dark-forms-final-css', '/src/ui/authenticated-dark-forms-final.css?v=20260907-darkforms5'],
     ['incheck360-record-view-drawer-dark-fix-css', '/src/ui/record-view-drawer-dark-fix.css?v=20260907-recorddrawer2']
   ];
@@ -85,5 +87,6 @@ window.InCheck360UI = Object.freeze({
     ModulePage.refresh();
     window.WorkflowGuide?.refresh?.();
     window.FormGuide?.refresh?.();
+    window.CrmJourneyGuide?.refresh?.();
   }
 });
