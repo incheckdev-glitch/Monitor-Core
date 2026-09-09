@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 
-const ADMIN_ROLES = new Set(['admin']);
+const ADMIN_ROLES = new Set(['admin', 'gm', 'general_manager', 'generalmanager']);
 const DEFAULT_MAX_OBJECTS = 2500;
 const DEFAULT_MAX_STORAGE_BYTES = 250 * 1024 * 1024; // 250 MB safety limit for Vercel memory/time.
 const DEFAULT_LOCK_SECONDS = 15 * 60;
