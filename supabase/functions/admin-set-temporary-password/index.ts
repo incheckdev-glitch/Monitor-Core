@@ -6,6 +6,16 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const ADMIN_EQUIVALENT_ROLES = new Set(["admin", "gm", "general_manager", "generalmanager"]);
+
+function normalizeRole(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_")
+    .replace(/_+/g, "_");
+}
+
 function jsonResponse(status: number, payload: unknown) {
   return new Response(JSON.stringify(payload), {
     status,
@@ -69,8 +79,9 @@ Deno.serve(async (req: Request) => {
       .eq("id", callerId)
       .maybeSingle();
 
-    if (profileErr || profile?.role_key !== "admin" || profile?.is_active !== true) {
-      return jsonResponse(403, { ok: false, message: "Caller is not admin." });
+    const isAdminEquivalent = ADMIN_EQUIVALENT_ROLES.has(normalizeRole(profile?.role_key));
+    if (profileErr || !isAdminEquivalent || profile?.is_active !== true) {
+      return jsonResponse(403, { ok: false, message: "Caller does not have admin-equivalent access." });
     }
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
