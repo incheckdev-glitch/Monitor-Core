@@ -1,10 +1,26 @@
 (function attachAdminOverride(global) {
   'use strict';
 
-  const ADMIN_OVERRIDE_ROLES = new Set(['admin']);
+  // GM is intentionally authorization-equivalent to Admin while retaining the
+  // GM role key for display, audit, and reporting purposes.
+  const ADMIN_OVERRIDE_ROLES = new Set([
+    'admin',
+    'gm',
+    'general_manager',
+    'generalmanager'
+  ]);
 
   function normalizeRole(value) {
-    return String(value || '').trim().toLowerCase();
+    return String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '_')
+      .replace(/-/g, '_')
+      .replace(/_+/g, '_');
+  }
+
+  function isAdminEquivalentRole(value) {
+    return ADMIN_OVERRIDE_ROLES.has(normalizeRole(value));
   }
 
   function getSessionUser() {
@@ -33,7 +49,7 @@
   }
 
   function isAdminOverrideUser() {
-    return ADMIN_OVERRIDE_ROLES.has(getCurrentRole());
+    return isAdminEquivalentRole(getCurrentRole());
   }
 
   function getCurrentUserInfo() {
@@ -64,6 +80,34 @@
 
   function shouldBypassValidation() {
     return canOverride();
+  }
+
+  function patchAdminEquivalentHelpers() {
+    // Some legacy modules call Session.isAdmin() or Permissions.isAdmin()
+    // directly instead of the central permission matrix. Keep those paths in
+    // sync with the Admin-equivalent authorization contract as well.
+    if (global.Session) {
+      global.Session.isAdmin = function isAdmin() {
+        return isAdminEquivalentRole(
+          (typeof this.role === 'function' ? this.role() : '') || this.state?.role || this.state?.role_key || ''
+        );
+      };
+    }
+
+    if (global.Permissions) {
+      global.Permissions.isAdmin = function isAdmin() {
+        return isAdminEquivalentRole(getCurrentRole());
+      };
+      global.Permissions.hasAdminOverride = function hasAdminOverride() {
+        return this.isAdmin() || canOverride();
+      };
+      global.Permissions.isAdminLike = function isAdminLike() {
+        return this.hasAdminOverride();
+      };
+      global.Permissions.canManageRolesPermissions = function canManageRolesPermissions() {
+        return this.isAdmin();
+      };
+    }
   }
 
   function applyBanner(container, { active = true, message = '' } = {}) {
@@ -113,6 +157,7 @@
 
   global.AdminOverride = {
     normalizeRole,
+    isAdminEquivalentRole,
     getCurrentRole,
     isAdminOverrideUser,
     canOverride,
@@ -120,8 +165,11 @@
     shouldBypassLocks,
     shouldBypassValidation,
     getCurrentUserInfo,
+    patchAdminEquivalentHelpers,
     collectOldValues,
     applyBanner,
     logOverride
   };
+
+  patchAdminEquivalentHelpers();
 })(window);
