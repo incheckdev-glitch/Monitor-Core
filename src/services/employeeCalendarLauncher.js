@@ -26,7 +26,7 @@
     const link = document.createElement('link');
     link.id = STYLE_ID;
     link.rel = 'stylesheet';
-    link.href = '/src/ui/employee-calendar.css?v=20260904-employeecalendar3';
+    link.href = '/src/ui/employee-calendar.css?v=20260909-calvisibility1';
     document.head.appendChild(link);
   }
 
@@ -123,7 +123,8 @@
 
     if (!loadPromise) {
       const observerCapture = captureCalendarObservers();
-      loadPromise = import('./employeeCalendar.js?v=20260904-employeecalendar3')
+      loadPromise = import('./employeeCalendarVisibilityFix.js?v=20260909-calvisibility1')
+        .then(() => import('./employeeCalendar.js?v=20260909-calvisibility1'))
         .then(() => global.InCheck360EmployeeCalendar)
         .finally(() => {
           observerCapture.restore();
@@ -150,6 +151,7 @@
       try {
         const api = await loadCalendar();
         api.open();
+        global.InCheck360EmployeeCalendarVisibilityFix?.refresh?.();
       } catch (error) {
         notify(error?.message || 'Unable to open Calendar', 'error');
       } finally {
