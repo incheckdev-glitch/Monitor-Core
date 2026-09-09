@@ -7,6 +7,7 @@
   const STORAGE_PREFIX = 'monitorCore.employeeCalendar.visibleOwners:';
   let observer = null;
   let restoreTimer = 0;
+  let fullCalendarRetry = 0;
   let currentUserId = '';
   let calendarInstance = null;
 
@@ -155,7 +156,8 @@
   function wrapFullCalendar() {
     const FullCalendar = global.FullCalendar;
     const OriginalCalendar = FullCalendar?.Calendar;
-    if (!OriginalCalendar || OriginalCalendar[PATCH_FLAG]) return;
+    if (!OriginalCalendar) return false;
+    if (OriginalCalendar[PATCH_FLAG]) return true;
 
     class VisibilityAwareCalendar extends OriginalCalendar {
       constructor(el, options = {}) {
@@ -169,7 +171,7 @@
                 const rows = Array.isArray(events) ? events : [];
                 const filtered = rows.filter(event => {
                   const ownerId = clean(event?.extendedProps?.row?.owner_user_id);
-                  return selected.size === 0 || selected.has(ownerId);
+                  return selected.size > 0 && selected.has(ownerId);
                 });
                 success(filtered);
               }, failure);
@@ -184,7 +186,19 @@
     Object.defineProperty(VisibilityAwareCalendar, PATCH_FLAG, { value: true });
     try {
       FullCalendar.Calendar = VisibilityAwareCalendar;
-    } catch (_) {}
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function ensureFullCalendarWrapped() {
+    if (wrapFullCalendar()) {
+      clearTimeout(fullCalendarRetry);
+      return;
+    }
+    clearTimeout(fullCalendarRetry);
+    fullCalendarRetry = global.setTimeout(ensureFullCalendarWrapped, 100);
   }
 
   function observeCalendarUi() {
@@ -194,18 +208,19 @@
         Array.from(record.addedNodes || []).some(node =>
           node?.nodeType === 1 && (
             node.id === LIST_ID ||
-            node.querySelector?.(`#${LIST_ID}`)
+            node.matches?.('.ec-owner, [data-owner]') ||
+            node.querySelector?.(`#${LIST_ID}, .ec-owner, [data-owner]`)
           )
         )
       );
-      if (needsRestore) scheduleRestore(60);
+      if (needsRestore) scheduleRestore(40);
       requestAnimationFrame(syncUpcomingVisibility);
     });
     observer.observe(document.documentElement, { childList: true, subtree: true });
   }
 
   function boot() {
-    wrapFullCalendar();
+    ensureFullCalendarWrapped();
     observeCalendarUi();
     scheduleRestore(0);
   }
