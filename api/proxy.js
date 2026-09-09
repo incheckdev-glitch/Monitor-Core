@@ -4,7 +4,7 @@ const RESOURCE_ALIASES = {
   operations_onboarding: ['operationsOnboarding', 'operations-onboarding']
 };
 
-const USER_MANAGEMENT_ROLES = new Set(['admin', 'administrator', 'super_admin']);
+const USER_MANAGEMENT_ROLES = new Set(['admin', 'administrator', 'super_admin', 'gm', 'general_manager', 'generalmanager']);
 const DEFAULT_BOOTSTRAP_ADMIN_EMAILS = new Set();
 
 function parseEmailList(value = '') {
