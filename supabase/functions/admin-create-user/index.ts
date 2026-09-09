@@ -6,6 +6,16 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const ADMIN_EQUIVALENT_ROLES = new Set(["admin", "gm", "general_manager", "generalmanager"]);
+
+function normalizeRole(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_")
+    .replace(/_+/g, "_");
+}
+
 function jsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -76,9 +86,9 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Failed to verify admin permissions" }, 500);
     }
 
-    const isAdmin = profile?.role_key === "admin" && profile?.is_active === true;
-    if (!isAdmin) {
-      return jsonResponse({ error: "Forbidden: admin access required" }, 403);
+    const isAdminEquivalent = ADMIN_EQUIVALENT_ROLES.has(normalizeRole(profile?.role_key)) && profile?.is_active === true;
+    if (!isAdminEquivalent) {
+      return jsonResponse({ error: "Forbidden: admin-equivalent access required" }, 403);
     }
 
     const body = (await req.json().catch(() => null)) as RequestBody | null;
