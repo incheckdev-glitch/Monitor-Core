@@ -1,4 +1,5 @@
-import { UIComponents } from './components.js?v=20260904-ds2';
+import { UIComponents as UIComponentsV2 } from './components.js?v=20260904-ds2';
+import { UIComponents as UIComponentsV1 } from './components.js?v=20260904-ds1';
 
 const OWNED_WIDGET_SELECTOR = [
   '#employeeCalendarView','#employeeCalendar','.ec-calendar','.fc','.fullcalendar',
@@ -24,11 +25,16 @@ function guardAdopt(api, fallbackFactory) {
   api.adopt = guarded;
 }
 
-guardAdopt(UIComponents.ActionBar, element => element);
-guardAdopt(UIComponents.FormSection, element => element);
-guardAdopt(UIComponents.StatusBadge, element => element);
-guardAdopt(UIComponents.Pagination, element => element);
-guardAdopt(UIComponents.DropdownMenu, element => element);
-guardAdopt(UIComponents.DataTable, table => ({ table, shell: null }));
+function patchComponents(components) {
+  guardAdopt(components?.ActionBar, element => element);
+  guardAdopt(components?.FormSection, element => element);
+  guardAdopt(components?.StatusBadge, element => element);
+  guardAdopt(components?.Pagination, element => element);
+  guardAdopt(components?.DropdownMenu, element => element);
+  guardAdopt(components?.DataTable, table => ({ table, shell: null }));
+}
+
+patchComponents(UIComponentsV2);
+patchComponents(UIComponentsV1);
 
 export const WidgetIsolation = Object.freeze({ isOwnedWidgetNode });
