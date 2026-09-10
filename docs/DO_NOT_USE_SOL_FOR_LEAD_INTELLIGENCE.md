@@ -1,0 +1,1 @@
+Lead Intelligence production research is a cost-sensitive workflow. Do not use GPT-5.6 Sol or Terra here unless a future product decision explicitly changes the cost policy. The server should remain pinned to GPT-5.6 Luna with low web context and hard tool/output caps.
