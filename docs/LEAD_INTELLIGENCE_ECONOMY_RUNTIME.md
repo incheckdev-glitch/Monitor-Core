@@ -1,0 +1,1 @@
+Runtime economy mode is enforced server-side by api/lead-intelligence-job.js. Client-selected counts are clamped to 5, the default is 3, the model is GPT-5.6 Luna, reasoning is disabled, web context is low, built-in tool calls are capped at 3, and output is capped at 2,200 tokens. The legacy synchronous route is blocked from starting paid OpenAI research.
