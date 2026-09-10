@@ -112,6 +112,12 @@
       ]
     }
   ],
+  "crons": [
+    {
+      "path": "/api/outlook/maintenance",
+      "schedule": "15 2 * * *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/((?!api/|_vercel/|assets/|icons/|manifest.webmanifest|service-worker.js|offline.html|favicon.ico).*)",
