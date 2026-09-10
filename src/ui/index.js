@@ -1,5 +1,6 @@
 import { UIComponents } from './components.js?v=20260904-ds2';
 import './widgetIsolation.js?v=20260910-widgetisolation2';
+import './legacyWidgetIsolation.js?v=20260910-legacywidget1';
 import { installLegacyBridge, LegacyBridge } from './legacyBridge.js?v=20260904-ds2';
 import { installLegacyBridgeSafely } from './legacyBridgeObserverGuard.js?v=20260910-stability3';
 import { installModulePageSystem, ModulePage } from './modulePage.js?v=20260910-widgetisolation2';
