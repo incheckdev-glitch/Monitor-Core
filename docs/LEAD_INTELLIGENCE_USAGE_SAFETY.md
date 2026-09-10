@@ -1,0 +1,1 @@
+Usage safety: every production Lead Intelligence run is limited by server code, not browser settings. This protects against accidental high-cost searches even if a stale browser submits larger values.
