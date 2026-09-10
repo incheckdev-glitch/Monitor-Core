@@ -110,27 +110,37 @@
         } catch (_) {}
       },
       disconnect() {
-        captured.forEach((observer) => {
+        captured.forEach(observer => {
           try { observer.disconnect(); } catch (_) {}
         });
       }
     };
   }
 
+  async function ensureOutlookIntegration() {
+    if (global.InCheck360OutlookCalendar) return global.InCheck360OutlookCalendar;
+    await import('./outlookCalendarIntegration.js?v=20260910-outlook1');
+    return global.InCheck360OutlookCalendar;
+  }
+
   async function loadCalendar() {
-    if (global.InCheck360EmployeeCalendar?.open) return global.InCheck360EmployeeCalendar;
+    if (global.InCheck360EmployeeCalendar?.open) {
+      await ensureOutlookIntegration();
+      return global.InCheck360EmployeeCalendar;
+    }
     ensureStyle();
 
     if (!loadPromise) {
       const observerCapture = captureCalendarObservers();
       loadPromise = import('./employeeCalendarVisibilityFix.js?v=20260909-calvisibility1')
         .then(() => import('./employeeCalendar.js?v=20260909-calvisibility1'))
+        .then(() => ensureOutlookIntegration())
         .then(() => global.InCheck360EmployeeCalendar)
         .finally(() => {
           observerCapture.restore();
           observerCapture.disconnect();
         })
-        .catch((error) => {
+        .catch(error => {
           loadPromise = null;
           throw error;
         });
@@ -152,6 +162,7 @@
         const api = await loadCalendar();
         api.open();
         global.InCheck360EmployeeCalendarVisibilityFix?.refresh?.();
+        global.InCheck360OutlookCalendar?.onCalendarOpen?.();
       } catch (error) {
         notify(error?.message || 'Unable to open Calendar', 'error');
       } finally {
