@@ -20,6 +20,37 @@ function text(value = '') {
   return String(value ?? '').trim();
 }
 
+// Supabase's current Vercel integration uses SUPABASE_SECRET_KEY /
+// SUPABASE_PUBLISHABLE_KEY. Keep legacy variable names compatible so the
+// Outlook backend works with either generation without exposing a server key.
+function bootstrapSupabaseEnvironment() {
+  if (!text(process.env.SUPABASE_URL)) {
+    process.env.SUPABASE_URL = text(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL
+    ) || 'https://rewgbmfcrbgkzxcbrxjy.supabase.co';
+  }
+
+  if (!text(process.env.SUPABASE_SERVICE_ROLE_KEY)) {
+    const serverSecret = text(
+      process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_KEY
+    );
+    if (serverSecret) process.env.SUPABASE_SERVICE_ROLE_KEY = serverSecret;
+  }
+
+  if (!text(process.env.SUPABASE_ANON_KEY)) {
+    const publicKey = text(
+      process.env.SUPABASE_PUBLISHABLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+      process.env.VITE_SUPABASE_ANON_KEY
+    );
+    if (publicKey) process.env.SUPABASE_ANON_KEY = publicKey;
+  }
+}
+
+bootstrapSupabaseEnvironment();
+
 function bodyObject(body) {
   if (body && typeof body === 'object') return body;
   try { return text(body) ? JSON.parse(String(body)) : {}; } catch { return {}; }
