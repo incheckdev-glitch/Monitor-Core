@@ -1,7 +1,7 @@
 import { UIComponents } from './components.js?v=20260904-ds2';
-import './widgetIsolation.js?v=20260910-widgetisolation1';
+import './widgetIsolation.js?v=20260910-widgetisolation2';
 import { installLegacyBridge, LegacyBridge } from './legacyBridge.js?v=20260904-ds2';
-import { installModulePageSystem, ModulePage } from './modulePage.js?v=20260910-widgetisolation1';
+import { installModulePageSystem, ModulePage } from './modulePage.js?v=20260910-widgetisolation2';
 import { installResponsiveRuntime, ResponsiveRuntime } from './responsiveRuntime.js?v=20260906-appshell2';
 import './managementCommandCenter.js?v=20260907-mcc1';
 import './systemHealth.js?v=20260907-health1';
