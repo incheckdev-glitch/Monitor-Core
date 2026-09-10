@@ -102,7 +102,7 @@ export default {
 
       const { data: sessions, error: sessionsError } = await ctx.supabaseAdmin
         .from('user_activity_sessions')
-        .select('id,user_id,started_at,last_seen_at')
+        .select('id,user_id,started_at,last_seen_at,ended_at,device_type,browser,operating_system')
         .gte('last_seen_at', start)
         .lt('started_at', end)
         .order('last_seen_at', { ascending: false })
@@ -121,21 +121,22 @@ export default {
 
       if (ipError) return Response.json({ error: ipError.message }, { status: 400 });
       const ipBySession = new Map((ipRows || []).map(row => [String(row.session_id), row]));
-      const seenUsers = new Set<string>();
-      const records: Array<Record<string, unknown>> = [];
 
-      for (const session of sessionRows) {
+      const records = sessionRows.map(session => {
         const sessionIp = ipBySession.get(String(session.id));
-        const uid = String(session.user_id || '');
-        if (!sessionIp || !uid || seenUsers.has(uid)) continue;
-        seenUsers.add(uid);
-        records.push({
-          user_id: uid,
+        return {
+          user_id: session.user_id,
           session_id: session.id,
-          ip_address: sessionIp.ip_address,
-          captured_at: sessionIp.captured_at
-        });
-      }
+          ip_address: sessionIp?.ip_address ?? null,
+          captured_at: sessionIp?.captured_at ?? null,
+          started_at: session.started_at,
+          last_seen_at: session.last_seen_at,
+          ended_at: session.ended_at,
+          device_type: session.device_type,
+          browser: session.browser,
+          operating_system: session.operating_system
+        };
+      });
 
       return Response.json({ records });
     }
