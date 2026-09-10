@@ -1,0 +1,1 @@
+Lead Intelligence spend must be minimized. Any future change that increases model tier, reasoning effort, web context, tool-call cap, result cap, or output-token cap should be treated as an explicit cost-impacting change.
