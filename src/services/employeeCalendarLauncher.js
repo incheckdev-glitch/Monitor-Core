@@ -118,8 +118,13 @@
   }
 
   async function ensureOutlookIntegration() {
-    if (global.InCheck360OutlookCalendar) return global.InCheck360OutlookCalendar;
-    await import('./outlookCalendarIntegration.js?v=20260910-outlook1');
+    if (!global.InCheck360OutlookCalendar) {
+      await import('./outlookCalendarIntegration.js?v=20260910-outlook3');
+    }
+    if (!global.InCheck360OutlookCalendarRealtime) {
+      await import('./outlookCalendarRealtime.js?v=20260910-outlook3');
+    }
+    try { await global.InCheck360OutlookCalendarRealtime?.ensure?.(); } catch (_) {}
     return global.InCheck360OutlookCalendar;
   }
 
@@ -163,6 +168,7 @@
         api.open();
         global.InCheck360EmployeeCalendarVisibilityFix?.refresh?.();
         global.InCheck360OutlookCalendar?.onCalendarOpen?.();
+        global.InCheck360OutlookCalendarRealtime?.ensure?.();
       } catch (error) {
         notify(error?.message || 'Unable to open Calendar', 'error');
       } finally {
