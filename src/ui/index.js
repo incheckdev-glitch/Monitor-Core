@@ -1,5 +1,4 @@
 import { UIComponents } from './components.js?v=20260904-ds2';
-import './uiStabilityGuard.js?v=20260910-uistability1';
 import { installLegacyBridge, LegacyBridge } from './legacyBridge.js?v=20260904-ds2';
 import { installModulePageSystem, ModulePage } from './modulePage.js?v=20260904-ds2';
 import { installResponsiveRuntime, ResponsiveRuntime } from './responsiveRuntime.js?v=20260906-appshell2';
@@ -95,7 +94,6 @@ window.InCheck360UI = Object.freeze({
     ResponsiveRuntime.refresh();
     LegacyBridge.refresh();
     ModulePage.refresh();
-    window.InCheck360UiStabilityGuard?.refresh?.();
     window.WorkflowGuide?.refresh?.();
     window.FormGuide?.refresh?.();
     window.ClientSuccessCompletionOnly?.refresh?.();
