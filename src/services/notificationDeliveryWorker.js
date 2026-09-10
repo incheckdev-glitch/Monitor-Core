@@ -1,4 +1,4 @@
-import './darkModeSafetyPatch.js?v=20260701-clear-dark1';
+import './darkModeSafetyPatch.js?v=20260910-widgetisolation1';
 import './pwaVercelTestPatch.js?v=20260701-nonadmin-sw-update1';
 import './pwaActiveDevicesPanelPatch.js?v=20260701-active-devices-panel2';
 
