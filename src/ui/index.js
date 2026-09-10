@@ -1,6 +1,7 @@
 import { UIComponents } from './components.js?v=20260904-ds2';
 import './widgetIsolation.js?v=20260910-widgetisolation2';
 import { installLegacyBridge, LegacyBridge } from './legacyBridge.js?v=20260904-ds2';
+import { installLegacyBridgeSafely } from './legacyBridgeObserverGuard.js?v=20260910-stability3';
 import { installModulePageSystem, ModulePage } from './modulePage.js?v=20260910-widgetisolation2';
 import { installResponsiveRuntime, ResponsiveRuntime } from './responsiveRuntime.js?v=20260906-appshell2';
 import './managementCommandCenter.js?v=20260907-mcc1';
@@ -54,7 +55,7 @@ function install() {
   ensureCss();
   installResponsiveRuntime();
   if (!document.body || document.body.classList.contains('auth-locked')) return;
-  installLegacyBridge();
+  installLegacyBridgeSafely(installLegacyBridge);
   installModulePageSystem();
 }
 
