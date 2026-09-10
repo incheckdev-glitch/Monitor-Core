@@ -6,9 +6,12 @@
     connection: null,
     statusBusy: false,
     syncBusy: false,
+    connectBusy: false,
+    handlersInstalled: false,
     autoTimer: null,
     retryCount: 0,
-    lastSilentSync: 0
+    lastSilentSync: 0,
+    pendingSyncTimer: null
   };
 
   const $ = id => document.getElementById(id);
@@ -20,6 +23,14 @@
       if (global.U?.toast) return global.U.toast(message, type);
     } catch (_) {}
     console[type === 'error' ? 'error' : 'log']('[outlook-calendar]', message);
+  }
+
+  function setPanelError(message = '') {
+    const error = $('ecOutlookError');
+    if (!error) return;
+    const text = clean(message);
+    error.hidden = !text;
+    error.textContent = text;
   }
 
   function ensureCss() {
@@ -36,11 +47,18 @@
   }
 
   async function authHeader() {
+    let token = '';
     const client = supabase();
-    if (!client?.auth?.getSession) throw new Error('Supabase session is unavailable.');
-    const result = await client.auth.getSession();
-    const token = clean(result?.data?.session?.access_token);
-    if (!token) throw new Error('Your session expired. Please log in again.');
+    if (client?.auth?.getSession) {
+      try {
+        const result = await client.auth.getSession();
+        token = clean(result?.data?.session?.access_token);
+      } catch (_) {}
+    }
+    if (!token && typeof global.Api?.getCurrentAccessToken === 'function') {
+      try { token = clean(await global.Api.getCurrentAccessToken()); } catch (_) {}
+    }
+    if (!token) throw new Error('Your ERP session could not be read. Please refresh the page and try again.');
     return { Authorization: `Bearer ${token}` };
   }
 
@@ -50,7 +68,12 @@
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
       ...(options.headers || {})
     };
-    const response = await fetch(path, { ...options, headers, cache: 'no-store' });
+    const response = await fetch(path, {
+      ...options,
+      headers,
+      cache: 'no-store',
+      credentials: 'same-origin'
+    });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || payload?.ok === false) {
       const error = new Error(clean(payload?.error) || `Request failed (${response.status}).`);
@@ -133,31 +156,11 @@
     }
 
     bindUi();
+    installDelegatedHandlers();
     return true;
   }
 
   function bindUi() {
-    const connect = $('ecOutlookConnect');
-    if (connect && connect.dataset.bound !== 'true') {
-      connect.dataset.bound = 'true';
-      connect.addEventListener('click', connectOutlook);
-    }
-    const sync = $('ecOutlookSync');
-    if (sync && sync.dataset.bound !== 'true') {
-      sync.dataset.bound = 'true';
-      sync.addEventListener('click', () => syncNow(false));
-    }
-    const disconnect = $('ecOutlookDisconnect');
-    if (disconnect && disconnect.dataset.bound !== 'true') {
-      disconnect.dataset.bound = 'true';
-      disconnect.addEventListener('click', disconnectOutlook);
-    }
-    ['ecOutlookTwoWay', 'ecOutlookTeams', 'ecOutlookInviteContacts'].forEach(id => {
-      const input = $(id);
-      if (!input || input.dataset.bound === 'true') return;
-      input.dataset.bound = 'true';
-      input.addEventListener('change', saveIntegrationSettings);
-    });
     const settings = $('ecSettings');
     if (settings && settings.dataset.outlookBound !== 'true') {
       settings.dataset.outlookBound = 'true';
@@ -178,6 +181,27 @@
       calendar.dataset.outlookBound = 'true';
       calendar.addEventListener('pointerup', () => scheduleSync(1800), { passive: true });
     }
+  }
+
+  function installDelegatedHandlers() {
+    if (state.handlersInstalled) return;
+    state.handlersInstalled = true;
+
+    document.addEventListener('click', event => {
+      const target = event.target instanceof Element ? event.target.closest('#ecOutlookConnect, #ecOutlookSync, #ecOutlookDisconnect') : null;
+      if (!target) return;
+      event.preventDefault();
+      if (target.id === 'ecOutlookConnect') connectOutlook();
+      else if (target.id === 'ecOutlookSync') syncNow(false);
+      else if (target.id === 'ecOutlookDisconnect') disconnectOutlook();
+    }, true);
+
+    document.addEventListener('change', event => {
+      const id = event.target?.id;
+      if (id === 'ecOutlookTwoWay' || id === 'ecOutlookTeams' || id === 'ecOutlookInviteContacts') {
+        saveIntegrationSettings();
+      }
+    }, true);
   }
 
   function render(connection) {
@@ -208,17 +232,21 @@
     const disconnect = $('ecOutlookDisconnect');
     if (connect) {
       connect.hidden = connected;
-      connect.disabled = !configured;
-      connect.textContent = c.status === 'needs_reauth' ? 'Reconnect Outlook' : configured ? 'Connect Outlook' : 'Microsoft setup required';
+      connect.disabled = !configured || state.connectBusy;
+      connect.textContent = state.connectBusy ? 'Opening Microsoft…' : c.status === 'needs_reauth' ? 'Reconnect Outlook' : configured ? 'Connect Outlook' : 'Microsoft setup required';
     }
-    if (sync) { sync.hidden = !connected; sync.disabled = state.syncBusy || c.twoWayEnabled === false; }
-    if (disconnect) disconnect.hidden = !connected && c.status !== 'needs_reauth' && c.status !== 'error';
+    if (sync) { sync.hidden = !connected; sync.style.display = connected ? '' : 'none'; sync.disabled = state.syncBusy || c.twoWayEnabled === false; }
+    if (disconnect) {
+      const showDisconnect = connected || c.status === 'needs_reauth' || c.status === 'error';
+      disconnect.hidden = !showDisconnect;
+      disconnect.style.display = showDisconnect ? '' : 'none';
+    }
 
     const error = $('ecOutlookError');
     if (error) {
       const message = clean(c.lastError);
-      error.hidden = !message;
-      error.textContent = message;
+      if (message) setPanelError(message);
+      else if (!state.connectBusy) setPanelError('');
     }
   }
 
@@ -231,6 +259,7 @@
       render(payload.connection || null);
       return payload.connection || null;
     } catch (error) {
+      setPanelError(error.message);
       if (!silent) toast(error.message, 'error');
       return null;
     } finally {
@@ -239,21 +268,33 @@
   }
 
   async function connectOutlook() {
+    if (state.connectBusy) return;
+    state.connectBusy = true;
+    setPanelError('');
     const button = $('ecOutlookConnect');
-    if (button) button.disabled = true;
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Opening Microsoft…';
+    }
     try {
       const payload = await request('/api/outlook/connect');
       if (!payload.authorizationUrl) throw new Error('Microsoft authorization URL was not returned.');
-      global.location.assign(payload.authorizationUrl);
+      global.location.href = payload.authorizationUrl;
     } catch (error) {
+      setPanelError(error.message);
       toast(error.message, 'error');
-      if (button) button.disabled = false;
+      state.connectBusy = false;
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Connect Outlook';
+      }
     }
   }
 
   async function saveIntegrationSettings() {
     if (!state.connection?.connected) return;
     try {
+      setPanelError('');
       const payload = await request('/api/outlook/settings', {
         method: 'POST',
         body: JSON.stringify({
@@ -266,6 +307,7 @@
       toast('Outlook Calendar settings saved');
       if (payload.connection?.twoWayEnabled) scheduleSync(500);
     } catch (error) {
+      setPanelError(error.message);
       toast(error.message, 'error');
       await loadStatus(true);
     }
@@ -278,6 +320,7 @@
     if (silent) state.lastSilentSync = Date.now();
     render(state.connection);
     try {
+      setPanelError('');
       const payload = await request('/api/outlook/sync', { method: 'POST', body: '{}' });
       render(payload.connection || state.connection);
       try { await global.InCheck360EmployeeCalendar?.refresh?.(); } catch (_) {}
@@ -288,6 +331,7 @@
         toast(changes ? `Outlook sync complete · ${changes} change${changes === 1 ? '' : 's'}` : 'Outlook is already up to date');
       }
     } catch (error) {
+      setPanelError(error.message);
       if (!silent) toast(error.message, 'error');
       await loadStatus(true);
     } finally {
@@ -299,10 +343,12 @@
   async function disconnectOutlook() {
     if (!global.confirm('Disconnect Microsoft Outlook from your CRM Calendar? Existing CRM items will stay in the Operations Portal.')) return;
     try {
+      setPanelError('');
       const payload = await request('/api/outlook/disconnect', { method: 'POST', body: '{}' });
       render(payload.connection || null);
       toast('Outlook Calendar disconnected');
     } catch (error) {
+      setPanelError(error.message);
       toast(error.message, 'error');
     }
   }
@@ -336,7 +382,10 @@
     url.searchParams.delete('outlook_error');
     global.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash || '#employee-calendar'}`);
     if (result === 'connected') toast('Microsoft Outlook Calendar connected');
-    else if (result === 'error') toast(message || 'Unable to connect Microsoft Outlook Calendar', 'error');
+    else if (result === 'error') {
+      setPanelError(message || 'Unable to connect Microsoft Outlook Calendar');
+      toast(message || 'Unable to connect Microsoft Outlook Calendar', 'error');
+    }
   }
 
   async function onCalendarOpen() {
@@ -346,6 +395,7 @@
   }
 
   function boot() {
+    installDelegatedHandlers();
     if (state.installed) return;
     if (!ensureUi()) {
       if (state.retryCount++ < 30) global.setTimeout(boot, 120);
@@ -368,7 +418,8 @@
   global.InCheck360OutlookCalendar = Object.freeze({
     refresh: () => loadStatus(true),
     sync: () => syncNow(false),
-    onCalendarOpen
+    onCalendarOpen,
+    connect: connectOutlook
   });
 
   boot();
