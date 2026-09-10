@@ -1,7 +1,6 @@
 import {
   createServerClients,
   ensureWebhookSubscription,
-  loadConnection,
   pullNotificationChange,
   reconcileFromOutlook
 } from '../../src/server/outlookGraph.js';
@@ -48,6 +47,7 @@ export default async function handler(req, res) {
       continue;
     }
 
+    let connection = null;
     try {
       const lookup = await admin
         .from('outlook_calendar_connections')
@@ -55,7 +55,7 @@ export default async function handler(req, res) {
         .eq('webhook_subscription_id', subscriptionId)
         .maybeSingle();
       if (lookup.error) throw lookup.error;
-      const connection = lookup.data;
+      connection = lookup.data;
       if (!connection || !connection.webhook_client_state || text(notification?.clientState) !== text(connection.webhook_client_state)) {
         ignored += 1;
         continue;
@@ -81,21 +81,21 @@ export default async function handler(req, res) {
 
       await admin.from('outlook_calendar_connections').update({
         last_webhook_at: new Date().toISOString(),
+        last_error: null,
         updated_at: new Date().toISOString()
       }).eq('user_id', connection.user_id);
       processed += 1;
     } catch (error) {
       failed += 1;
       console.error('[Outlook webhook] notification failed', subscriptionId, error);
-      try {
-        const connection = await loadConnection(admin, notification?.resourceData?.id || '');
-        if (connection?.user_id) {
+      if (connection?.user_id) {
+        try {
           await admin.from('outlook_calendar_connections').update({
             last_error: `Webhook: ${text(error?.message)}`,
             updated_at: new Date().toISOString()
           }).eq('user_id', connection.user_id);
-        }
-      } catch (_) {}
+        } catch (_) {}
+      }
     }
   }
 
