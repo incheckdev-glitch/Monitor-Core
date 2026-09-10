@@ -1,0 +1,180 @@
+#employeeCalendarView .ec-outlook-panel {
+  margin-top: 18px;
+  border: 1px solid var(--border, #d9e2ef);
+  border-radius: 14px;
+  background: var(--surface, #fff);
+  overflow: hidden;
+}
+
+#employeeCalendarView .ec-outlook-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px 10px;
+}
+
+#employeeCalendarView .ec-outlook-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+#employeeCalendarView .ec-outlook-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: #106ebe;
+  color: #fff;
+  font-weight: 800;
+  font-size: 15px;
+  flex: 0 0 auto;
+}
+
+#employeeCalendarView .ec-outlook-title strong {
+  display: block;
+  font-size: 13px;
+}
+
+#employeeCalendarView .ec-outlook-title small,
+#employeeCalendarView .ec-outlook-copy,
+#employeeCalendarView .ec-outlook-meta small {
+  color: var(--muted, #64748b);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+#employeeCalendarView .ec-outlook-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+#employeeCalendarView .ec-outlook-badge[data-state="connected"] {
+  background: #ecfdf3;
+  color: #027a48;
+}
+
+#employeeCalendarView .ec-outlook-badge[data-state="error"],
+#employeeCalendarView .ec-outlook-badge[data-state="needs_reauth"] {
+  background: #fff1f2;
+  color: #b42318;
+}
+
+#employeeCalendarView .ec-outlook-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 16px 12px;
+}
+
+#employeeCalendarView .ec-outlook-meta > div {
+  min-width: 0;
+  padding: 9px 10px;
+  border-radius: 9px;
+  background: var(--soft-surface, #f8fafc);
+}
+
+#employeeCalendarView .ec-outlook-meta strong {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+#employeeCalendarView .ec-outlook-options {
+  display: grid;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border, #e2e8f0);
+  border-bottom: 1px solid var(--border, #e2e8f0);
+}
+
+#employeeCalendarView .ec-outlook-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+#employeeCalendarView .ec-outlook-option input {
+  margin-top: 2px;
+  flex: 0 0 auto;
+}
+
+#employeeCalendarView .ec-outlook-option span {
+  display: grid;
+  gap: 2px;
+}
+
+#employeeCalendarView .ec-outlook-option small {
+  color: var(--muted, #64748b);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+#employeeCalendarView .ec-outlook-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px 14px;
+}
+
+#employeeCalendarView .ec-outlook-copy {
+  margin: 0;
+  padding: 0 16px 14px;
+}
+
+#employeeCalendarView .ec-outlook-error {
+  margin: 0 16px 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+#employeeCalendarView .ec-outlook-event-note {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+  margin: 10px 0 0;
+  padding: 9px 10px;
+  border-radius: 9px;
+  background: var(--soft-surface, #f8fafc);
+  color: var(--muted, #64748b);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+@media (max-width: 720px) {
+  #employeeCalendarView .ec-outlook-meta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+:root[data-theme="dark"] #employeeCalendarView .ec-outlook-panel,
+:root:not([data-theme="light"]) body[data-theme="dark"] #employeeCalendarView .ec-outlook-panel {
+  background: var(--surface, #111827);
+  border-color: var(--border, #334155);
+}
+
+:root[data-theme="dark"] #employeeCalendarView .ec-outlook-meta > div,
+:root[data-theme="dark"] #employeeCalendarView .ec-outlook-event-note,
+:root:not([data-theme="light"]) body[data-theme="dark"] #employeeCalendarView .ec-outlook-meta > div,
+:root:not([data-theme="light"]) body[data-theme="dark"] #employeeCalendarView .ec-outlook-event-note {
+  background: rgba(148, 163, 184, 0.08);
+}
