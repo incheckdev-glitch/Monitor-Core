@@ -1,7 +1,7 @@
 const EDGE_GATEWAY = 'https://rewgbmfcrbgkzxcbrxjy.supabase.co/functions/v1/outlook-calendar-gateway';
 const DEFAULT_CLIENT_ID = '163ee873-b3b3-4a08-b0cd-9a933a8c2861';
 const DEFAULT_TENANT_ID = '5deca149-2c90-4af4-8dae-b6b2b12f5548';
-const DEFAULT_APP_BASE_URL = 'https://portal.incheck360.com';
+const OUTLOOK_PUBLIC_BASE_URL = 'https://portal.incheck360.com';
 
 function text(value = '') {
   return String(value ?? '').trim();
@@ -16,7 +16,7 @@ function actionOf(req) {
 }
 
 function publicErrorRedirect(message = '') {
-  const target = new URL('/', text(process.env.APP_BASE_URL || process.env.PUBLIC_APP_URL) || DEFAULT_APP_BASE_URL);
+  const target = new URL('/', OUTLOOK_PUBLIC_BASE_URL);
   target.searchParams.set('outlook', 'error');
   target.searchParams.set('outlook_error', text(message || 'Unable to connect Microsoft Outlook.').slice(0, 180));
   target.hash = 'employee-calendar';
@@ -36,7 +36,9 @@ function gatewayHeaders(req) {
     'x-monitor-ms-client-id': text(process.env.MICROSOFT_CLIENT_ID) || DEFAULT_CLIENT_ID,
     'x-monitor-ms-client-secret': clientSecret,
     'x-monitor-ms-tenant-id': text(process.env.MICROSOFT_TENANT_ID) || DEFAULT_TENANT_ID,
-    'x-monitor-app-base-url': text(process.env.APP_BASE_URL || process.env.PUBLIC_APP_URL) || DEFAULT_APP_BASE_URL,
+    // Outlook OAuth/webhook URLs must always use the canonical production portal,
+    // never a Vercel deployment alias or an old APP_BASE_URL environment value.
+    'x-monitor-app-base-url': OUTLOOK_PUBLIC_BASE_URL,
   };
 
   const authorization = text(req.headers?.authorization || req.headers?.Authorization);
@@ -105,7 +107,7 @@ export default async function handler(req, res) {
       let payload = {};
       try { payload = raw ? JSON.parse(raw) : {}; } catch (_) {}
       if (payload?.redirectUrl) return res.redirect(302, payload.redirectUrl);
-      return res.redirect(302, publicErrorRedirect(payload?.error || `Outlook callback failed (${response.status}).`));
+      return res.redirect(302, publicErrorRedirect(payload?.error || payload?.message || `Outlook callback failed (${response.status}).`));
     }
 
     if (action === 'webhook' && queryText(req.query?.validationToken)) {
@@ -119,6 +121,7 @@ export default async function handler(req, res) {
       try { payload = raw ? JSON.parse(raw) : {}; } catch (_) {
         payload = { ok: false, error: raw || `Outlook gateway failed (${response.status}).` };
       }
+      if (payload && payload.ok === false && !payload.error && payload.message) payload.error = payload.message;
       return res.status(response.status).json(payload);
     }
 
