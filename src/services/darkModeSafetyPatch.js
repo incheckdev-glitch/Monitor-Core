@@ -7,7 +7,7 @@ import './crmGridViewStable.js?v=20260906-gridstable1';
 import './allModuleGridViewStable.js?v=20260906-gridstable1';
 import './statusGridGrouping.js?v=20260904-statusgrid1';
 import './employeeCalendarLauncher.js?v=20260909-calvisibility1';
-import '../ui/index.js?v=20260910-widgetisolation1';
+import '../ui/index.js?v=20260910-widgetisolation2';
 
 (function installInCheck360DarkModeSafetyPatch() {
   const styles = [
