@@ -2,9 +2,13 @@ import {
   loadConnection,
   reconcileFromOutlook,
   requireActiveUser,
-  safeConnection,
-  syncUserToOutlook
+  safeConnection
 } from '../../src/server/outlookGraph.js';
+import { syncCrmToOutlook } from '../../src/server/outlookSync.js';
+
+function withInviteSetting(connection, safe) {
+  return connection ? { ...safe, inviteRelatedContacts: connection.invite_related_contacts === true } : safe;
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -17,7 +21,7 @@ export default async function handler(req, res) {
 
     // Push CRM changes first. This avoids an old Outlook copy overwriting a CRM edit
     // that the user has just saved before pressing Sync Now.
-    const push = await syncUserToOutlook(admin, user.id, req);
+    const push = await syncCrmToOutlook(admin, user.id, req);
     const pull = push?.connected && !push?.disabled
       ? await reconcileFromOutlook(admin, user.id, req)
       : { processed: 0, updated: 0, deleted: 0, failed: 0 };
@@ -27,7 +31,7 @@ export default async function handler(req, res) {
       ok: true,
       push,
       pull,
-      connection: safeConnection(connection, req)
+      connection: withInviteSetting(connection, safeConnection(connection, req))
     });
   } catch (error) {
     console.error('[Outlook sync] failed', error);
