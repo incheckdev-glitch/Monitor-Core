@@ -20,6 +20,14 @@ const FILTER_SELECTOR = [
   '[id$="FilterCard"]','[id$="FiltersCard"]','[id$="FilterPanel"]','[id$="FiltersPanel"]',
   '[class*="-filter-card"]','[class*="-filters-card"]','[class*="-filter-panel"]'
 ].join(',');
+const COMPLEX_WIDGET_SELECTOR = [
+  '#employeeCalendarView','#employeeCalendar','.ec-calendar','.fc','.fullcalendar',
+  '.scheduler','.scheduler-container','.gantt','.gantt-container','.timeline-widget',
+  '.chart-container','.chart-wrap','.analytics-chart',
+  '.monaco-editor','.cm-editor','.CodeMirror','.ql-container','.tox-tinymce','.ProseMirror',
+  '.mapboxgl-map','.leaflet-container','.ic-module-grid-view','.ic-crm-grid-view',
+  '.print-preview','[data-print-preview]','.pdf-preview'
+].join(',');
 
 function authenticated() {
   return Boolean(document.body && !document.body.classList.contains('auth-locked'));
@@ -46,6 +54,14 @@ function isVisible(element) {
   if (!(element instanceof Element)) return false;
   const style = getComputedStyle(element);
   return style.display !== 'none' && style.visibility !== 'hidden';
+}
+
+function insideComplexWidget(element) {
+  return Boolean(element instanceof Element && element.closest(COMPLEX_WIDGET_SELECTOR));
+}
+
+function isStandaloneComplexView(view) {
+  return Boolean(view?.matches?.('#employeeCalendarView,.ec-page'));
 }
 
 function findView(info = moduleInfo()) {
@@ -99,6 +115,7 @@ function ensureHeader(view, info) {
 function classifyActions(view, header) {
   const bars = Array.from(view.querySelectorAll(ACTION_SELECTOR)).filter(bar => {
     if (bar.closest('.modal,[role="dialog"],#appHeader,.view-menu')) return false;
+    if (insideComplexWidget(bar)) return false;
     if (header && bar.closest('.icds-module-header') === header) return true;
     return true;
   });
@@ -127,20 +144,20 @@ function classifyActions(view, header) {
 
 function classifyKpis(view) {
   view.querySelectorAll(KPI_GRID_SELECTOR).forEach(grid => {
-    if (grid.closest('.modal,[role="dialog"]')) return;
+    if (grid.closest('.modal,[role="dialog"]') || insideComplexWidget(grid)) return;
     UIComponents.KpiGrid.adopt(grid);
     grid.classList.add('icds-module-kpis');
     grid.dataset.icdsModuleRegion = 'kpis';
   });
   view.querySelectorAll(KPI_CARD_SELECTOR).forEach(card => {
-    if (card.closest('.modal,[role="dialog"]')) return;
+    if (card.closest('.modal,[role="dialog"]') || insideComplexWidget(card)) return;
     UIComponents.KpiCard.adopt(card);
   });
 }
 
 function classifyFilters(view) {
   const panels = Array.from(view.querySelectorAll(FILTER_SELECTOR)).filter(panel => {
-    return !panel.closest('.modal,[role="dialog"],#appHeader');
+    return !panel.closest('.modal,[role="dialog"],#appHeader') && !insideComplexWidget(panel);
   });
 
   panels.forEach(panel => {
@@ -166,7 +183,7 @@ function classifyFilters(view) {
 
 function classifyTables(view) {
   view.querySelectorAll('table').forEach(table => {
-    if (table.closest('.modal,[role="dialog"],.print-preview,[data-print-preview],.pdf-preview')) return;
+    if (table.closest('.modal,[role="dialog"],.print-preview,[data-print-preview],.pdf-preview') || insideComplexWidget(table)) return;
     const adopted = UIComponents.DataTable.adopt(table);
     const shell = adopted?.shell;
     if (shell) {
@@ -178,7 +195,7 @@ function classifyTables(view) {
 
 function classifyForms(view) {
   view.querySelectorAll('form').forEach(form => {
-    if (form.closest('.modal,[role="dialog"]')) return;
+    if (form.closest('.modal,[role="dialog"]') || insideComplexWidget(form)) return;
     UIComponents.FormSection.adopt(form);
     form.classList.add('icds-module-form');
     form.dataset.icdsModuleRegion = 'form';
@@ -187,7 +204,7 @@ function classifyForms(view) {
 
 function classifyPagination(view) {
   view.querySelectorAll('.pagination,.pager,[class*="pagination"],[class*="pager"]').forEach(el => {
-    if (el.closest('.modal,[role="dialog"]')) return;
+    if (el.closest('.modal,[role="dialog"]') || insideComplexWidget(el)) return;
     UIComponents.Pagination.adopt(el);
     el.classList.add('icds-module-pagination');
     el.dataset.icdsModuleRegion = 'pagination';
@@ -207,6 +224,10 @@ function classifyContentBlocks(view) {
 export const ModulePage = Object.freeze({
   adopt(view, info = moduleInfo()) {
     if (!(view instanceof Element) || !info || view.closest('#loginSection,.modal,[role="dialog"]')) return null;
+
+    // The employee calendar and similar self-managed widgets own their layout.
+    // Generic ERP adoption must never move or restyle their internal DOM.
+    if (isStandaloneComplexView(view)) return view;
 
     UIComponents.PageLayout.adopt(view);
     view.classList.add('icds-module-page');
@@ -250,11 +271,21 @@ function schedule(delay = 40) {
   state.scanTimer = setTimeout(scan, delay);
 }
 
+function mutationNeedsScan(record) {
+  if (!record?.addedNodes?.length) return false;
+  const target = record.target instanceof Element ? record.target : record.target?.parentElement;
+  if (target && insideComplexWidget(target)) return false;
+  return Array.from(record.addedNodes).some(node => {
+    if (!(node instanceof Element)) return false;
+    return !insideComplexWidget(node);
+  });
+}
+
 function installObservers() {
   if (state.observer || typeof MutationObserver === 'undefined') return;
   state.observer = new MutationObserver(records => {
     if (!authenticated()) return;
-    if (records.some(record => record.addedNodes && record.addedNodes.length)) schedule(80);
+    if (records.some(mutationNeedsScan)) schedule(80);
   });
   state.observer.observe(document.body, { childList: true, subtree: true });
 
