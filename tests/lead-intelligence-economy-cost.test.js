@@ -14,6 +14,8 @@ assert.match(job, /reasoning:\s*\{\s*effort:\s*'none'\s*\}/);
 assert.match(job, /search_context_size:\s*'low'/);
 assert.match(job, /max_tool_calls:\s*MAX_WEB_CALLS/);
 assert.match(job, /verbosity:\s*'low'/);
+assert.match(job, /CACHE_HOURS = 24/);
+assert.match(job, /cached:/);
 assert.doesNotMatch(job, /gpt-5\.6-sol/);
 assert.doesNotMatch(job, /gpt-5\.6-terra/);
 
@@ -24,5 +26,6 @@ assert.match(client, /MAX_COUNT=5/);
 assert.match(client, /DEFAULT_COUNT=3/);
 assert.match(client, /3 — Lowest usage/);
 assert.match(client, /max 3 web searches/);
+assert.match(client, /\$0 new OpenAI research/);
 
 console.log('Lead Intelligence economy cost guards passed.');
