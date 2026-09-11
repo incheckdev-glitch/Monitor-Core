@@ -4,10 +4,11 @@ export const config = { maxDuration: 60 };
 
 const SB_URL = 'https://rewgbmfcrbgkzxcbrxjy.supabase.co';
 const MODEL = 'gpt-5.6-luna';
+const PROFILE = 'balanced-v2';
 const MAX = 5;
 const DEFAULT_COUNT = 3;
-const MAX_WEB_CALLS = 3;
-const MAX_OUTPUT_TOKENS = 2200;
+const MAX_WEB_CALLS = 5;
+const MAX_OUTPUT_TOKENS = 3000;
 const CACHE_HOURS = 24;
 
 const txt = v => String(v ?? '').replace(/\s+/g, ' ').trim();
@@ -119,7 +120,7 @@ const FORMAT = {
 };
 
 function prompt(c) {
-  return `Find up to ${c.count} real current B2B prospects for the customer-facing InCheck 360 operations platform.
+  return `Find up to ${c.count} real, current B2B prospects for the customer-facing InCheck 360 operations platform.
 InCheck 360 supports digital inspections/checks, issue reporting, corrective actions, evidence, follow-up to closure and multi-location management visibility. Do not confuse it with Monitor Core, the internal ERP.
 
 Countries: ${c.countries.join(', ') || 'Any relevant market'}
@@ -130,14 +131,17 @@ Minimum sites when public evidence exists: ${c.min_locations}
 Keywords: ${c.keywords.join(', ') || 'none'}
 Exclude: ${c.exclusions.join(', ') || 'none'}
 
-Economy rules:
-- Use the minimum web research needed and stop once enough strong prospects are verified.
-- Prefer one strong source per fact and at most two useful sources per prospect.
+Balanced-quality rules:
+- Use the web-search budget mainly to verify the person's CURRENT role/employer and the company's operational or multi-site fit.
+- A prospect should only be returned when the person, current role/employer, and company are supported by credible public evidence. Prefer current official/company pages, reputable business pages, event/speaker pages and exact public professional profiles.
+- If evidence suggests the role is stale, former, ambiguous, or belongs to another person with a similar name, omit the candidate.
+- When possible, verify multi-location/site evidence or operational scope rather than assuming it from company size.
+- Prefer one strong source per fact and no more than three useful sources per prospect.
 - Never invent people, roles, employers, emails, LinkedIn URLs, websites, site counts or source URLs.
 - Email only if explicitly public. LinkedIn only if the exact public profile is found; otherwise use an empty string.
-- Do not spend extra searches trying to discover email addresses or LinkedIn URLs.
+- Do not spend extra searches trying to discover email addresses or phone numbers; contact enrichment is handled separately after the user chooses a prospect.
 - Omit weak candidates instead of spending more searches just to fill the requested count.
-- Keep evidence, rationale, pain points and follow-up concise.
+- Keep evidence, rationale, pain points and follow-up concise and specific to the verified role/company.
 - Fit score = role 40%, operational/multi-site fit 25%, industry 20%, evidence confidence 15%.
 - Connection note <=200 characters. Follow-up is concise and low-pressure with one pain-discovery question.`;
 }
@@ -158,14 +162,10 @@ async function oa(url, init = {}) {
       signal: ctl.signal,
     });
     const p = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      throw Object.assign(new Error(txt(p?.error?.message) || `OpenAI request failed (${r.status}).`), { status: 502 });
-    }
+    if (!r.ok) throw Object.assign(new Error(txt(p?.error?.message) || `OpenAI request failed (${r.status}).`), { status: 502 });
     return p;
   } catch (e) {
-    if (e?.name === 'AbortError') {
-      throw Object.assign(new Error('OpenAI did not acknowledge the background job in time.'), { status: 504 });
-    }
+    if (e?.name === 'AbortError') throw Object.assign(new Error('OpenAI did not acknowledge the background job in time.'), { status: 504 });
     throw e;
   } finally {
     clearTimeout(timer);
@@ -213,7 +213,7 @@ function normalize(x = {}) {
     why_fit: txt(x.why_fit).slice(0, 900),
     likely_pain_points: arr(x.likely_pain_points, 3).map(v => v.slice(0, 260)),
     public_evidence: arr(x.public_evidence, 3).map(v => v.slice(0, 360)),
-    source_urls: (x.source_urls || [])
+    source_urls: (Array.isArray(x.source_urls) ? x.source_urls : [])
       .map(s => ({
         title: txt(s?.title).slice(0, 180),
         url: safeUrl(s?.url),
@@ -235,8 +235,9 @@ async function findReusableRun(a, c) {
   const cutoff = new Date(Date.now() - CACHE_HOURS * 3600000).toISOString();
   const recent = await a.db
     .from('lead_intelligence_runs')
-    .select('id,status,criteria,model,openai_response_id,result_count,started_at,completed_at')
+    .select('id,status,criteria,model,openai_response_id,result_count,started_at,completed_at,research_profile,web_search_cap')
     .eq('created_by', a.user.id)
+    .eq('research_profile', PROFILE)
     .in('status', ['running', 'completed'])
     .gte('started_at', cutoff)
     .order('started_at', { ascending: false })
@@ -256,6 +257,7 @@ async function start(a, c) {
       run_id: reusable.id,
       status: reusable.status,
       model: reusable.model || MODEL,
+      profile: reusable.research_profile || PROFILE,
       result_count: reusable.result_count || 0,
     };
   }
@@ -268,6 +270,8 @@ async function start(a, c) {
       status: 'running',
       started_at: new Date().toISOString(),
       model: MODEL,
+      research_profile: PROFILE,
+      web_search_cap: MAX_WEB_CALLS,
     })
     .select('*')
     .single();
@@ -280,45 +284,30 @@ async function start(a, c) {
         model: MODEL,
         background: true,
         store: true,
-        reasoning: { effort: 'none' },
+        reasoning: { effort: 'low' },
         tools: [{ type: 'web_search', search_context_size: 'low' }],
         tool_choice: 'auto',
         max_tool_calls: MAX_WEB_CALLS,
-        instructions: 'You are the cost-efficient Lead Intelligence research engine for InCheck 360. Verify prospects with minimal public web research. Accuracy is more important than filling the quota. Follow the JSON schema exactly.',
+        instructions: 'You are the cost-conscious Lead Intelligence research engine for InCheck 360. Verify current role, employer and operational fit carefully. Prefer fewer strong prospects over weak filler. Follow the JSON schema exactly.',
         input: prompt(c),
         text: { format: FORMAT, verbosity: 'low' },
         max_output_tokens: MAX_OUTPUT_TOKENS,
-        prompt_cache_key: 'monitor-core-lead-intelligence-economy-v1',
-        metadata: { monitor_core_run_id: run.data.id, purpose: 'lead_intelligence_economy' },
+        prompt_cache_key: 'monitor-core-lead-intelligence-balanced-v2',
+        metadata: { monitor_core_run_id: run.data.id, purpose: 'lead_intelligence_balanced_v2' },
       }),
     });
     if (!p.id) throw new Error('OpenAI did not return a research job ID.');
     const up = await a.db
       .from('lead_intelligence_runs')
-      .update({
-        openai_response_id: p.id,
-        model: MODEL,
-        error_message: null,
-      })
+      .update({ openai_response_id: p.id, model: MODEL, error_message: null })
       .eq('id', run.data.id)
       .eq('created_by', a.user.id);
     if (up.error) throw up.error;
-    return {
-      ok: true,
-      resumed: false,
-      cached: false,
-      run_id: run.data.id,
-      status: p.status || 'queued',
-      model: MODEL,
-    };
+    return { ok: true, resumed: false, cached: false, run_id: run.data.id, status: p.status || 'queued', model: MODEL, profile: PROFILE };
   } catch (e) {
     await a.db
       .from('lead_intelligence_runs')
-      .update({
-        status: 'failed',
-        error_message: txt(e.message),
-        completed_at: new Date().toISOString(),
-      })
+      .update({ status: 'failed', error_message: txt(e.message), completed_at: new Date().toISOString() })
       .eq('id', run.data.id)
       .eq('created_by', a.user.id);
     throw e;
@@ -337,27 +326,20 @@ async function status(a, id) {
 
   const run = q.data;
   if (run.status === 'completed') {
-    return {
-      ok: true,
-      run_id: id,
-      status: 'completed',
-      result_count: run.result_count || 0,
-      model: run.model || MODEL,
-      usage: run.usage || {},
-    };
+    return { ok: true, run_id: id, status: 'completed', result_count: run.result_count || 0, model: run.model || MODEL, profile: run.research_profile || '', usage: run.usage || {} };
   }
   if (run.status === 'failed') {
     return { ok: false, run_id: id, status: 'failed', error: run.error_message || 'Research failed.' };
   }
   if (!run.openai_response_id) {
-    return { ok: true, run_id: id, status: 'starting', result_count: 0, model: MODEL };
+    return { ok: true, run_id: id, status: 'starting', result_count: 0, model: MODEL, profile: run.research_profile || PROFILE };
   }
 
   const p = await oa(`https://api.openai.com/v1/responses/${encodeURIComponent(run.openai_response_id)}`, { method: 'GET' });
   const s = txt(p.status).toLowerCase() || 'in_progress';
 
   if (!['completed', 'failed', 'cancelled', 'incomplete'].includes(s)) {
-    return { ok: true, run_id: id, status: s, model: MODEL };
+    return { ok: true, run_id: id, status: s, model: MODEL, profile: run.research_profile || PROFILE };
   }
 
   if (s !== 'completed') {
@@ -374,12 +356,18 @@ async function status(a, id) {
   try {
     parsed = JSON.parse(outputText(p));
   } catch {
-    throw new Error('OpenAI completed the research but returned an unreadable structured result.');
+    const reason = 'OpenAI completed the research but returned an unreadable structured result.';
+    await a.db
+      .from('lead_intelligence_runs')
+      .update({ status: 'failed', error_message: reason, completed_at: new Date().toISOString(), usage: p.usage || {} })
+      .eq('id', id)
+      .eq('created_by', a.user.id);
+    return { ok: false, run_id: id, status: 'failed', error: reason };
   }
 
   const c = criteria(run.criteria || {});
   const seen = new Set();
-  const suggestions = (parsed?.suggestions || [])
+  const suggestions = (Array.isArray(parsed?.suggestions) ? parsed.suggestions : [])
     .map(normalize)
     .filter(Boolean)
     .filter(x => {
@@ -419,14 +407,7 @@ async function status(a, id) {
     .eq('created_by', a.user.id);
   if (done.error) throw done.error;
 
-  return {
-    ok: true,
-    run_id: id,
-    status: 'completed',
-    result_count: suggestions.length,
-    model: MODEL,
-    usage: p.usage || {},
-  };
+  return { ok: true, run_id: id, status: 'completed', result_count: suggestions.length, model: MODEL, profile: run.research_profile || PROFILE, usage: p.usage || {} };
 }
 
 export default async function handler(req, res) {
@@ -440,11 +421,13 @@ export default async function handler(req, res) {
         ok: true,
         configured: Boolean(txt(process.env.OPENAI_API_KEY)),
         model: MODEL,
-        mode: 'background-economy',
+        profile: PROFILE,
+        mode: 'background-balanced',
         max_suggestions: MAX,
         default_suggestions: DEFAULT_COUNT,
         max_web_calls: MAX_WEB_CALLS,
         max_output_tokens: MAX_OUTPUT_TOKENS,
+        reasoning_effort: 'low',
         cache_hours: CACHE_HOURS,
       });
     }
@@ -459,16 +442,12 @@ export default async function handler(req, res) {
 
     if (action === 'status') {
       const id = txt(b.run_id);
-      if (!/^[0-9a-f-]{36}$/i.test(id)) {
-        return res.status(400).json({ ok: false, error: 'A valid research run ID is required.' });
-      }
+      if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ ok: false, error: 'A valid research run ID is required.' });
       const r = await status(a, id);
       return res.status(r.ok === false ? 422 : 200).json(r);
     }
 
-    if (action !== 'start') {
-      return res.status(400).json({ ok: false, error: 'Unknown Lead Intelligence action.' });
-    }
+    if (action !== 'start') return res.status(400).json({ ok: false, error: 'Unknown Lead Intelligence action.' });
 
     const c = criteria(b.criteria && typeof b.criteria === 'object' ? b.criteria : b);
     if (!c.countries.length && !c.industries.length && !c.target_roles.length && !c.company_profile) {
@@ -477,9 +456,6 @@ export default async function handler(req, res) {
 
     return res.status(202).json(await start(a, c));
   } catch (e) {
-    return res.status(Number(e?.status) || 500).json({
-      ok: false,
-      error: txt(e?.message) || 'Lead Intelligence request failed.',
-    });
+    return res.status(Number(e?.status) || 500).json({ ok: false, error: txt(e?.message) || 'Lead Intelligence request failed.' });
   }
 }
