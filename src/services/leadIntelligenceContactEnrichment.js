@@ -4,18 +4,18 @@
   if (global.InCheck360LeadIntelligenceContactEnrichment) return;
 
   const API = '/api/lead-intelligence-enrich';
-  const VERSION = '20260911-li-contact1';
+  const VERSION = '20260911-li-contact2';
   const CACHE_DAYS = 30;
   const active = new Set();
-  let observer = null;
   let decorateQueued = false;
+  let refreshTimer = null;
 
   const clean = value => String(value ?? '').replace(/\s+/g, ' ').trim();
   const esc = value => String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+    .replace(/\"/g, '&quot;')
     .replace(/'/g, '&#039;');
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -149,9 +149,24 @@
     if (status === 'running') return 'Resume Contact Search';
     if (status === 'failed') return 'Retry Phone & Email';
     if (status === 'completed') {
-      return ageDays(row.contact_enriched_at) >= CACHE_DAYS ? 'Recheck Phone & Email' : 'Contact Checked';
+      return ageDays(row.contact_enriched_at) >= CACHE_DAYS ? 'Recheck Phone & Email' : 'View Phone & Email';
     }
     return 'Find Phone & Email';
+  }
+
+  function syncContactBox(card, row) {
+    const existing = card.querySelector('[data-li-contact-box]');
+    const markup = contactMarkup(row);
+    if (!markup) {
+      existing?.remove();
+      return;
+    }
+    if (existing) {
+      if (existing.outerHTML !== markup) existing.outerHTML = markup;
+      return;
+    }
+    const actions = card.querySelector('.li-card-actions');
+    actions?.insertAdjacentHTML('beforebegin', markup);
   }
 
   function decorateCard(card) {
@@ -160,37 +175,39 @@
     const row = rowFor(id);
     if (!row) return;
 
-    card.querySelector('[data-li-contact-box]')?.remove();
-    card.querySelector('[data-li-enrich-contact]')?.remove();
-    card.querySelector('[data-li-contact-paid-note]')?.remove();
-
     const actions = card.querySelector('.li-card-actions');
     if (!actions) return;
 
-    const markup = contactMarkup(row);
-    if (markup) actions.insertAdjacentHTML('beforebegin', markup);
+    syncContactBox(card, row);
 
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'btn ghost sm';
-    button.setAttribute('data-li-enrich-contact', id);
-    button.textContent = buttonLabel(row);
+    let button = actions.querySelector(`[data-li-enrich-contact="${CSS.escape(id)}"]`);
+    if (!button) {
+      button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn ghost sm';
+      button.setAttribute('data-li-enrich-contact', id);
+      actions.insertBefore(button, actions.firstChild);
+    }
 
     const status = clean(row.contact_enrichment_status || 'not_requested');
     const freshCompleted = status === 'completed' && ageDays(row.contact_enriched_at) < CACHE_DAYS;
-    button.disabled = active.has(id) || freshCompleted;
+    const label = buttonLabel(row);
+    if (button.textContent !== label) button.textContent = label;
+    button.disabled = active.has(id);
+    button.setAttribute('aria-disabled', active.has(id) ? 'true' : 'false');
     button.title = freshCompleted
-      ? `Contact lookup is cached for ${CACHE_DAYS} days. No extra OpenAI request is needed.`
+      ? `Open the saved contact result. The ${CACHE_DAYS}-day cache prevents a new OpenAI request.`
       : 'Runs a low-cost public contact lookup for this lead only. No bulk enrichment.';
-    actions.insertBefore(button, actions.firstChild);
 
-    const note = document.createElement('span');
-    note.className = 'li-contact-paid-note';
-    note.setAttribute('data-li-contact-paid-note', '1');
-    note.textContent = freshCompleted
-      ? '$0 to view cached result'
-      : 'Selective lookup · max 2 web searches';
-    actions.appendChild(note);
+    let note = actions.querySelector('[data-li-contact-paid-note]');
+    if (!note) {
+      note = document.createElement('span');
+      note.className = 'li-contact-paid-note';
+      note.setAttribute('data-li-contact-paid-note', '1');
+      actions.appendChild(note);
+    }
+    const noteText = freshCompleted ? '$0 to view cached result' : 'Selective lookup · max 2 web searches';
+    if (note.textContent !== noteText) note.textContent = noteText;
   }
 
   function decorateAll() {
@@ -206,9 +223,13 @@
     });
   }
 
+  function decorateBurst() {
+    [0, 80, 220, 500, 1000].forEach(delay => setTimeout(queueDecorate, delay));
+  }
+
   async function refreshUi() {
     try { await global.InCheck360LeadIntelligence?.refresh?.(); } catch (_) {}
-    queueDecorate();
+    decorateBurst();
     try { await global.InCheck360LeadIntelligenceAdmin?.refresh?.(); } catch (_) {}
   }
 
@@ -244,6 +265,13 @@
   async function startLookup(suggestionId) {
     const id = clean(suggestionId);
     if (!id || active.has(id)) return;
+    const row = rowFor(id);
+    if (!row) {
+      notify('Suggested lead data is still loading. Please try again.', 'error');
+      decorateBurst();
+      return;
+    }
+
     active.add(id);
     queueDecorate();
 
@@ -270,12 +298,13 @@
     const host = document.getElementById('liResults');
     if (!host) return false;
     installStyle();
-    if (!observer) {
-      // Scoped only to Lead Intelligence result cards. It does not observe or mutate the global app shell.
-      observer = new MutationObserver(queueDecorate);
-      observer.observe(host, { childList: true, subtree: true });
+    decorateBurst();
+    if (!refreshTimer) {
+      refreshTimer = setInterval(() => {
+        const view = document.getElementById('leadIntelligenceView');
+        if (view && view.style.display !== 'none' && !view.hidden) queueDecorate();
+      }, 1200);
     }
-    queueDecorate();
     return true;
   }
 
@@ -293,18 +322,21 @@
     if (button) {
       event.preventDefault();
       event.stopPropagation();
+      event.stopImmediatePropagation();
       void startLookup(button.getAttribute('data-li-enrich-contact'));
       return;
     }
-    if (event.target?.closest?.('#leadIntelligenceTab,[data-li-run],[data-li-filter],#liRefreshBtn')) {
-      setTimeout(queueDecorate, 100);
+    if (event.target?.closest?.('#leadIntelligenceTab,[data-li-run],[data-li-filter],#liRefreshBtn,#liGenerateBtn')) {
+      decorateBurst();
     }
   }, true);
+
+  global.addEventListener('focus', decorateBurst);
 
   global.InCheck360LeadIntelligenceContactEnrichment = Object.freeze({
     version: VERSION,
     start: startLookup,
-    refresh: queueDecorate,
+    refresh: decorateBurst,
   });
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
