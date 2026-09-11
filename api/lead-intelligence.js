@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
+import crmDailyBriefHandler from '../src/server/crm-daily-brief-handler.js';
 
-export const config = { maxDuration: 10 };
+export const config = { maxDuration: 60 };
 
 const SB_URL = 'https://rewgbmfcrbgkzxcbrxjy.supabase.co';
 const MODEL = 'gpt-5.6-luna';
@@ -35,6 +36,12 @@ async function requireAuthorizedUser(req) {
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store, max-age=0');
+
+  const mode = clean(req.query?.mode).toLowerCase();
+  if (mode === 'crm_daily_brief') {
+    return crmDailyBriefHandler(req, res);
+  }
+
   try {
     await requireAuthorizedUser(req);
     const method = String(req.method || 'GET').toUpperCase();

@@ -60,6 +60,7 @@
   ],
   "rewrites": [
     { "source": "/api/outlook/:action", "destination": "/api/outlook?action=:action" },
+    { "source": "/api/crm-daily-brief", "destination": "/api/lead-intelligence?mode=crm_daily_brief" },
     {
       "source": "/((?!api/|_vercel/|assets/|icons/|manifest.webmanifest|service-worker.js|offline.html|favicon.ico).*)",
       "destination": "/index.html"
