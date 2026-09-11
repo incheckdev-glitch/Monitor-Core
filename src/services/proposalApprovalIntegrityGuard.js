@@ -1,17 +1,91 @@
 (function installProposalApprovalIntegrityGuard(global) {
   'use strict';
 
-  const VERSION = '20260911-proposal-approval-integrity1';
+  const VERSION = '20260911-proposal-approval-integrity2';
   const norm = value => String(value == null ? '' : value).trim().toLowerCase();
+  const policyCache = { value: null, checkedAt: 0 };
+
+  function isActiveProposalRule(rule = {}) {
+    const resource = norm(rule.resource);
+    const active = rule.is_active !== false && norm(rule.is_active) !== 'false';
+    return active && (resource === 'proposal' || resource === 'proposals');
+  }
+
+  function extractRows(response) {
+    if (Array.isArray(response)) return response;
+    if (Array.isArray(response?.rows)) return response.rows;
+    if (Array.isArray(response?.rules)) return response.rules;
+    if (Array.isArray(response?.data)) return response.data;
+    if (Array.isArray(response?.data?.rows)) return response.data.rows;
+    if (Array.isArray(response?.data?.rules)) return response.data.rules;
+    return [];
+  }
+
+  async function hasConfiguredProposalPolicy() {
+    const stateRules = global.Workflow?.state?.rules;
+    if (Array.isArray(stateRules) && stateRules.some(isActiveProposalRule)) {
+      policyCache.value = true;
+      policyCache.checkedAt = Date.now();
+      return true;
+    }
+
+    const now = Date.now();
+    if (policyCache.value !== null && now - policyCache.checkedAt < 5000) return policyCache.value;
+
+    if (!global.Api || typeof global.Api.listWorkflowRules !== 'function') return null;
+
+    try {
+      const response = await global.Api.listWorkflowRules({});
+      const hasPolicy = extractRows(response).some(isActiveProposalRule);
+      policyCache.value = hasPolicy;
+      policyCache.checkedAt = Date.now();
+      return hasPolicy;
+    } catch (error) {
+      console.warn('[proposal approval integrity] Unable to verify proposal policy; preserving normal workflow behavior.', error);
+      return null;
+    }
+  }
+
+  function noPolicyResult() {
+    return {
+      ok: true,
+      allowed: true,
+      skipped: true,
+      noPolicy: true,
+      pendingApproval: false,
+      approvalCreated: false,
+      approvalId: '',
+      reason: ''
+    };
+  }
 
   function patchWorkflowEngine() {
     const engine = global.WorkflowEngine;
-    if (!engine || typeof engine.createWorkflowApprovalFromDecision !== 'function') return false;
+    if (!engine || typeof engine.enforceBeforeSave !== 'function' || typeof engine.createWorkflowApprovalFromDecision !== 'function') return false;
     if (engine.__proposalApprovalIntegrityVersion === VERSION) return true;
 
-    const original = engine.createWorkflowApprovalFromDecision;
-    engine.createWorkflowApprovalFromDecision = async function guardedCreateWorkflowApproval(...args) {
-      const result = await original.apply(this, args);
+    const originalEnforceBeforeSave = engine.enforceBeforeSave;
+    engine.enforceBeforeSave = async function guardedEnforceBeforeSave(resource, ...args) {
+      const normalizedResource = norm(resource);
+      if (normalizedResource === 'proposal' || normalizedResource === 'proposals') {
+        const hasPolicy = await hasConfiguredProposalPolicy();
+        if (hasPolicy === false) {
+          console.debug('[proposal approval integrity] No active proposal policy configured; approval workflow skipped.');
+          return noPolicyResult();
+        }
+      }
+      return originalEnforceBeforeSave.call(this, resource, ...args);
+    };
+
+    const originalCreateApproval = engine.createWorkflowApprovalFromDecision;
+    engine.createWorkflowApprovalFromDecision = async function guardedCreateWorkflowApproval(resource, ...args) {
+      const normalizedResource = norm(resource);
+      if (normalizedResource === 'proposal' || normalizedResource === 'proposals') {
+        const hasPolicy = await hasConfiguredProposalPolicy();
+        if (hasPolicy === false) return noPolicyResult();
+      }
+
+      const result = await originalCreateApproval.call(this, resource, ...args);
       if (!result || result.approvalCreated !== true) return result;
 
       const approvalId = String(result.approvalId || result.approval_id || '').trim();
@@ -22,6 +96,7 @@
         ...result,
         approvalCreated: false,
         approvalId: '',
+        pendingApproval: false,
         reason: 'Approval is required, but no approval request record was created. Please retry.'
       };
     };
@@ -44,8 +119,6 @@
         const proposalId = String(form?.dataset?.id || this.state?.currentProposalId || '').trim();
         const requestedStatus = norm(statusEl?.value);
 
-        // Pending Approval is system-managed. A stale form must never write it back
-        // after the database has already moved the proposal to another status.
         if (isEdit && proposalId && requestedStatus === 'pending_approval' && typeof this.getProposal === 'function') {
           const latestResponse = await this.getProposal(proposalId);
           const latest = typeof this.extractProposalAndItems === 'function'
