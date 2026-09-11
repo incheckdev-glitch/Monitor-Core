@@ -2,9 +2,20 @@
   'use strict';
   if (global.InCheck360CrmPipelineProductInterest) return;
 
-  const VERSION = '20260911-crm-pipeline-products1';
-  const LEAD_STATUSES = ['not contacted yet','not available','meeting booked','meeting done','negotiation','qualified','lost','disregard'];
+  const VERSION = '20260911-crm-pipeline-products2';
+  const LEAD_STATUS_ROWS = [
+    ['Not Contacted Yet', 'not contacted yet'],
+    ['Not Available', 'not available'],
+    ['Meeting Booked', 'meeting booked'],
+    ['Meeting Done', 'meeting done'],
+    ['Negotiation', 'negotiation'],
+    ['Qualified', 'qualified'],
+    ['Lost', 'lost'],
+    ['Disregard', 'disregard']
+  ];
+  const LEAD_STATUSES = LEAD_STATUS_ROWS.map(([, key]) => key);
   const DEAL_STAGES = ['In Progress','Negotiation','POC','Proposal','Lost'];
+  const DEAL_STAGE_ROWS = DEAL_STAGES.map(stage => [stage, stage]);
   let catalog = [];
   let retries = 0;
 
@@ -68,9 +79,9 @@
     const anchor = document.getElementById('dealFormServiceInterest') || document.getElementById('dealFormStage');
     if (!anchor?.parentElement) return false;
     const field = document.createElement('div');
-    field.className = anchor.parentElement.className || 'form-group';
+    field.className = anchor.parentElement.className || 'crm-field';
     field.id = 'dealInterestedProductsField';
-    field.innerHTML = `<label for="dealInterestedProductIds">Interested Products</label>
+    field.innerHTML = `<label class="muted" for="dealInterestedProductIds">Interested Products</label>
       <select id="dealInterestedProductIds" class="${esc(anchor.className)}" multiple size="5" aria-describedby="dealInterestedProductsHelp"></select>
       <small id="dealInterestedProductsHelp" style="display:block;margin-top:5px;opacity:.65">Select one or multiple items from the Product Catalog. Hold Ctrl/Cmd to select several items.</small>`;
     anchor.parentElement.insertAdjacentElement('afterend', field);
@@ -102,6 +113,117 @@
     return select ? ids(Array.from(select.selectedOptions || []).map(o => o.value)) : [];
   }
 
+  function renderLeadStatusDistribution(analytics = {}) {
+    const host = document.getElementById('leadsStatusDistribution');
+    if (!host) return;
+    const total = Number(analytics.total || 0);
+    const rows = LEAD_STATUS_ROWS.map(([label, key]) => {
+      const count = Number(analytics.statusBreakdown?.[key] || 0);
+      const percent = total ? (count / total) * 100 : 0;
+      return `<div class="leads-status-row" data-status="${esc(key)}">
+        <div class="leads-status-label"><span class="leads-status-dot"></span>${esc(label)}</div>
+        <div class="leads-status-count">${count}</div>
+        <div class="leads-status-track"><span class="leads-status-fill" style="width:${Math.min(100, percent).toFixed(1)}%"></span></div>
+        <div class="leads-status-meta">${percent.toFixed(1)}%</div>
+      </div>`;
+    }).join('');
+    host.innerHTML = `${rows}<div class="leads-status-row leads-status-row--total" data-status="total">
+      <div class="leads-status-label"><span class="leads-status-dot"></span>Total Leads</div>
+      <div class="leads-status-count">${total}</div>
+      <div class="leads-status-track"><span class="leads-status-fill" style="width:${total ? 100 : 0}%"></span></div>
+      <div class="leads-status-meta">${total ? '100%' : '0.0%'}</div>
+    </div>`;
+  }
+
+  function renderDealStageDistribution(controller, analytics = {}) {
+    const host = document.getElementById('dealsStageDistribution');
+    if (!host || typeof controller?.renderDistribution !== 'function') return;
+    const entries = DEAL_STAGE_ROWS.map(([label, key]) => [label, Number(analytics.stageBreakdown?.[key] || 0)]);
+    controller.renderDistribution(host, entries, Number(analytics.totalDeals || 0));
+  }
+
+  function makeLane(label, tone='neutral') {
+    const lane = document.createElement('section');
+    lane.className = 'ic-crm-kanban-lane';
+    lane.dataset.tone = tone;
+    lane.innerHTML = `<div class="ic-crm-kanban-lane-head"><div><span class="ic-crm-lane-dot"></span><strong>${esc(label)}</strong></div><span class="ic-crm-lane-count">0</span></div><div class="ic-crm-kanban-cards"><div class="ic-crm-lane-empty">No records in this stage</div></div>`;
+    return lane;
+  }
+
+  function reconcileKanban(module, rows, valueNormalizer) {
+    const kanban = document.getElementById(`${module}GridView`)?.querySelector('.ic-crm-kanban');
+    if (!kanban) return;
+    const desired = rows.map(([label, key]) => ({ label, key: norm(key) }));
+    const desiredKeys = new Set(desired.map(item => item.key));
+    const existing = Array.from(kanban.querySelectorAll('.ic-crm-kanban-lane'));
+    const laneByKey = new Map();
+
+    for (const lane of existing) {
+      const heading = lane.querySelector('.ic-crm-kanban-lane-head strong');
+      const key = norm(heading?.textContent);
+      if (key && !laneByKey.has(key)) laneByKey.set(key, lane);
+    }
+
+    for (const item of desired) {
+      let lane = laneByKey.get(item.key);
+      if (!lane) {
+        const tone = item.key === 'lost' ? 'danger' : item.key === 'disregard' ? 'neutral' : ['qualified','proposal'].includes(item.key) ? 'success' : ['negotiation','poc','meeting booked'].includes(item.key) ? 'warning' : 'neutral';
+        lane = makeLane(item.label, tone);
+        laneByKey.set(item.key, lane);
+      }
+      const heading = lane.querySelector('.ic-crm-kanban-lane-head strong');
+      if (heading) heading.textContent = item.label;
+      kanban.appendChild(lane);
+    }
+
+    const allCards = Array.from(kanban.querySelectorAll('.ic-crm-kanban-card'));
+    for (const card of allCards) {
+      const statusNode = card.querySelector('.ic-crm-card-status');
+      const normalized = norm(valueNormalizer(statusNode?.textContent || ''));
+      const target = laneByKey.get(normalized);
+      if (!target) continue;
+      const cardsHost = target.querySelector('.ic-crm-kanban-cards');
+      if (cardsHost) {
+        cardsHost.querySelector('.ic-crm-lane-empty')?.remove();
+        cardsHost.appendChild(card);
+        const label = desired.find(item => item.key === normalized)?.label;
+        if (label && statusNode) statusNode.textContent = label;
+      }
+    }
+
+    for (const lane of Array.from(kanban.querySelectorAll('.ic-crm-kanban-lane'))) {
+      const heading = lane.querySelector('.ic-crm-kanban-lane-head strong');
+      const key = norm(heading?.textContent);
+      const cardsHost = lane.querySelector('.ic-crm-kanban-cards');
+      const cards = cardsHost ? cardsHost.querySelectorAll('.ic-crm-kanban-card') : [];
+      const count = lane.querySelector('.ic-crm-lane-count');
+      if (count) count.textContent = String(cards.length);
+      if (!cards.length && cardsHost && !cardsHost.querySelector('.ic-crm-lane-empty')) {
+        cardsHost.innerHTML = '<div class="ic-crm-lane-empty">No records in this stage</div>';
+      }
+      if (!cards.length && !desiredKeys.has(key)) lane.remove();
+    }
+
+    for (const item of desired) {
+      const lane = laneByKey.get(item.key);
+      if (lane?.isConnected) kanban.appendChild(lane);
+    }
+    for (const lane of Array.from(kanban.querySelectorAll('.ic-crm-kanban-lane'))) {
+      const key = norm(lane.querySelector('.ic-crm-kanban-lane-head strong')?.textContent);
+      if (!desiredKeys.has(key)) kanban.appendChild(lane);
+    }
+  }
+
+  function reconcileGridLabels() {
+    reconcileKanban('leads', LEAD_STATUS_ROWS, value => leadStatus(value));
+    reconcileKanban('deals', DEAL_STAGE_ROWS, value => dealStage(value));
+  }
+
+  function scheduleReconcile() {
+    global.setTimeout(reconcileGridLabels, 80);
+    global.setTimeout(reconcileGridLabels, 220);
+  }
+
   function patchLeads() {
     const L = global.Leads;
     if (!L || L.__crmPipelineProductInterestVersion === VERSION) return !!L;
@@ -115,18 +237,44 @@
       const variant = s === 'lost' ? 'danger' : s === 'disregard' ? 'neutral' : ['meeting done','qualified'].includes(s) ? 'success' : ['meeting booked','negotiation'].includes(s) ? 'info' : s === 'not available' ? 'warning' : 'neutral';
       return this.leadChip(s, variant);
     };
-    wrap(L,'syncLeadFormDropdowns','__crmDisregardForm',original=>function(selected={}) {
+    wrap(L,'syncLeadFormDropdowns','__crmDisregardForm2',original=>function(selected={}) {
       const r = original.call(this,{...selected,status:leadStatus(selected?.status)});
       rewriteSelect('leadFormStatus',LEAD_STATUSES,leadStatus(document.getElementById('leadFormStatus')?.value || selected?.status || 'not contacted yet'));
       return r;
     });
-    wrap(L,'renderFilters','__crmDisregardFilters',original=>function(...args) {
+    wrap(L,'renderFilters','__crmDisregardFilters2',original=>function(...args) {
       const r = original.apply(this,args);
-      rewriteSelect('leadsStatusFilter',LEAD_STATUSES,this.state?.status || 'All',true);
+      const selected = this.state?.status === 'All' ? 'All' : leadStatus(this.state?.status || 'All');
+      rewriteSelect('leadsStatusFilter',LEAD_STATUSES,selected,true);
+      return r;
+    });
+    wrap(L,'computeLeadAnalytics','__crmExpandedLeadAnalytics2',original=>function(leads=[]) {
+      const analytics = original.call(this,leads) || {};
+      const statusBreakdown = Object.fromEntries(LEAD_STATUSES.map(key => [key,0]));
+      for (const row of Array.isArray(leads) ? leads : []) {
+        const status = leadStatus(row?.status);
+        if (Object.prototype.hasOwnProperty.call(statusBreakdown,status)) statusBreakdown[status] += 1;
+      }
+      analytics.statusBreakdown = statusBreakdown;
+      analytics.meetingBookedCount = statusBreakdown['meeting booked'];
+      analytics.meetingDoneCount = statusBreakdown['meeting done'];
+      analytics.disregardCount = statusBreakdown.disregard;
+      return analytics;
+    });
+    wrap(L,'renderLeadAnalytics','__crmExpandedLeadDashboard2',original=>function(analytics) {
+      const r = original.call(this,analytics);
+      const safe = analytics || this.computeLeadAnalytics([]);
+      renderLeadStatusDistribution(safe);
+      return r;
+    });
+    wrap(L,'render','__crmLeadGridReconcile2',original=>function(...args) {
+      const r = original.apply(this,args);
+      scheduleReconcile();
       return r;
     });
     L.__crmPipelineProductInterestVersion = VERSION;
     try { L.renderFilters?.(); } catch(_) {}
+    try { L.rerenderSummaryIfNeeded?.(); } catch(_) {}
     return true;
   }
 
@@ -136,85 +284,80 @@
     D.formDropdownDefaults = D.formDropdownDefaults || {};
     D.formDropdownDefaults.stage = DEAL_STAGES.slice();
     D.normalizeStage = dealStage;
-    D.matchesOpenStatus = s => !['lost','proposal'].includes(norm(dealStage(s)));
+    D.matchesOpenStatus = s => norm(dealStage(s)) !== 'lost';
     if (Array.isArray(D.columns) && !D.columns.includes('interested_product_ids')) D.columns.push('interested_product_ids');
     D.dealStageChip = function(stage='') {
       const s = dealStage(stage);
       const variant = s === 'Lost' ? 'danger' : s === 'Proposal' ? 'success' : ['POC','Negotiation'].includes(s) ? 'info' : 'neutral';
       return this.dealChip(s, variant);
     };
-    wrap(D,'normalizeDeal','__crmProductsNormalize',original=>function(raw={}) {
+    wrap(D,'normalizeDeal','__crmProductsNormalize2',original=>function(raw={}) {
       const row = original.call(this,raw) || {};
       row.stage = dealStage(raw?.stage ?? row.stage);
       row.interested_product_ids = ids(raw?.interested_product_ids ?? row.interested_product_ids);
       return row;
     });
-    wrap(D,'backendDeal','__crmProductsBackend',original=>function(deal={},options={}) {
+    wrap(D,'backendDeal','__crmProductsBackend2',original=>function(deal={},options={}) {
       const payload = original.call(this,deal,options) || {};
       if (Object.prototype.hasOwnProperty.call(deal,'stage')) payload.stage = dealStage(deal.stage);
       if (Object.prototype.hasOwnProperty.call(deal,'interested_product_ids')) payload.interested_product_ids = ids(deal.interested_product_ids);
       return payload;
     });
-    wrap(D,'collectFormData','__crmProductsCollect',original=>function(...args) {
+    wrap(D,'collectFormData','__crmProductsCollect2',original=>function(...args) {
       const row = original.apply(this,args) || {};
       row.stage = dealStage(row.stage);
       row.interested_product_ids = selectedProducts();
       return row;
     });
-    wrap(D,'syncDealFormDropdowns','__crmProposalStageForm',original=>function(selected={}) {
+    wrap(D,'syncDealFormDropdowns','__crmProposalStageForm2',original=>function(selected={}) {
       const stage = dealStage(selected?.stage || document.getElementById('dealFormStage')?.value || 'In Progress');
       const r = original.call(this,{...selected,stage});
       rewriteSelect('dealFormStage',DEAL_STAGES,stage);
       return r;
     });
-    wrap(D,'renderFilters','__crmProposalStageFilters',original=>function(...args) {
+    wrap(D,'renderFilters','__crmProposalStageFilters2',original=>function(...args) {
       const r = original.apply(this,args);
       const stage = this.state?.stage === 'All' ? 'All' : dealStage(this.state?.stage || 'All');
       rewriteSelect('dealsStageFilter',DEAL_STAGES,stage,true);
       return r;
     });
-    wrap(D,'openForm','__crmProductsOpenForm',original=>async function(row=null) {
+    wrap(D,'renderDealAnalytics','__crmProposalStageDashboard2',original=>function(analytics) {
+      const r = original.call(this,analytics);
+      const safe = analytics || this.computeDealAnalytics([]);
+      renderDealStageDistribution(this,safe);
+      return r;
+    });
+    wrap(D,'openForm','__crmProductsOpenForm2',original=>async function(row=null) {
       const r = await original.call(this,row);
       ensureProductField();
       await loadCatalog();
-      renderProducts(row?.interested_product_ids || []);
+      const current = this.state?.form?.mode === 'edit' ? (this.state?.form?.currentDeal || row || {}) : (row || {});
+      renderProducts(current?.interested_product_ids || row?.interested_product_ids || []);
       const stage = dealStage(row?.stage || document.getElementById('dealFormStage')?.value || 'In Progress');
       rewriteSelect('dealFormStage',DEAL_STAGES,stage);
       return r;
     });
+    wrap(D,'render','__crmDealGridReconcile2',original=>function(...args) {
+      const r = original.apply(this,args);
+      scheduleReconcile();
+      return r;
+    });
     D.__crmPipelineProductInterestVersion = VERSION;
     try { D.renderFilters?.(); } catch(_) {}
+    try { D.renderDealAnalytics?.(D.computeDealAnalytics?.(D.state?.filteredRows || []) || {}); } catch(_) {}
     return true;
-  }
-
-  function reconcileGridLabels() {
-    const deals = document.getElementById('dealsGridView')?.querySelector('.ic-crm-kanban');
-    if (deals) {
-      for (const lane of deals.querySelectorAll('.ic-crm-kanban-lane')) {
-        const label = lane.querySelector('.ic-crm-kanban-lane-head strong');
-        if (norm(label?.textContent) === 'converted to proposal') label.textContent = 'Proposal';
-      }
-    }
-    const leads = document.getElementById('leadsGridView')?.querySelector('.ic-crm-kanban');
-    if (leads && !Array.from(leads.querySelectorAll('.ic-crm-kanban-lane-head strong')).some(el => norm(el.textContent) === 'disregard')) {
-      const lane = document.createElement('section');
-      lane.className = 'ic-crm-kanban-lane';
-      lane.dataset.tone = 'neutral';
-      lane.innerHTML = '<div class="ic-crm-kanban-lane-head"><div><span class="ic-crm-lane-dot"></span><strong>Disregard</strong></div><span class="ic-crm-lane-count">0</span></div><div class="ic-crm-kanban-cards"><div class="ic-crm-lane-empty">No records in this stage</div></div>';
-      leads.appendChild(lane);
-    }
   }
 
   function patchAll() {
     if (!patchLeads() || !patchDeals()) return false;
     try { global.InCheck360CrmGridView?.refresh?.('leads'); } catch(_) {}
     try { global.InCheck360CrmGridView?.refresh?.('deals'); } catch(_) {}
-    global.setTimeout(reconcileGridLabels,100);
+    scheduleReconcile();
     return true;
   }
 
   document.addEventListener('click',event=>{
-    if (event.target?.closest?.('#leadsTab,#dealsTab,[data-view="leads"],[data-view="deals"]')) global.setTimeout(reconcileGridLabels,120);
+    if (event.target?.closest?.('#leadsTab,#dealsTab,[data-view="leads"],[data-view="deals"],[data-crm-view-mode="grid"]')) scheduleReconcile();
   });
 
   function boot() {
