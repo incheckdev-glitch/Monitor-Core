@@ -11,7 +11,6 @@ import './leadIntelligenceContactEnrichment.js?v=20260911-li-contact2';
 import './leadIntelligenceAdmin.js?v=20260911-li-admin-subtab2';
 import './crmDailyBrief.js?v=20260911-crm-daily-brief3';
 import './crmDailyBriefExecutiveLayout.js?v=20260911-crm-daily-brief-exec2';
-import './crmDailyBriefClosingSummary.js?v=20260911-crm-daily-brief-summary1';
 import './proposalApprovalIntegrityGuard.js?v=20260911-proposal-approval-integrity2';
 import './crmGridViewStable.js?v=20260910-salespipeline3';
 import './allModuleGridViewStable.js?v=20260906-gridstable1';
