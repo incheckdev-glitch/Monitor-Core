@@ -3,7 +3,7 @@
 
   if (global.InCheck360CrmDailyBrief) return;
 
-  const VERSION = '20260911-crm-daily-brief2';
+  const VERSION = '20260911-crm-daily-brief3';
   const TAB_ID = 'crmDailyBriefTab';
   const VIEW_ID = 'crmDailyBriefView';
   const CSS_ID = 'crm-daily-brief-css';
@@ -73,22 +73,28 @@
     return `
       <div class="crm-brief-shell">
         <section class="crm-brief-hero">
-          <div>
+          <div class="crm-brief-hero-copy">
             <div class="crm-brief-eyebrow">CRM · Shared Management Intelligence</div>
             <h1>AI CRM Daily Brief</h1>
-            <p>One richer daily report shared with the CRM team. It is generated from structured ERP facts only.</p>
-            <p class="muted">Salesperson notes, free-text notes, private chats and ChatGPT history are excluded from the AI source.</p>
+            <p>One richer daily report shared with the CRM team, generated from structured ERP facts only.</p>
+            <p class="crm-brief-source-note">Salesperson notes, free-text notes, private chats and ChatGPT history are excluded from the AI source.</p>
           </div>
           <div class="crm-brief-hero-actions">
             <span id="crmBriefStatus" class="crm-brief-status">Loading saved brief…</span>
             <button id="crmBriefGenerateBtn" class="btn primary" type="button" hidden>Generate Today's Brief</button>
+            <button id="crmBriefExportBtn" class="btn ghost crm-brief-export-btn" type="button" hidden>Export PDF</button>
             <button id="crmBriefRefreshBtn" class="btn ghost" type="button">Refresh</button>
           </div>
         </section>
         <div id="crmBriefError" class="crm-brief-error" hidden></div>
         <section class="crm-brief-layout">
           <aside class="crm-brief-history">
-            <h2>Previous Reports</h2>
+            <div class="crm-brief-history-head">
+              <div>
+                <span class="crm-brief-history-kicker">Archive</span>
+                <h2>Previous Reports</h2>
+              </div>
+            </div>
             <div id="crmBriefHistory" class="crm-brief-history-list"><div class="muted">No reports yet.</div></div>
           </aside>
           <main id="crmBriefReport" class="crm-brief-report">
@@ -213,7 +219,7 @@
     }
     host.innerHTML = state.reports.map(row => `
       <button type="button" class="crm-brief-history-btn${row.id === state.selectedId ? ' is-active' : ''}" data-crm-brief-id="${esc(row.id)}">
-        <strong>${esc(row.report_date === todayLocal() ? 'Today' : formatDate(row.report_date))}</strong>
+        <span class="crm-brief-history-date">${esc(row.report_date === todayLocal() ? 'Today' : formatDate(row.report_date))}</span>
         <small>${esc(formatDateTime(row.generated_at))}${Number(row.generation_count || 1) > 1 ? ` · v${Number(row.generation_count)}` : ''}</small>
       </button>`).join('');
   }
@@ -223,17 +229,24 @@
     const entityNumber = clean(item.entity_number);
     const entityType = clean(item.entity_type);
     return `<article class="crm-brief-item crm-brief-item--${esc(priority)}">
-      <div class="crm-brief-item-top"><h4>${esc(item.title || 'CRM item')}</h4><span class="crm-brief-priority">${esc(priority)}</span></div>
-      ${item.detail ? `<p>${esc(item.detail)}</p>` : ''}
-      ${item.recommended_action ? `<p class="crm-brief-action">Next: ${esc(item.recommended_action)}</p>` : ''}
-      ${item.evidence ? `<p class="crm-brief-evidence">Evidence: ${esc(item.evidence)}</p>` : ''}
+      <div class="crm-brief-item-top">
+        <h4>${esc(item.title || 'CRM item')}</h4>
+        <span class="crm-brief-priority crm-brief-priority--${esc(priority)}">${esc(priority)}</span>
+      </div>
+      ${item.detail ? `<p class="crm-brief-detail">${esc(item.detail)}</p>` : ''}
+      ${item.recommended_action ? `<div class="crm-brief-action"><span>Recommended action</span><strong>${esc(item.recommended_action)}</strong></div>` : ''}
+      ${item.evidence ? `<div class="crm-brief-evidence"><span>Evidence</span><p>${esc(item.evidence)}</p></div>` : ''}
       ${(entityNumber || (entityType && entityType !== 'none')) ? `<span class="crm-brief-entity">${esc(entityNumber || entityType.replace(/_/g, ' '))}</span>` : ''}
     </article>`;
   }
 
-  function sectionMarkup(title, icon, items) {
+  function sectionMarkup(title, icon, items, tone = '') {
     const list = Array.isArray(items) ? items : [];
-    return `<section class="crm-brief-section"><h3><span aria-hidden="true">${icon}</span>${esc(title)}</h3>
+    return `<section class="crm-brief-section crm-brief-section--${esc(tone || 'default')}">
+      <div class="crm-brief-section-head">
+        <h3><span class="crm-brief-section-icon" aria-hidden="true">${icon}</span>${esc(title)}</h3>
+        <span class="crm-brief-section-count">${list.length}</span>
+      </div>
       <div class="crm-brief-items">${list.length ? list.map(itemMarkup).join('') : '<div class="crm-brief-none">Nothing material in this section.</div>'}</div>
     </section>`;
   }
@@ -242,46 +255,248 @@
     const host = document.getElementById('crmBriefReport');
     const status = document.getElementById('crmBriefStatus');
     const generate = document.getElementById('crmBriefGenerateBtn');
+    const exportBtn = document.getElementById('crmBriefExportBtn');
     if (!host) return;
 
     const row = selectedReport();
     if (!row) {
-      host.innerHTML = `<div class="crm-brief-empty"><strong>No CRM brief generated yet.</strong><span>${state.isAdmin ? 'Click Generate Today\'s Brief to create the first shared report.' : 'Admin or GM can generate the first shared report.'}</span></div>`;
+      host.innerHTML = `<div class="crm-brief-empty"><strong>No CRM brief generated yet.</strong><span>${state.isAdmin ? "Click Generate Today's Brief to create the first shared report." : 'Admin or GM can generate the first shared report.'}</span></div>`;
       if (status) status.textContent = 'No saved report';
       if (generate) generate.textContent = "Generate Today's Brief";
+      if (exportBtn) exportBtn.hidden = true;
       return;
     }
 
     const report = row.report || {};
     const isToday = row.report_date === todayLocal();
-    if (status) status.textContent = isToday ? 'Today’s shared report is ready' : `Latest saved: ${formatDate(row.report_date)}`;
+    if (status) status.textContent = isToday ? 'Today’s shared report is ready' : `Viewing ${formatDate(row.report_date)}`;
     if (generate) generate.textContent = isToday ? "Regenerate Today's Brief" : "Generate Today's Brief";
+    if (exportBtn) exportBtn.hidden = false;
 
     const metrics = Array.isArray(report.key_metrics) ? report.key_metrics : [];
     host.innerHTML = `
-      ${!isToday ? `<div class="crm-brief-banner">No report has been generated for today yet. Showing the latest saved CRM brief.</div>` : ''}
-      <div class="crm-brief-report-head">
-        <div>
-          <div class="crm-brief-eyebrow">Structured CRM Intelligence</div>
-          <h2>${esc(formatDate(row.report_date))}</h2>
-          <div class="crm-brief-report-meta">Generated ${esc(formatDateTime(row.generated_at))}${row.generated_by_name ? ` by ${esc(row.generated_by_name)}` : ''} · ${esc(row.model || 'OpenAI')}</div>
+      ${!isToday ? `<div class="crm-brief-banner crm-brief-banner--notice">No report has been generated for today yet. Showing a previous saved CRM brief.</div>` : ''}
+      <div class="crm-brief-report-cover">
+        <div class="crm-brief-report-head">
+          <div>
+            <div class="crm-brief-eyebrow">Structured CRM Intelligence</div>
+            <h2>${esc(formatDate(row.report_date))}</h2>
+            <div class="crm-brief-report-meta">Generated ${esc(formatDateTime(row.generated_at))}${row.generated_by_name ? ` by ${esc(row.generated_by_name)}` : ''} · ${esc(row.model || 'OpenAI')}</div>
+          </div>
+          <div class="crm-brief-report-badges">
+            <span class="crm-brief-shared-badge">Shared daily report</span>
+            ${state.isAdmin ? `<span class="crm-brief-cost">Est. AI cost $${Number(row.estimated_cost_usd || 0).toFixed(4)}</span>` : ''}
+          </div>
         </div>
-        ${state.isAdmin ? `<span class="crm-brief-cost">Est. AI cost $${Number(row.estimated_cost_usd || 0).toFixed(4)}</span>` : ''}
+        <div class="crm-brief-source-strip">
+          <strong>Source policy</strong>
+          <span>Structured ERP data only</span>
+          <span>Salesperson notes excluded</span>
+          <span>Private/chat history excluded</span>
+        </div>
+        <section class="crm-brief-executive">
+          <div class="crm-brief-executive-label">Executive summary</div>
+          <div class="crm-brief-summary">${esc(report.executive_summary || 'No executive summary was returned.')}</div>
+        </section>
+        ${metrics.length ? `<div class="crm-brief-metrics">${metrics.slice(0,8).map(m => `<article class="crm-brief-metric"><span>${esc(m.label)}</span><strong>${esc(m.value)}</strong>${m.context ? `<small>${esc(m.context)}</small>` : ''}</article>`).join('')}</div>` : ''}
       </div>
-      <div class="crm-brief-banner">Source policy: structured ERP data only · salesperson notes and private/chat history excluded.</div>
-      <div class="crm-brief-summary">${esc(report.executive_summary || 'No executive summary was returned.')}</div>
-      ${metrics.length ? `<div class="crm-brief-metrics">${metrics.slice(0,8).map(m => `<article class="crm-brief-metric"><span>${esc(m.label)}</span><strong>${esc(m.value)}</strong>${m.context ? `<small>${esc(m.context)}</small>` : ''}</article>`).join('')}</div>` : ''}
-      ${sectionMarkup('Management Takeaways', '🎯', report.management_takeaways)}
-      ${sectionMarkup('Pipeline Health', '📊', report.pipeline_health)}
-      ${sectionMarkup('Immediate Attention', '🔴', report.immediate_attention)}
-      ${sectionMarkup('Follow-ups', '🟠', report.follow_ups)}
-      ${sectionMarkup('Opportunities', '🟢', report.opportunities)}
-      ${sectionMarkup('Proposal Watch', '📄', report.proposal_watch)}
-      ${sectionMarkup('Team Execution', '👥', report.team_execution)}
-      ${sectionMarkup('Data Quality', '🧹', report.data_quality)}
-      ${sectionMarkup('What Changed', '📌', report.recent_activity)}
-      ${sectionMarkup('Upcoming 7 Days', '📅', report.upcoming)}
+
+      <div class="crm-brief-section-grid crm-brief-section-grid--lead">
+        ${sectionMarkup('Management Takeaways', '🎯', report.management_takeaways, 'takeaways')}
+        ${sectionMarkup('Pipeline Health', '📊', report.pipeline_health, 'pipeline')}
+      </div>
+
+      <div class="crm-brief-section-grid">
+        ${sectionMarkup('Immediate Attention', '🔴', report.immediate_attention, 'attention')}
+        ${sectionMarkup('Follow-ups', '🟠', report.follow_ups, 'followups')}
+        ${sectionMarkup('Opportunities', '🟢', report.opportunities, 'opportunities')}
+        ${sectionMarkup('Proposal Watch', '📄', report.proposal_watch, 'proposals')}
+        ${sectionMarkup('Team Execution', '👥', report.team_execution, 'team')}
+        ${sectionMarkup('Data Quality', '🧹', report.data_quality, 'quality')}
+        ${sectionMarkup('What Changed', '📌', report.recent_activity, 'activity')}
+        ${sectionMarkup('Upcoming 7 Days', '📅', report.upcoming, 'upcoming')}
+      </div>
     `;
+  }
+
+  function pdfItemMarkup(item = {}) {
+    const priority = ['high','medium','low'].includes(clean(item.priority).toLowerCase()) ? clean(item.priority).toLowerCase() : 'low';
+    const entityNumber = clean(item.entity_number);
+    const entityType = clean(item.entity_type);
+    const entity = entityNumber || (entityType && entityType !== 'none' ? entityType.replace(/_/g, ' ') : '');
+    return `<div class="pdf-item pdf-item-${esc(priority)}">
+      <div class="pdf-item-head">
+        <strong>${esc(item.title || 'CRM item')}</strong>
+        <span class="pdf-priority">${esc(priority.toUpperCase())}</span>
+      </div>
+      ${item.detail ? `<p>${esc(item.detail)}</p>` : ''}
+      ${item.recommended_action ? `<div class="pdf-callout"><b>Recommended action:</b> ${esc(item.recommended_action)}</div>` : ''}
+      ${item.evidence ? `<div class="pdf-evidence"><b>Evidence:</b> ${esc(item.evidence)}</div>` : ''}
+      ${entity ? `<div class="pdf-entity">${esc(entity)}</div>` : ''}
+    </div>`;
+  }
+
+  function pdfSection(title, items) {
+    const list = Array.isArray(items) ? items : [];
+    return `<section class="pdf-section">
+      <div class="pdf-section-title"><h2>${esc(title)}</h2><span>${list.length}</span></div>
+      ${list.length ? list.map(pdfItemMarkup).join('') : '<div class="pdf-empty">Nothing material in this section.</div>'}
+    </section>`;
+  }
+
+  function buildPdfDocument(row) {
+    const report = row?.report || {};
+    const metrics = Array.isArray(report.key_metrics) ? report.key_metrics.slice(0, 8) : [];
+    const titleDate = formatDate(row?.report_date);
+    const generated = formatDateTime(row?.generated_at);
+    const generatedBy = row?.generated_by_name ? ` by ${esc(row.generated_by_name)}` : '';
+    const cost = state.isAdmin ? `<span>Estimated AI cost: $${Number(row?.estimated_cost_usd || 0).toFixed(4)}</span>` : '';
+    const sections = [
+      ['Management Takeaways', report.management_takeaways],
+      ['Pipeline Health', report.pipeline_health],
+      ['Immediate Attention', report.immediate_attention],
+      ['Follow-ups', report.follow_ups],
+      ['Opportunities', report.opportunities],
+      ['Proposal Watch', report.proposal_watch],
+      ['Team Execution', report.team_execution],
+      ['Data Quality', report.data_quality],
+      ['What Changed', report.recent_activity],
+      ['Upcoming 7 Days', report.upcoming],
+    ];
+
+    return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CRM-Daily-Brief-${esc(row?.report_date || todayLocal())}</title>
+<style>
+  @page{size:A4;margin:12mm 11mm 14mm}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#fff;color:#172033;font-family:Arial,Helvetica,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body{font-size:10.5px;line-height:1.45}
+  .pdf-wrap{max-width:188mm;margin:0 auto}
+  .pdf-header{border:1px solid #dbe4f0;border-radius:12px;padding:14px 16px;background:#f7f9fc;margin-bottom:10px}
+  .pdf-brand{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#335eea;font-weight:700}
+  h1{font-size:23px;line-height:1.1;margin:4px 0 4px;color:#10213d}
+  .pdf-date{font-size:12px;font-weight:700;color:#334155}
+  .pdf-meta{margin-top:5px;color:#64748b;font-size:8.5px}
+  .pdf-meta span{margin-right:12px}
+  .pdf-policy{margin-top:9px;padding-top:8px;border-top:1px solid #dbe4f0;color:#64748b;font-size:8.4px}
+  .pdf-summary{margin:10px 0;padding:12px 14px;border:1px solid #cfdcff;border-left:4px solid #335eea;border-radius:10px;background:#f6f8ff}
+  .pdf-summary-label{font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:#335eea;font-weight:700;margin-bottom:4px}
+  .pdf-summary p{margin:0;font-size:11px;line-height:1.5}
+  .pdf-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:10px 0 12px}
+  .pdf-metric{border:1px solid #dbe4f0;border-radius:9px;padding:8px;min-height:50px;break-inside:avoid}
+  .pdf-metric span{display:block;color:#64748b;font-size:7.5px;text-transform:uppercase;letter-spacing:.04em}
+  .pdf-metric strong{display:block;font-size:15px;color:#10213d;margin:2px 0}
+  .pdf-metric small{display:block;font-size:7.5px;color:#718096;line-height:1.3}
+  .pdf-section{margin:11px 0;break-inside:auto}
+  .pdf-section-title{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #e7edf5;padding-bottom:4px;margin-bottom:6px}
+  .pdf-section-title h2{font-size:12px;margin:0;color:#10213d}
+  .pdf-section-title span{font-size:8px;font-weight:700;color:#64748b;border:1px solid #dbe4f0;border-radius:999px;padding:1px 6px}
+  .pdf-item{border:1px solid #dbe4f0;border-left:3px solid #94a3b8;border-radius:8px;padding:7px 9px;margin:5px 0;break-inside:avoid;page-break-inside:avoid}
+  .pdf-item-high{border-left-color:#c62828}.pdf-item-medium{border-left-color:#b86b00}.pdf-item-low{border-left-color:#1d7a46}
+  .pdf-item-head{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+  .pdf-item-head strong{font-size:9.5px;color:#172033}
+  .pdf-priority{font-size:6.7px;font-weight:700;letter-spacing:.05em;color:#64748b;white-space:nowrap}
+  .pdf-item p{margin:3px 0;color:#334155}
+  .pdf-callout{margin-top:5px;padding:5px 7px;background:#f6f8fb;border-radius:6px;color:#24354d}
+  .pdf-evidence{margin-top:4px;color:#64748b;font-size:8px}
+  .pdf-entity{display:inline-block;margin-top:5px;padding:2px 6px;background:#eef2f7;border-radius:999px;color:#475569;font-size:7.5px;font-weight:700}
+  .pdf-empty{color:#94a3b8;font-style:italic;padding:4px 0}
+  .pdf-footer{margin-top:14px;padding-top:7px;border-top:1px solid #dbe4f0;color:#8793a5;font-size:7.5px;text-align:center}
+  @media print{.pdf-wrap{max-width:none}.pdf-section{orphans:2;widows:2}}
+</style>
+</head>
+<body>
+<div class="pdf-wrap">
+  <header class="pdf-header">
+    <div class="pdf-brand">Monitor Core - Internal Management Report</div>
+    <h1>AI CRM Daily Brief</h1>
+    <div class="pdf-date">${esc(titleDate)}</div>
+    <div class="pdf-meta">
+      <span>Generated ${esc(generated)}${generatedBy}</span>
+      <span>Model: ${esc(row?.model || 'OpenAI')}</span>
+      ${cost}
+    </div>
+    <div class="pdf-policy">Source policy: structured ERP facts only. Salesperson notes, free-text notes, private chats and ChatGPT history are excluded.</div>
+  </header>
+
+  <section class="pdf-summary">
+    <div class="pdf-summary-label">Executive summary</div>
+    <p>${esc(report.executive_summary || 'No executive summary was returned.')}</p>
+  </section>
+
+  ${metrics.length ? `<div class="pdf-metrics">${metrics.map(metric => `<div class="pdf-metric"><span>${esc(metric.label)}</span><strong>${esc(metric.value)}</strong>${metric.context ? `<small>${esc(metric.context)}</small>` : ''}</div>`).join('')}</div>` : ''}
+
+  ${sections.map(([title, items]) => pdfSection(title, items)).join('')}
+
+  <footer class="pdf-footer">Shared CRM Daily Brief - generated from the saved ERP report. Exporting does not trigger a new AI generation.</footer>
+</div>
+</body>
+</html>`;
+  }
+
+  function printPdfDocument(html) {
+    const printWindow = global.open('', '_blank', 'width=1024,height=900');
+    if (printWindow && printWindow.document) {
+      printWindow.document.open();
+      printWindow.document.write(html);
+      printWindow.document.close();
+      const printNow = () => {
+        try {
+          printWindow.focus();
+          printWindow.print();
+        } catch (error) {
+          console.error('[CRM Daily Brief] PDF print failed', error);
+        }
+      };
+      setTimeout(printNow, 300);
+      return true;
+    }
+
+    try {
+      const frame = document.createElement('iframe');
+      frame.setAttribute('aria-hidden', 'true');
+      frame.style.position = 'fixed';
+      frame.style.right = '0';
+      frame.style.bottom = '0';
+      frame.style.width = '1px';
+      frame.style.height = '1px';
+      frame.style.opacity = '0';
+      frame.style.pointerEvents = 'none';
+      document.body.appendChild(frame);
+      const frameDoc = frame.contentDocument || frame.contentWindow?.document;
+      if (!frameDoc || !frame.contentWindow) throw new Error('Print frame unavailable');
+      frameDoc.open();
+      frameDoc.write(html);
+      frameDoc.close();
+      setTimeout(() => {
+        try {
+          frame.contentWindow.focus();
+          frame.contentWindow.print();
+          notify('Print dialog opened. Choose Save as PDF to export the report.');
+        } finally {
+          setTimeout(() => frame.remove(), 1500);
+        }
+      }, 350);
+      return true;
+    } catch (error) {
+      console.error('[CRM Daily Brief] PDF export fallback failed', error);
+      return false;
+    }
+  }
+
+  function exportSelectedPdf() {
+    const row = selectedReport();
+    if (!row) {
+      notify('No saved CRM brief is available to export.', 'error');
+      return;
+    }
+    const ok = printPdfDocument(buildPdfDocument(row));
+    if (ok) notify('PDF export opened. Choose Save as PDF in the print dialog.');
+    else notify('Unable to open the PDF export. Please allow pop-ups and try again.', 'error');
   }
 
   function renderError() {
@@ -342,6 +557,7 @@
 
   function wireView() {
     document.getElementById('crmBriefGenerateBtn')?.addEventListener('click', () => void generateToday());
+    document.getElementById('crmBriefExportBtn')?.addEventListener('click', exportSelectedPdf);
     document.getElementById('crmBriefRefreshBtn')?.addEventListener('click', () => void loadReports());
     document.getElementById('crmBriefHistory')?.addEventListener('click', event => {
       const id = event.target?.closest?.('[data-crm-brief-id]')?.getAttribute('data-crm-brief-id');
@@ -417,7 +633,13 @@
   }, true);
 
   global.addEventListener('focus', () => { if (state.installed) checkAccess(); });
-  global.InCheck360CrmDailyBrief = Object.freeze({ version: VERSION, open: openView, refresh: loadReports, state });
+  global.InCheck360CrmDailyBrief = Object.freeze({
+    version: VERSION,
+    open: openView,
+    refresh: loadReports,
+    exportPdf: exportSelectedPdf,
+    state,
+  });
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
   else boot();
