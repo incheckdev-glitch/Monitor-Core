@@ -4,8 +4,8 @@ export const config = { maxDuration: 60 };
 
 const SB_URL = 'https://rewgbmfcrbgkzxcbrxjy.supabase.co';
 const MODEL = 'gpt-5.6-luna';
-const PROMPT_VERSION = 'crm-daily-brief-v2-structured';
-const MAX_OUTPUT_TOKENS = 4200;
+const PROMPT_VERSION = 'crm-daily-brief-v3-reliable';
+const MAX_OUTPUT_TOKENS = 8000;
 
 const clean = value => String(value ?? '').replace(/\s+/g, ' ').trim();
 
@@ -55,6 +55,16 @@ function outputText(payload = {}) {
     .filter(item => item?.type === 'output_text')
     .map(item => item.text || '')
     .join('\n')
+    .trim();
+}
+
+function refusalText(payload = {}) {
+  return (payload.output || [])
+    .flatMap(item => item?.type === 'message' ? (item.content || []) : [])
+    .filter(item => item?.type === 'refusal')
+    .map(item => item.refusal || item.text || '')
+    .filter(Boolean)
+    .join(' ')
     .trim();
 }
 
@@ -131,7 +141,7 @@ async function callOpenAI(snapshot, reportDate) {
   if (!key) throw Object.assign(new Error('OpenAI is not configured yet.'), { status: 503 });
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 50000);
+  const timer = setTimeout(() => controller.abort(), 52000);
   try {
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
@@ -140,7 +150,7 @@ async function callOpenAI(snapshot, reportDate) {
       body: JSON.stringify({
         model: MODEL,
         store: false,
-        reasoning: { effort: 'medium' },
+        reasoning: { effort: 'low' },
         instructions: `You create a management-grade shared CRM Daily Brief for the internal Monitor Core ERP.
 
 SOURCE POLICY — mandatory:
@@ -163,24 +173,54 @@ ANALYSIS RULES:
 - Management Takeaways should be the 3–5 most decision-useful conclusions.
 - Avoid repeating the same record across many sections unless it is genuinely critical.
 - Every entity_id/entity_number must come exactly from the supplied snapshot. For aggregated observations use entity_type pipeline/team/data_quality and empty entity_id/entity_number.
-- Evidence must quote the structured fact in plain language, e.g. “Follow-up was due 2026-09-10” or “4 active deals have no next follow-up.”
+- Evidence must state the structured fact in plain language, e.g. “Follow-up was due 2026-09-10” or “4 active deals have no next follow-up.”
 - Keep language concise, factual and action-oriented.`,
         input: `Report date: ${reportDate}\nStructured CRM snapshot:\n${JSON.stringify(snapshot)}`,
         text: { format: FORMAT, verbosity: 'medium' },
         max_output_tokens: MAX_OUTPUT_TOKENS,
-        prompt_cache_key: 'monitor-core-crm-daily-brief-v2-structured',
+        prompt_cache_key: 'monitor-core-crm-daily-brief-v3-reliable',
         metadata: { purpose: 'crm_daily_brief', report_date: reportDate, prompt_version: PROMPT_VERSION },
       }),
     });
+
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
       throw Object.assign(new Error(clean(payload?.error?.message) || `OpenAI request failed (${response.status}).`), { status: 502 });
     }
+
+    const refusal = refusalText(payload);
+    if (refusal) {
+      throw Object.assign(new Error('OpenAI declined to generate this CRM brief.'), { status: 502 });
+    }
+
+    if (payload?.status === 'incomplete') {
+      const reason = clean(payload?.incomplete_details?.reason) || 'unknown_reason';
+      const message = reason === 'max_output_tokens'
+        ? 'CRM Daily Brief reached the model output limit before the structured report was complete. Please retry.'
+        : `CRM Daily Brief generation was incomplete (${reason}). Please retry.`;
+      throw Object.assign(new Error(message), { status: 502 });
+    }
+
+    if (payload?.status && payload.status !== 'completed') {
+      throw Object.assign(new Error(`CRM Daily Brief generation did not complete (${payload.status}). Please retry.`), { status: 502 });
+    }
+
     const text = outputText(payload);
     if (!text) throw Object.assign(new Error('OpenAI returned an empty CRM brief.'), { status: 502 });
+
     let report;
-    try { report = JSON.parse(text); }
-    catch { throw Object.assign(new Error('OpenAI returned an invalid CRM brief format.'), { status: 502 }); }
+    try {
+      report = JSON.parse(text);
+    } catch (parseError) {
+      console.error('[CRM Daily Brief] Structured output parse failure', {
+        responseId: payload?.id || '',
+        status: payload?.status || '',
+        incompleteReason: payload?.incomplete_details?.reason || '',
+        outputLength: text.length,
+      });
+      throw Object.assign(new Error('OpenAI returned an unreadable structured CRM brief. Please retry.'), { status: 502 });
+    }
+
     return { report, usage: payload.usage || {}, responseId: payload.id || '' };
   } catch (error) {
     if (error?.name === 'AbortError') throw Object.assign(new Error('CRM Daily Brief generation timed out. Please retry.'), { status: 504 });
