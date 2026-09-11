@@ -1,0 +1,42 @@
+/* Agreement View: single provider signer presentation only.
+   Keeps all legacy form fields in the DOM for agreement JS compatibility. */
+
+#agreementForm .signatory-column:has(#agreementFormProviderOfficialSignatory1Name) h4 {
+  font-size: 0;
+}
+
+#agreementForm .signatory-column:has(#agreementFormProviderOfficialSignatory1Name) h4::after {
+  content: 'Provider Official Signatory';
+  font-size: 15px;
+  font-weight: 700;
+}
+
+#agreementForm .signatory-column:has(#agreementFormProviderOfficialSignatory1Name) .agreement-signature-subtitle:first-of-type {
+  font-size: 0;
+}
+
+#agreementForm .signatory-column:has(#agreementFormProviderOfficialSignatory1Name) .agreement-signature-subtitle:first-of-type::after {
+  content: 'General Manager';
+  font-size: 12px;
+  font-weight: 700;
+}
+
+#agreementForm .signatory-column:has(#agreementFormProviderOfficialSignatory1Name) .agreement-signature-subtitle ~ .agreement-signature-subtitle {
+  display: none !important;
+}
+
+#agreementForm .filter-row:has(#agreementFormProviderOfficialSignatory2Name),
+#agreementForm .filter-row:has(#agreementFormProviderOfficialSignatory2Title),
+#agreementForm .filter-row:has(#agreementFormProviderOfficialSignatory2SignDate) {
+  display: none !important;
+}
+
+/* Fallback: even without :has(), remove the obsolete controls and labels. */
+#agreementForm label[for='agreementFormProviderOfficialSignatory2Name'],
+#agreementForm label[for='agreementFormProviderOfficialSignatory2Title'],
+#agreementForm label[for='agreementFormProviderOfficialSignatory2SignDate'],
+#agreementForm #agreementFormProviderOfficialSignatory2Name,
+#agreementForm #agreementFormProviderOfficialSignatory2Title,
+#agreementForm #agreementFormProviderOfficialSignatory2SignDate {
+  display: none !important;
+}
