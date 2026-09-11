@@ -5,6 +5,7 @@ import './sidebarLightTheme.js?v=20260904-menulight1';
 import './workspaceModuleFilters.js?v=20260904-modulefilters2';
 import './salesPipelineGuard.js?v=20260910-salespipeline3';
 import './dealProposalTriggerGuard.js?v=20260911-dealproposal1';
+import './crmPipelineProductInterest.js?v=20260911-crm-pipeline-products1';
 import './leadIntelligence.js?v=20260910-leadintel1';
 import './leadIntelligenceBackground.js?v=20260911-li-bg3';
 import './leadIntelligenceContactEnrichment.js?v=20260911-li-contact2';
