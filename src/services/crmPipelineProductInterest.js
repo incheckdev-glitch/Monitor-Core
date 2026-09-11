@@ -2,10 +2,11 @@
   'use strict';
   if (global.InCheck360CrmPipelineProductInterest) return;
 
-  const VERSION = '20260911-crm-pipeline-products2';
+  const VERSION = '20260911-crm-pipeline-products3';
   const LEAD_STATUS_ROWS = [
     ['Not Contacted Yet', 'not contacted yet'],
     ['Not Available', 'not available'],
+    ['Engaged', 'engaged'],
     ['Meeting Booked', 'meeting booked'],
     ['Meeting Done', 'meeting done'],
     ['Negotiation', 'negotiation'],
@@ -30,6 +31,7 @@
     if (!s || ['new','open','not contacted'].includes(s)) return 'not contacted yet';
     if (['disregard','disregarded','irrelevant','not relevant'].includes(s)) return 'disregard';
     if (['not available','unavailable'].includes(s)) return 'not available';
+    if (['engaged','contacted','connected','in contact','initial contact'].includes(s)) return 'engaged';
     if (['meeting booked','meeting scheduled','booked'].includes(s)) return 'meeting booked';
     if (['meeting done','meeting completed','met'].includes(s)) return 'meeting done';
     if (s.includes('negotiat')) return 'negotiation';
@@ -54,6 +56,15 @@
     const opts = all ? ['All', ...values] : values;
     el.innerHTML = opts.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
     if (opts.includes(selected)) el.value = selected;
+  }
+
+  function rewriteLeadStatusSelect(id, selected, all=false) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const opts = all ? [['All','All'], ...LEAD_STATUS_ROWS] : LEAD_STATUS_ROWS;
+    el.innerHTML = opts.map(([label,value]) => `<option value="${esc(value)}">${esc(label)}</option>`).join('');
+    const normalized = selected === 'All' ? 'All' : leadStatus(selected);
+    if (opts.some(([,value]) => value === normalized)) el.value = normalized;
   }
 
   function wrap(obj, name, marker, factory) {
@@ -167,7 +178,7 @@
     for (const item of desired) {
       let lane = laneByKey.get(item.key);
       if (!lane) {
-        const tone = item.key === 'lost' ? 'danger' : item.key === 'disregard' ? 'neutral' : ['qualified','proposal'].includes(item.key) ? 'success' : ['negotiation','poc','meeting booked'].includes(item.key) ? 'warning' : 'neutral';
+        const tone = item.key === 'lost' ? 'danger' : item.key === 'disregard' ? 'neutral' : ['qualified','proposal'].includes(item.key) ? 'success' : ['engaged','negotiation','poc','meeting booked'].includes(item.key) ? 'warning' : 'neutral';
         lane = makeLane(item.label, tone);
         laneByKey.set(item.key, lane);
       }
@@ -234,21 +245,21 @@
     L.matchesOpenStatus = s => !['lost','disregard'].includes(norm(leadStatus(s)));
     L.leadStatusChip = function(status='') {
       const s = leadStatus(status);
-      const variant = s === 'lost' ? 'danger' : s === 'disregard' ? 'neutral' : ['meeting done','qualified'].includes(s) ? 'success' : ['meeting booked','negotiation'].includes(s) ? 'info' : s === 'not available' ? 'warning' : 'neutral';
+      const variant = s === 'lost' ? 'danger' : s === 'disregard' ? 'neutral' : ['meeting done','qualified'].includes(s) ? 'success' : ['engaged','meeting booked','negotiation'].includes(s) ? 'info' : s === 'not available' ? 'warning' : 'neutral';
       return this.leadChip(s, variant);
     };
-    wrap(L,'syncLeadFormDropdowns','__crmDisregardForm2',original=>function(selected={}) {
+    wrap(L,'syncLeadFormDropdowns','__crmDisregardForm3',original=>function(selected={}) {
       const r = original.call(this,{...selected,status:leadStatus(selected?.status)});
-      rewriteSelect('leadFormStatus',LEAD_STATUSES,leadStatus(document.getElementById('leadFormStatus')?.value || selected?.status || 'not contacted yet'));
+      rewriteLeadStatusSelect('leadFormStatus', document.getElementById('leadFormStatus')?.value || selected?.status || 'not contacted yet');
       return r;
     });
-    wrap(L,'renderFilters','__crmDisregardFilters2',original=>function(...args) {
+    wrap(L,'renderFilters','__crmDisregardFilters3',original=>function(...args) {
       const r = original.apply(this,args);
       const selected = this.state?.status === 'All' ? 'All' : leadStatus(this.state?.status || 'All');
-      rewriteSelect('leadsStatusFilter',LEAD_STATUSES,selected,true);
+      rewriteLeadStatusSelect('leadsStatusFilter', selected, true);
       return r;
     });
-    wrap(L,'computeLeadAnalytics','__crmExpandedLeadAnalytics2',original=>function(leads=[]) {
+    wrap(L,'computeLeadAnalytics','__crmExpandedLeadAnalytics3',original=>function(leads=[]) {
       const analytics = original.call(this,leads) || {};
       const statusBreakdown = Object.fromEntries(LEAD_STATUSES.map(key => [key,0]));
       for (const row of Array.isArray(leads) ? leads : []) {
@@ -256,18 +267,19 @@
         if (Object.prototype.hasOwnProperty.call(statusBreakdown,status)) statusBreakdown[status] += 1;
       }
       analytics.statusBreakdown = statusBreakdown;
+      analytics.engagedCount = statusBreakdown.engaged;
       analytics.meetingBookedCount = statusBreakdown['meeting booked'];
       analytics.meetingDoneCount = statusBreakdown['meeting done'];
       analytics.disregardCount = statusBreakdown.disregard;
       return analytics;
     });
-    wrap(L,'renderLeadAnalytics','__crmExpandedLeadDashboard2',original=>function(analytics) {
+    wrap(L,'renderLeadAnalytics','__crmExpandedLeadDashboard3',original=>function(analytics) {
       const r = original.call(this,analytics);
       const safe = analytics || this.computeLeadAnalytics([]);
       renderLeadStatusDistribution(safe);
       return r;
     });
-    wrap(L,'render','__crmLeadGridReconcile2',original=>function(...args) {
+    wrap(L,'render','__crmLeadGridReconcile3',original=>function(...args) {
       const r = original.apply(this,args);
       scheduleReconcile();
       return r;
@@ -291,43 +303,43 @@
       const variant = s === 'Lost' ? 'danger' : s === 'Proposal' ? 'success' : ['POC','Negotiation'].includes(s) ? 'info' : 'neutral';
       return this.dealChip(s, variant);
     };
-    wrap(D,'normalizeDeal','__crmProductsNormalize2',original=>function(raw={}) {
+    wrap(D,'normalizeDeal','__crmProductsNormalize3',original=>function(raw={}) {
       const row = original.call(this,raw) || {};
       row.stage = dealStage(raw?.stage ?? row.stage);
       row.interested_product_ids = ids(raw?.interested_product_ids ?? row.interested_product_ids);
       return row;
     });
-    wrap(D,'backendDeal','__crmProductsBackend2',original=>function(deal={},options={}) {
+    wrap(D,'backendDeal','__crmProductsBackend3',original=>function(deal={},options={}) {
       const payload = original.call(this,deal,options) || {};
       if (Object.prototype.hasOwnProperty.call(deal,'stage')) payload.stage = dealStage(deal.stage);
       if (Object.prototype.hasOwnProperty.call(deal,'interested_product_ids')) payload.interested_product_ids = ids(deal.interested_product_ids);
       return payload;
     });
-    wrap(D,'collectFormData','__crmProductsCollect2',original=>function(...args) {
+    wrap(D,'collectFormData','__crmProductsCollect3',original=>function(...args) {
       const row = original.apply(this,args) || {};
       row.stage = dealStage(row.stage);
       row.interested_product_ids = selectedProducts();
       return row;
     });
-    wrap(D,'syncDealFormDropdowns','__crmProposalStageForm2',original=>function(selected={}) {
+    wrap(D,'syncDealFormDropdowns','__crmProposalStageForm3',original=>function(selected={}) {
       const stage = dealStage(selected?.stage || document.getElementById('dealFormStage')?.value || 'In Progress');
       const r = original.call(this,{...selected,stage});
       rewriteSelect('dealFormStage',DEAL_STAGES,stage);
       return r;
     });
-    wrap(D,'renderFilters','__crmProposalStageFilters2',original=>function(...args) {
+    wrap(D,'renderFilters','__crmProposalStageFilters3',original=>function(...args) {
       const r = original.apply(this,args);
       const stage = this.state?.stage === 'All' ? 'All' : dealStage(this.state?.stage || 'All');
       rewriteSelect('dealsStageFilter',DEAL_STAGES,stage,true);
       return r;
     });
-    wrap(D,'renderDealAnalytics','__crmProposalStageDashboard2',original=>function(analytics) {
+    wrap(D,'renderDealAnalytics','__crmProposalStageDashboard3',original=>function(analytics) {
       const r = original.call(this,analytics);
       const safe = analytics || this.computeDealAnalytics([]);
       renderDealStageDistribution(this,safe);
       return r;
     });
-    wrap(D,'openForm','__crmProductsOpenForm2',original=>async function(row=null) {
+    wrap(D,'openForm','__crmProductsOpenForm3',original=>async function(row=null) {
       const r = await original.call(this,row);
       ensureProductField();
       await loadCatalog();
@@ -337,7 +349,7 @@
       rewriteSelect('dealFormStage',DEAL_STAGES,stage);
       return r;
     });
-    wrap(D,'render','__crmDealGridReconcile2',original=>function(...args) {
+    wrap(D,'render','__crmDealGridReconcile3',original=>function(...args) {
       const r = original.apply(this,args);
       scheduleReconcile();
       return r;
