@@ -4,8 +4,8 @@ export const config = { maxDuration: 60 };
 
 const SB_URL = 'https://rewgbmfcrbgkzxcbrxjy.supabase.co';
 const MODEL = 'gpt-5.6-luna';
-const PROMPT_VERSION = 'crm-daily-brief-v1';
-const MAX_OUTPUT_TOKENS = 2600;
+const PROMPT_VERSION = 'crm-daily-brief-v2-structured';
+const MAX_OUTPUT_TOKENS = 4200;
 
 const clean = value => String(value ?? '').replace(/\s+/g, ' ').trim();
 
@@ -29,7 +29,7 @@ async function auth(req) {
   const db = serverClient(token);
   const { data, error } = await db.auth.getUser(token);
   if (error || !data?.user) throw Object.assign(new Error('Your session is invalid or expired.'), { status: 401 });
-  return { db, user: data.user, token };
+  return { db, user: data.user };
 }
 
 async function requireView(a) {
@@ -73,7 +73,7 @@ const ITEM_FIELDS = {
   title: { type: 'string' },
   detail: { type: 'string' },
   recommended_action: { type: 'string' },
-  entity_type: { type: 'string', enum: ['lead', 'deal', 'proposal', 'calendar_event', 'company', 'contact', 'none'] },
+  entity_type: { type: 'string', enum: ['lead', 'deal', 'proposal', 'calendar_event', 'company', 'contact', 'team', 'pipeline', 'data_quality', 'none'] },
   entity_id: { type: 'string' },
   entity_number: { type: 'string' },
   evidence: { type: 'string' },
@@ -86,6 +86,17 @@ const ITEM_SCHEMA = {
   properties: ITEM_FIELDS,
 };
 
+const METRIC_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['label', 'value', 'context'],
+  properties: {
+    label: { type: 'string' },
+    value: { type: 'string' },
+    context: { type: 'string' },
+  },
+};
+
 const FORMAT = {
   type: 'json_schema',
   name: 'crm_daily_brief',
@@ -93,22 +104,24 @@ const FORMAT = {
   schema: {
     type: 'object',
     additionalProperties: false,
-    required: ['executive_summary', 'key_metrics', 'immediate_attention', 'follow_ups', 'opportunities', 'recent_activity', 'upcoming'],
+    required: [
+      'executive_summary', 'management_takeaways', 'key_metrics', 'pipeline_health',
+      'immediate_attention', 'follow_ups', 'opportunities', 'proposal_watch',
+      'team_execution', 'data_quality', 'recent_activity', 'upcoming'
+    ],
     properties: {
       executive_summary: { type: 'string' },
-      key_metrics: {
-        type: 'array', maxItems: 6,
-        items: {
-          type: 'object', additionalProperties: false,
-          required: ['label', 'value'],
-          properties: { label: { type: 'string' }, value: { type: 'string' } },
-        },
-      },
-      immediate_attention: { type: 'array', maxItems: 8, items: ITEM_SCHEMA },
+      management_takeaways: { type: 'array', maxItems: 5, items: ITEM_SCHEMA },
+      key_metrics: { type: 'array', maxItems: 8, items: METRIC_SCHEMA },
+      pipeline_health: { type: 'array', maxItems: 8, items: ITEM_SCHEMA },
+      immediate_attention: { type: 'array', maxItems: 10, items: ITEM_SCHEMA },
       follow_ups: { type: 'array', maxItems: 10, items: ITEM_SCHEMA },
       opportunities: { type: 'array', maxItems: 8, items: ITEM_SCHEMA },
+      proposal_watch: { type: 'array', maxItems: 8, items: ITEM_SCHEMA },
+      team_execution: { type: 'array', maxItems: 8, items: ITEM_SCHEMA },
+      data_quality: { type: 'array', maxItems: 8, items: ITEM_SCHEMA },
       recent_activity: { type: 'array', maxItems: 10, items: ITEM_SCHEMA },
-      upcoming: { type: 'array', maxItems: 8, items: ITEM_SCHEMA },
+      upcoming: { type: 'array', maxItems: 10, items: ITEM_SCHEMA },
     },
   },
 };
@@ -118,7 +131,7 @@ async function callOpenAI(snapshot, reportDate) {
   if (!key) throw Object.assign(new Error('OpenAI is not configured yet.'), { status: 503 });
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 45000);
+  const timer = setTimeout(() => controller.abort(), 50000);
   try {
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
@@ -127,12 +140,35 @@ async function callOpenAI(snapshot, reportDate) {
       body: JSON.stringify({
         model: MODEL,
         store: false,
-        reasoning: { effort: 'low' },
-        instructions: `You create the shared daily CRM management brief for the internal Monitor Core ERP. Use ONLY the supplied CRM snapshot. Do not browse the web and do not invent facts, dates, statuses, values, people, IDs, or actions already completed. Prioritize overdue follow-ups, stale records, proposal deadlines, high-priority/qualified opportunities, meaningful status changes, and upcoming CRM meetings/calls. Keep the brief concise and operational. Every referenced entity_id and entity_number must come exactly from the supplied snapshot; otherwise use entity_type "none" and empty strings. Evidence must briefly state the source fact that justified the item. Recent activity describes what happened; recommended_action may be empty when no action is needed. This report is shared across CRM users, so avoid speculation and clearly distinguish fact from recommendation.`,
-        input: `Report date: ${reportDate}\nCRM source snapshot:\n${JSON.stringify(snapshot)}`,
-        text: { format: FORMAT, verbosity: 'low' },
+        reasoning: { effort: 'medium' },
+        instructions: `You create a management-grade shared CRM Daily Brief for the internal Monitor Core ERP.
+
+SOURCE POLICY — mandatory:
+- Use ONLY the supplied structured CRM snapshot.
+- Never use, request, mention, summarize, infer from, or refer to salesperson notes, free-text CRM notes, proposal internal notes, lifecycle notes/change reasons, email bodies, messages, chat logs, ChatGPT history, conversation history, or private user history.
+- The snapshot intentionally excludes those sources. Do not imply that you reviewed them.
+- Do not browse the web.
+- Do not invent facts, dates, values, people, statuses, activity, intent, probability, or completed actions.
+
+REPORT GOAL:
+Give management a useful daily operational picture, not a generic summary. Explain what changed, where execution is weak, what requires follow-up, where opportunities are progressing, which proposals need attention, whether the pipeline is healthy, where ownership/follow-up discipline is weak, and what is coming in the next 7 days.
+
+ANALYSIS RULES:
+- Prioritize objective signals: overdue follow-up dates, missing next follow-up, inactivity age, status/stage distribution, structured status transitions, proposal expiry/value/status, conversions, calendar activity, ownership, priority, estimated value, and data completeness.
+- Compare signals across the snapshot when useful, but never manufacture a trend that is not supported.
+- Team Execution may use structured owner assignment and counts only. Do not judge individuals based on notes, chats, writing style, or private behavior.
+- Data Quality should surface missing owner/contact/follow-up/value fields when material.
+- Pipeline Health should summarize concentration, inactivity, stage/status mix, follow-up discipline, and value where the snapshot supports it.
+- Proposal Watch should focus on sent/pending proposals, approaching/past validity dates, accepted/rejected movement, and commercial value.
+- Management Takeaways should be the 3–5 most decision-useful conclusions.
+- Avoid repeating the same record across many sections unless it is genuinely critical.
+- Every entity_id/entity_number must come exactly from the supplied snapshot. For aggregated observations use entity_type pipeline/team/data_quality and empty entity_id/entity_number.
+- Evidence must quote the structured fact in plain language, e.g. “Follow-up was due 2026-09-10” or “4 active deals have no next follow-up.”
+- Keep language concise, factual and action-oriented.`,
+        input: `Report date: ${reportDate}\nStructured CRM snapshot:\n${JSON.stringify(snapshot)}`,
+        text: { format: FORMAT, verbosity: 'medium' },
         max_output_tokens: MAX_OUTPUT_TOKENS,
-        prompt_cache_key: 'monitor-core-crm-daily-brief-v1',
+        prompt_cache_key: 'monitor-core-crm-daily-brief-v2-structured',
         metadata: { purpose: 'crm_daily_brief', report_date: reportDate, prompt_version: PROMPT_VERSION },
       }),
     });
@@ -174,6 +210,11 @@ async function generate(a, req) {
   const snapshotResult = await a.db.rpc('crm_daily_brief_source_snapshot', { p_as_of: new Date().toISOString() });
   if (snapshotResult.error) throw snapshotResult.error;
   const snapshot = snapshotResult.data || {};
+
+  const policy = snapshot?.source_policy || {};
+  if (policy.structured_crm_only !== true || policy.salesperson_notes_excluded !== true || policy.chat_history_excluded !== true) {
+    throw Object.assign(new Error('CRM Daily Brief source policy is not safe to generate.'), { status: 500 });
+  }
 
   const ai = await callOpenAI(snapshot, reportDate);
   const usage = ai.usage || {};

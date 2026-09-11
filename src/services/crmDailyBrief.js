@@ -3,7 +3,7 @@
 
   if (global.InCheck360CrmDailyBrief) return;
 
-  const VERSION = '20260911-crm-daily-brief1';
+  const VERSION = '20260911-crm-daily-brief2';
   const TAB_ID = 'crmDailyBriefTab';
   const VIEW_ID = 'crmDailyBriefView';
   const CSS_ID = 'crm-daily-brief-css';
@@ -74,9 +74,10 @@
       <div class="crm-brief-shell">
         <section class="crm-brief-hero">
           <div>
-            <div class="crm-brief-eyebrow">CRM · Shared AI Intelligence</div>
+            <div class="crm-brief-eyebrow">CRM · Shared Management Intelligence</div>
             <h1>AI CRM Daily Brief</h1>
-            <p>One saved CRM report shared with the team. Opening or refreshing this page does not create another AI request.</p>
+            <p>One richer daily report shared with the CRM team. It is generated from structured ERP facts only.</p>
+            <p class="muted">Salesperson notes, free-text notes, private chats and ChatGPT history are excluded from the AI source.</p>
           </div>
           <div class="crm-brief-hero-actions">
             <span id="crmBriefStatus" class="crm-brief-status">Loading saved brief…</span>
@@ -260,16 +261,26 @@
     host.innerHTML = `
       ${!isToday ? `<div class="crm-brief-banner">No report has been generated for today yet. Showing the latest saved CRM brief.</div>` : ''}
       <div class="crm-brief-report-head">
-        <div><div class="crm-brief-eyebrow">Shared CRM Brief</div><h2>${esc(formatDate(row.report_date))}</h2><div class="crm-brief-report-meta">Generated ${esc(formatDateTime(row.generated_at))}${row.generated_by_name ? ` by ${esc(row.generated_by_name)}` : ''} · ${esc(row.model || 'OpenAI')}</div></div>
+        <div>
+          <div class="crm-brief-eyebrow">Structured CRM Intelligence</div>
+          <h2>${esc(formatDate(row.report_date))}</h2>
+          <div class="crm-brief-report-meta">Generated ${esc(formatDateTime(row.generated_at))}${row.generated_by_name ? ` by ${esc(row.generated_by_name)}` : ''} · ${esc(row.model || 'OpenAI')}</div>
+        </div>
         ${state.isAdmin ? `<span class="crm-brief-cost">Est. AI cost $${Number(row.estimated_cost_usd || 0).toFixed(4)}</span>` : ''}
       </div>
+      <div class="crm-brief-banner">Source policy: structured ERP data only · salesperson notes and private/chat history excluded.</div>
       <div class="crm-brief-summary">${esc(report.executive_summary || 'No executive summary was returned.')}</div>
-      ${metrics.length ? `<div class="crm-brief-metrics">${metrics.slice(0,6).map(m => `<article class="crm-brief-metric"><span>${esc(m.label)}</span><strong>${esc(m.value)}</strong></article>`).join('')}</div>` : ''}
+      ${metrics.length ? `<div class="crm-brief-metrics">${metrics.slice(0,8).map(m => `<article class="crm-brief-metric"><span>${esc(m.label)}</span><strong>${esc(m.value)}</strong>${m.context ? `<small>${esc(m.context)}</small>` : ''}</article>`).join('')}</div>` : ''}
+      ${sectionMarkup('Management Takeaways', '🎯', report.management_takeaways)}
+      ${sectionMarkup('Pipeline Health', '📊', report.pipeline_health)}
       ${sectionMarkup('Immediate Attention', '🔴', report.immediate_attention)}
       ${sectionMarkup('Follow-ups', '🟠', report.follow_ups)}
       ${sectionMarkup('Opportunities', '🟢', report.opportunities)}
-      ${sectionMarkup('What Happened', '📌', report.recent_activity)}
-      ${sectionMarkup('Upcoming', '📅', report.upcoming)}
+      ${sectionMarkup('Proposal Watch', '📄', report.proposal_watch)}
+      ${sectionMarkup('Team Execution', '👥', report.team_execution)}
+      ${sectionMarkup('Data Quality', '🧹', report.data_quality)}
+      ${sectionMarkup('What Changed', '📌', report.recent_activity)}
+      ${sectionMarkup('Upcoming 7 Days', '📅', report.upcoming)}
     `;
   }
 
@@ -313,8 +324,8 @@
     renderError();
     const button = document.getElementById('crmBriefGenerateBtn');
     const status = document.getElementById('crmBriefStatus');
-    if (button) { button.disabled = true; button.textContent = 'Generating…'; }
-    if (status) status.textContent = 'AI is preparing the shared report…';
+    if (button) { button.disabled = true; button.textContent = 'Generating richer brief…'; }
+    if (status) status.textContent = 'AI is analyzing structured CRM signals…';
     try {
       const payload = await apiRequest('POST', { report_date: todayLocal() });
       notify(payload?.report?.generation_count > 1 ? "Today's CRM brief regenerated and saved." : "Today's CRM brief generated and saved.");
