@@ -33,7 +33,8 @@ import '../ui/index.js?v=20260910-stability4';
     ['incheck360-employee-calendar-dark-fix-css', '/src/ui/employee-calendar-dark-fix.css?v=20260906-calendardark1'],
     ['incheck360-sidebar-hover-stable-css', '/src/ui/sidebar-hover-stable.css?v=20260907-sidebarhover2'],
     ['monitor-core-dark-mode-consistency-final-css', '/src/ui/dark-mode-consistency-final.css?v=20260907-darkconsistency1'],
-    ['monitor-core-sidebar-permission-visibility-css', '/src/ui/sidebar-permission-visibility.css?v=20260908-permissions1']
+    ['monitor-core-sidebar-permission-visibility-css', '/src/ui/sidebar-permission-visibility.css?v=20260908-permissions1'],
+    ['monitor-core-agreement-single-provider-signer-css', '/src/ui/agreement-single-provider-signer.css?v=20260911-gm-only1']
   ];
 
   for (const [id, href] of styles) {
