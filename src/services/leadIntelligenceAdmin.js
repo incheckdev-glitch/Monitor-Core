@@ -3,11 +3,16 @@
 
   if (global.InCheck360LeadIntelligenceAdmin) return;
 
-  const VERSION = '20260910-li-admin1';
+  const VERSION = '20260911-li-admin-subtab2';
   const PANEL_ID = 'liAdminUsagePanel';
+  const NAV_ID = 'liAdminSubtabs';
+  const RESEARCH_TAB_ID = 'liAdminResearchTab';
+  const ADMIN_TAB_ID = 'liAdminUsageTab';
   const STYLE_ID = 'li-admin-usage-style';
   let loading = false;
   let installed = false;
+  let adminAllowed = false;
+  let activeMode = 'research';
 
   const clean = value => String(value ?? '').replace(/\s+/g, ' ').trim();
   const esc = value => String(value ?? '')
@@ -46,7 +51,13 @@
     const style = document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = `
-      #${PANEL_ID}{margin-top:18px;color:inherit}
+      #${NAV_ID}{display:flex;align-items:center;gap:8px;margin:0 0 16px;padding:5px;border:1px solid rgba(127,127,127,.18);border-radius:12px;background:rgba(127,127,127,.05);width:max-content;max-width:100%}
+      #${NAV_ID}[hidden]{display:none!important}
+      .li-admin-subtab{appearance:none;border:0;background:transparent;color:inherit;padding:8px 13px;border-radius:9px;font:inherit;font-size:.82rem;font-weight:700;cursor:pointer;white-space:nowrap}
+      .li-admin-subtab:hover{background:rgba(127,127,127,.09)}
+      .li-admin-subtab.is-active{background:var(--primary,#2458ff);color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+      .li-shell.li-admin-mode>section:not(#${PANEL_ID}){display:none!important}
+      #${PANEL_ID}{margin-top:0;color:inherit}
       #${PANEL_ID}[hidden]{display:none!important}
       .li-admin-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px;flex-wrap:wrap}
       .li-admin-head h2{margin:2px 0 4px;font-size:1.2rem}
@@ -72,7 +83,7 @@
       .li-admin-warning{margin-top:10px;padding:9px 11px;border-radius:9px;background:rgba(225,145,0,.1);border:1px solid rgba(225,145,0,.25);font-size:.78rem}
       .li-admin-empty{padding:18px;text-align:center;opacity:.7}
       @media(max-width:900px){.li-admin-summary{grid-template-columns:repeat(2,minmax(120px,1fr))}}
-      @media(max-width:520px){.li-admin-summary{grid-template-columns:1fr 1fr}.li-admin-head{display:block}.li-admin-head button{margin-top:10px}}
+      @media(max-width:520px){#${NAV_ID}{width:100%}.li-admin-subtab{flex:1}.li-admin-summary{grid-template-columns:1fr 1fr}.li-admin-head{display:block}.li-admin-head button{margin-top:10px}}
     `;
     document.head.appendChild(style);
   }
@@ -106,21 +117,92 @@
       <p class="li-admin-note">Blank limit = unlimited. Default limits are 10/day, 50/week and 150/month until an Admin/GM saves a custom value. Limits are enforced server-side before a new research run can be created. Periods reset on UTC calendar boundaries. Cost is a conservative estimate from recorded model tokens plus the maximum configured web-search allowance; historical runs with missing usage are flagged.</p>`;
   }
 
+  function getShell() {
+    return document.querySelector('#leadIntelligenceView .li-shell');
+  }
+
+  function updateTabState() {
+    const researchTab = document.getElementById(RESEARCH_TAB_ID);
+    const adminTab = document.getElementById(ADMIN_TAB_ID);
+    const researchActive = activeMode !== 'admin';
+    if (researchTab) {
+      researchTab.classList.toggle('is-active', researchActive);
+      researchTab.setAttribute('aria-selected', researchActive ? 'true' : 'false');
+    }
+    if (adminTab) {
+      adminTab.classList.toggle('is-active', !researchActive);
+      adminTab.setAttribute('aria-selected', !researchActive ? 'true' : 'false');
+    }
+  }
+
+  function setMode(mode) {
+    const shell = getShell();
+    const panel = document.getElementById(PANEL_ID);
+    if (!shell || !panel) return;
+
+    activeMode = mode === 'admin' && adminAllowed ? 'admin' : 'research';
+    shell.classList.toggle('li-admin-mode', activeMode === 'admin');
+    panel.hidden = activeMode !== 'admin';
+    updateTabState();
+  }
+
+  function setAdminAvailable(allowed) {
+    adminAllowed = allowed === true;
+    const nav = document.getElementById(NAV_ID);
+    if (nav) nav.hidden = !adminAllowed;
+    if (!adminAllowed) setMode('research');
+  }
+
+  function wireTabs(nav) {
+    nav.addEventListener('click', event => {
+      if (event.target?.closest?.(`#${RESEARCH_TAB_ID}`)) {
+        setMode('research');
+        return;
+      }
+      if (event.target?.closest?.(`#${ADMIN_TAB_ID}`)) {
+        if (!adminAllowed) return;
+        setMode('admin');
+        void load();
+      }
+    });
+  }
+
   function ensurePanel() {
-    if (document.getElementById(PANEL_ID)) return true;
     const view = document.getElementById('leadIntelligenceView');
-    if (!view) return false;
+    const shell = view?.querySelector?.('.li-shell');
+    if (!view || !shell) return false;
     installStyle();
-    const panel = document.createElement('section');
-    panel.id = PANEL_ID;
-    panel.className = 'li-panel li-admin-usage';
-    panel.hidden = true;
-    panel.innerHTML = panelMarkup();
-    const stats = view.querySelector('.li-stats');
-    if (stats?.parentNode) stats.parentNode.insertBefore(panel, stats.nextSibling);
-    else view.appendChild(panel);
-    wirePanel(panel);
+
+    let nav = document.getElementById(NAV_ID);
+    if (!nav) {
+      nav = document.createElement('div');
+      nav.id = NAV_ID;
+      nav.className = 'li-admin-subtabs';
+      nav.setAttribute('role', 'tablist');
+      nav.setAttribute('aria-label', 'Lead Intelligence sections');
+      nav.hidden = true;
+      nav.innerHTML = `
+        <button id="${RESEARCH_TAB_ID}" class="li-admin-subtab is-active" type="button" role="tab" aria-selected="true">Lead Research</button>
+        <button id="${ADMIN_TAB_ID}" class="li-admin-subtab" type="button" role="tab" aria-selected="false">AI Usage &amp; Limits</button>`;
+      shell.insertBefore(nav, shell.firstChild);
+      wireTabs(nav);
+    }
+
+    let panel = document.getElementById(PANEL_ID);
+    if (!panel) {
+      panel = document.createElement('section');
+      panel.id = PANEL_ID;
+      panel.className = 'li-panel li-admin-usage';
+      panel.setAttribute('role', 'tabpanel');
+      panel.setAttribute('aria-labelledby', ADMIN_TAB_ID);
+      panel.hidden = true;
+      panel.innerHTML = panelMarkup();
+      nav.insertAdjacentElement('afterend', panel);
+      wirePanel(panel);
+    }
+
     installed = true;
+    setMode(activeMode);
     return true;
   }
 
@@ -176,25 +258,27 @@
   }
 
   async function load() {
-    if (loading || !ensurePanel()) return;
+    if (loading || !ensurePanel()) return false;
     const supabase = db();
-    if (!supabase) return;
+    if (!supabase) return false;
     loading = true;
-    const panel = document.getElementById(PANEL_ID);
     const refresh = document.getElementById('liAdminRefresh');
     if (refresh) { refresh.disabled = true; refresh.textContent = 'Refreshing…'; }
     try {
       const { data, error } = await supabase.rpc('lead_intelligence_admin_dashboard');
       if (error) {
-        panel.hidden = true;
+        setAdminAvailable(false);
         if (!/Admin or GM access is required/i.test(clean(error.message))) console.warn('[Lead Intelligence Admin]', error);
-        return;
+        return false;
       }
-      panel.hidden = false;
+      setAdminAvailable(true);
       render(data || []);
+      if (activeMode === 'admin') setMode('admin');
+      return true;
     } catch (error) {
-      if (panel) panel.hidden = true;
+      setAdminAvailable(false);
       console.warn('[Lead Intelligence Admin]', error);
+      return false;
     } finally {
       loading = false;
       if (refresh) { refresh.disabled = false; refresh.textContent = 'Refresh usage'; }
@@ -212,7 +296,7 @@
   async function save(button) {
     const row = button?.closest?.('[data-li-admin-user]');
     const userId = clean(row?.getAttribute('data-li-admin-user'));
-    if (!row || !userId) return;
+    if (!row || !userId || !adminAllowed) return;
     const supabase = db();
     if (!supabase) return;
     try {
@@ -259,16 +343,27 @@
   }
 
   document.addEventListener('click', event => {
-    if (event.target?.closest?.('#leadIntelligenceTab')) setTimeout(() => void load(), 80);
+    if (event.target?.closest?.('#leadIntelligenceTab')) {
+      setMode('research');
+      setTimeout(() => void load(), 80);
+    }
     if (event.target?.closest?.('#liRefreshBtn')) setTimeout(() => void load(), 80);
   }, true);
 
   global.addEventListener('focus', () => {
-    const panel = document.getElementById(PANEL_ID);
-    if (installed && panel && !panel.hidden) void load();
+    if (installed && adminAllowed && activeMode === 'admin') void load();
   });
 
-  global.InCheck360LeadIntelligenceAdmin = Object.freeze({ version: VERSION, refresh: load });
+  global.InCheck360LeadIntelligenceAdmin = Object.freeze({
+    version: VERSION,
+    refresh: load,
+    openUsage: async () => {
+      const allowed = await load();
+      if (allowed) setMode('admin');
+      return allowed;
+    },
+    openResearch: () => setMode('research')
+  });
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
   else boot();
