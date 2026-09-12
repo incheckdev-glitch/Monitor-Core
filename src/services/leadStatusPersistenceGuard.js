@@ -1,8 +1,7 @@
 (function installLeadStatusPersistenceGuard(global) {
   'use strict';
-  if (global.InCheck360LeadStatusPersistenceGuard?.version === '20260912-lead-status-persistence2') return;
 
-  const VERSION = '20260912-lead-status-persistence2';
+  const VERSION = '20260912-lead-status-persistence3';
   const STATUS_ROWS = [
     ['Not Contacted Yet', 'not contacted yet'],
     ['Not Available', 'not available'],
@@ -19,7 +18,11 @@
 
   const clean = value => String(value ?? '').replace(/\s+/g, ' ').trim();
   const norm = value => clean(value).toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ');
-  const esc = value => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const esc = value => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 
   function canonical(value) {
     const status = norm(value);
@@ -36,15 +39,67 @@
     return status;
   }
 
-  function activeFormStatus() {
-    const form = document.getElementById('leadForm');
-    const modal = document.getElementById('leadFormModal');
+  function leadForm() {
+    return document.getElementById('leadForm');
+  }
+
+  function formRecordKey(form = leadForm()) {
+    if (!form) return '';
+    return clean(form.dataset?.id || 'new');
+  }
+
+  function selectedStatusFromControl() {
     const select = document.getElementById('leadFormStatus');
-    if (!form || !select) return '';
-    const modalOpen = !modal || (modal.getAttribute('aria-hidden') !== 'true' && modal.style.display !== 'none');
-    if (!modalOpen) return '';
+    if (!select) return '';
     const value = canonical(select.value);
     return STATUSES.includes(value) ? value : '';
+  }
+
+  function rememberUserSelection(value) {
+    const form = leadForm();
+    const status = canonical(value);
+    if (!form || !STATUSES.includes(status)) return '';
+    form.dataset.leadStatusUserSelection = status;
+    form.dataset.leadStatusUserSelectionFor = formRecordKey(form);
+    return status;
+  }
+
+  function snapshotStatusForSubmit() {
+    const form = leadForm();
+    if (!form) return '';
+    const recordKey = formRecordKey(form);
+    const remembered = form.dataset.leadStatusUserSelectionFor === recordKey
+      ? canonical(form.dataset.leadStatusUserSelection)
+      : '';
+    const status = STATUSES.includes(remembered) ? remembered : selectedStatusFromControl();
+    if (!STATUSES.includes(status)) return '';
+    form.dataset.pendingLeadStatus = status;
+    form.dataset.pendingLeadStatusFor = recordKey;
+    return status;
+  }
+
+  function capturedStatus() {
+    const form = leadForm();
+    if (!form) return '';
+    const recordKey = formRecordKey(form);
+    const pending = form.dataset.pendingLeadStatusFor === recordKey
+      ? canonical(form.dataset.pendingLeadStatus)
+      : '';
+    if (STATUSES.includes(pending)) return pending;
+    const remembered = form.dataset.leadStatusUserSelectionFor === recordKey
+      ? canonical(form.dataset.leadStatusUserSelection)
+      : '';
+    if (STATUSES.includes(remembered)) return remembered;
+    return selectedStatusFromControl();
+  }
+
+  function clearCapturedStatus() {
+    const form = leadForm();
+    if (!form) return;
+    delete form.dataset.pendingLeadStatus;
+    delete form.dataset.pendingLeadStatusFor;
+    delete form.dataset.leadStatusUserSelection;
+    delete form.dataset.leadStatusUserSelectionFor;
   }
 
   function rewriteStatusSelect(id, selected, includeAll = false) {
@@ -52,7 +107,9 @@
     if (!select) return;
     const options = includeAll ? [['All', 'All'], ...STATUS_ROWS] : STATUS_ROWS;
     const current = selected === 'All' ? 'All' : canonical(selected);
-    select.innerHTML = options.map(([label, value]) => `<option value="${esc(value)}">${esc(label)}</option>`).join('');
+    select.innerHTML = options
+      .map(([label, value]) => `<option value="${esc(value)}">${esc(label)}</option>`)
+      .join('');
     if (options.some(([, value]) => value === current)) select.value = current;
   }
 
@@ -74,57 +131,80 @@
     Leads.normalizeLeadStatus = canonical;
     Leads.matchesOpenStatus = status => !['lost', 'disregard'].includes(canonical(status));
 
-    wrap(Leads, 'collectFormData', '__leadStatusPersistenceCollect2', original => function(...args) {
+    wrap(Leads, 'openForm', '__leadStatusPersistenceOpen3', original => async function(row = null) {
+      clearCapturedStatus();
+      const result = await original.call(this, row);
+      const current = canonical(row?.status || selectedStatusFromControl() || 'not contacted yet');
+      rewriteStatusSelect('leadFormStatus', current, false);
+      return result;
+    });
+
+    wrap(Leads, 'collectFormData', '__leadStatusPersistenceCollect3', original => function(...args) {
       const row = original.apply(this, args) || {};
-      row.status = activeFormStatus() || canonical(row.status);
+      row.status = capturedStatus() || canonical(row.status);
       return row;
     });
 
-    wrap(Leads, 'backendLead', '__leadStatusPersistenceBackend2', original => function(lead = {}, options = {}) {
-      const selected = activeFormStatus();
-      const source = selected ? { ...(lead || {}), status: selected } : { ...(lead || {}), status: canonical(lead?.status) };
+    wrap(Leads, 'backendLead', '__leadStatusPersistenceBackend3', original => function(lead = {}, options = {}) {
+      const selected = capturedStatus();
+      const source = { ...(lead || {}) };
+      if (selected || Object.prototype.hasOwnProperty.call(source, 'status')) {
+        source.status = selected || canonical(source.status);
+      }
       const payload = original.call(this, source, options) || {};
-      payload.status = selected || canonical(payload.status || source.status);
+      if (selected || Object.prototype.hasOwnProperty.call(source, 'status')) {
+        payload.status = selected || canonical(payload.status || source.status);
+      }
       return payload;
     });
 
-    wrap(Leads, 'createLead', '__leadStatusPersistenceCreate2', original => async function(lead = {}) {
+    wrap(Leads, 'createLead', '__leadStatusPersistenceCreate3', original => async function(lead = {}) {
       const next = { ...(lead || {}) };
-      next.status = activeFormStatus() || canonical(next.status);
+      next.status = capturedStatus() || canonical(next.status);
       return original.call(this, next);
     });
 
-    wrap(Leads, 'updateLead', '__leadStatusPersistenceUpdate2', original => async function(id, updates = {}) {
+    wrap(Leads, 'updateLead', '__leadStatusPersistenceUpdate3', original => async function(id, updates = {}) {
       const next = { ...(updates || {}) };
-      const selected = activeFormStatus();
-      if (Object.prototype.hasOwnProperty.call(next, 'status') || selected) next.status = selected || canonical(next.status);
+      const selected = capturedStatus();
+      if (selected || Object.prototype.hasOwnProperty.call(next, 'status')) {
+        next.status = selected || canonical(next.status);
+      }
       return original.call(this, id, next);
     });
 
-    wrap(Leads, 'updateLeadWithVerification', '__leadStatusPersistenceVerify2', original => async function(id, updates = {}) {
+    wrap(Leads, 'updateLeadWithVerification', '__leadStatusPersistenceVerify3', original => async function(id, updates = {}) {
       const next = { ...(updates || {}) };
-      const selected = activeFormStatus();
-      if (Object.prototype.hasOwnProperty.call(next, 'status') || selected) next.status = selected || canonical(next.status);
+      const selected = capturedStatus();
+      if (selected || Object.prototype.hasOwnProperty.call(next, 'status')) {
+        next.status = selected || canonical(next.status);
+      }
       return original.call(this, id, next);
     });
 
-    wrap(Leads, 'normalizeLead', '__leadStatusPersistenceNormalize2', original => function(raw = {}) {
+    wrap(Leads, 'normalizeLead', '__leadStatusPersistenceNormalize3', original => function(raw = {}) {
       const row = original.call(this, raw) || {};
       row.status = canonical(raw?.status ?? row.status);
       return row;
     });
 
-    wrap(Leads, 'syncLeadFormDropdowns', '__leadStatusPersistenceDropdown2', original => function(selected = {}) {
-      const wanted = canonical(selected?.status || activeFormStatus() || this.state?.currentLead?.status || 'not contacted yet');
+    wrap(Leads, 'syncLeadFormDropdowns', '__leadStatusPersistenceDropdown3', original => function(selected = {}) {
+      const wanted = canonical(selected?.status || capturedStatus() || this.state?.currentLead?.status || 'not contacted yet');
       const result = original.call(this, { ...selected, status: wanted });
       rewriteStatusSelect('leadFormStatus', wanted, false);
       return result;
     });
 
-    wrap(Leads, 'renderFilters', '__leadStatusPersistenceFilters2', original => function(...args) {
+    wrap(Leads, 'renderFilters', '__leadStatusPersistenceFilters3', original => function(...args) {
       const result = original.apply(this, args);
       const selected = this.state?.status === 'All' ? 'All' : canonical(this.state?.status || 'All');
       rewriteStatusSelect('leadsStatusFilter', selected, true);
+      return result;
+    });
+
+    wrap(Leads, 'closeForm', '__leadStatusPersistenceClose3', original => function(...args) {
+      const result = original.apply(this, args);
+      clearCapturedStatus();
       return result;
     });
 
@@ -145,7 +225,7 @@
   }
 
   function applyStatusToDispatchPayload(payload = {}) {
-    const selected = activeFormStatus();
+    const selected = capturedStatus();
     if (!selected) return payload;
     const resource = norm(payload?.resource);
     const action = norm(payload?.action);
@@ -153,7 +233,10 @@
 
     const next = { ...(payload || {}) };
     if (action === 'update') {
-      next.updates = { ...(payload?.updates && typeof payload.updates === 'object' ? payload.updates : {}), status: selected };
+      next.updates = {
+        ...(payload?.updates && typeof payload.updates === 'object' ? payload.updates : {}),
+        status: selected
+      };
     } else {
       next.status = selected;
     }
@@ -178,7 +261,28 @@
     return true;
   }
 
+  function bindCaptureHandlers() {
+    if (global.__leadStatusPersistenceCaptureBound) return;
+    global.__leadStatusPersistenceCaptureBound = true;
+
+    document.addEventListener('change', event => {
+      if (event.target?.id !== 'leadFormStatus') return;
+      rememberUserSelection(event.target.value);
+    }, true);
+
+    document.addEventListener('submit', event => {
+      if (event.target?.id !== 'leadForm') return;
+      snapshotStatusForSubmit();
+    }, true);
+
+    document.addEventListener('pointerdown', event => {
+      if (!event.target?.closest?.('#leadFormSaveBtn')) return;
+      snapshotStatusForSubmit();
+    }, true);
+  }
+
   function patchAll() {
+    bindCaptureHandlers();
     const leadReady = patchLeadController();
     const dispatchReady = patchSupabaseDispatch();
     return leadReady && dispatchReady;
@@ -195,6 +299,10 @@
     statuses: STATUSES.slice(),
     refresh: patchAll
   });
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
-  else boot();
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot, { once: true });
+  } else {
+    boot();
+  }
 })(window);
