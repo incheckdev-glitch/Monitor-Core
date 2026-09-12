@@ -26,6 +26,7 @@ import './crmLeadStatusAuthority.js?v=20260912-crm-lead-status-authority1';
 import './crmMultiContact.js?v=20260912-crm-multi-contact1';
 import './crmCommercialCore.js?v=20260912-crm-commercial1';
 import './crmCommercialAging.js?v=20260912-crm-aging1';
+import './crmFieldPersistenceAuthority.js?v=20260912-crm-field-persistence1';
 
 (function installInCheck360DarkModeSafetyPatch() {
   const styles = [
