@@ -24,6 +24,8 @@ import './employeeCalendarLauncher.js?v=20260910-outlook3';
 import '../ui/index.js?v=20260910-stability4';
 import './crmLeadStatusAuthority.js?v=20260912-crm-lead-status-authority1';
 import './crmMultiContact.js?v=20260912-crm-multi-contact1';
+import './crmCommercialCore.js?v=20260912-crm-commercial1';
+import './crmCommercialAging.js?v=20260912-crm-aging1';
 
 (function installInCheck360DarkModeSafetyPatch() {
   const styles = [
