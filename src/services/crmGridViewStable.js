@@ -6,18 +6,24 @@
       lanes: [
         { key: 'not contacted yet', label: 'Not Contacted Yet', tone: 'info' },
         { key: 'not available', label: 'Not Available', tone: 'neutral' },
+        { key: 'engaged', label: 'Engaged', tone: 'warning' },
+        { key: 'meeting booked', label: 'Meeting Booked', tone: 'info' },
+        { key: 'meeting done', label: 'Meeting Done', tone: 'success' },
         { key: 'negotiation', label: 'Negotiation', tone: 'warning' },
         { key: 'qualified', label: 'Qualified', tone: 'success' },
-        { key: 'lost', label: 'Lost', tone: 'danger' }
+        { key: 'lost', label: 'Lost', tone: 'danger' },
+        { key: 'disregard', label: 'Disregard', tone: 'neutral' }
       ]
     },
     deals: {
       controller: 'Deals', viewId: 'dealsView', tableSelector: '#dealsTable',
       storageKey: 'incheck360OperationsPortal.dealsViewMode', title: 'Deals Pipeline', singular: 'deal',
       lanes: [
-        { key: 'new', label: 'New', tone: 'info' },
         { key: 'in progress', label: 'In Progress', tone: 'warning' },
-        { key: 'qualified', label: 'Qualified', tone: 'success' },
+        { key: 'negotiation', label: 'Negotiation', tone: 'warning' },
+        { key: 'poc', label: 'POC', tone: 'info' },
+        { key: 'proposal', label: 'Proposal', tone: 'success' },
+        { key: 'won', label: 'Won', tone: 'success' },
         { key: 'lost', label: 'Lost', tone: 'danger' }
       ]
     }
@@ -55,9 +61,20 @@
       const status = controller?.normalizeLeadStatus ? controller.normalizeLeadStatus(row.status) : norm(row.status);
       return norm(status || 'not contacted yet');
     }
-    const stage = norm(row.stage || row.deal_stage || 'new');
-    if (['in-progress', 'in_progress', 'progress'].includes(stage)) return 'in progress';
-    return stage || 'new';
+
+    const controller = controllerFor(key);
+    const rawStage = row.stage || row.deal_stage || 'In Progress';
+    const normalizedByController = controller?.normalizeStage ? controller.normalizeStage(rawStage) : rawStage;
+    const stage = norm(normalizedByController).replace(/_/g, ' ').replace(/-/g, ' ');
+    if (!stage || stage === 'new' || stage.includes('prospect')) return 'in progress';
+    if (stage === 'progress' || stage.includes('in progress')) return 'in progress';
+    if (stage === 'qualified') return 'negotiation';
+    if (stage.includes('negotiat')) return 'negotiation';
+    if (stage === 'poc' || stage.includes('proof of concept') || stage.includes('proof ofconcept')) return 'poc';
+    if (stage === 'proposal' || stage === 'proposal sent' || stage === 'converted to proposal' || stage.includes('converted to proposal')) return 'proposal';
+    if (stage === 'won' || stage === 'closed won' || stage.includes('closed won')) return 'won';
+    if (stage === 'lost' || stage === 'closed lost' || stage.includes('closed lost')) return 'lost';
+    return stage || 'in progress';
   }
 
   function currentRows(controller) {
@@ -158,7 +175,8 @@
       recordId(key, row), row.status, row.stage, row.deal_stage, row.company_name, row.customer_legal_name,
       row.customer_name, row.full_name, row.contact_name, row.estimated_value, row.estimatedValue,
       row.currency, row.priority, row.assigned_to, row.next_follow_up, row.next_follow_up_at,
-      row.next_follow_up_date, row.nextFollowUp, row.nextFollowUpAt, row.updated_at, row.updatedAt
+      row.next_follow_up_date, row.nextFollowUp, row.nextFollowUpAt, row.updated_at, row.updatedAt,
+      row.number_of_locations, row.location_count, row.rollout_scope, row.next_action
     ].map(text).join('\u001f'));
     return `${loading ? '1' : '0'}\u001d${error}\u001d${parts.join('\u001e')}`;
   }
@@ -173,8 +191,9 @@
     const priority = text(row.priority) || 'No priority';
     const assignee = text(row.assigned_to) || 'Unassigned';
     const followUp = key === 'leads' ? (row.next_follow_up || row.next_follow_up_at || row.nextFollowUp) : (row.next_follow_up_at || row.next_follow_up_date || row.nextFollowUpAt);
+    const terminal = key === 'leads' ? ['lost', 'disregard'].includes(lane) : ['won', 'lost'].includes(lane);
     const isOverdue = (() => {
-      if (!followUp || ['lost', 'qualified'].includes(lane)) return false;
+      if (!followUp || terminal) return false;
       const date = new Date(followUp);
       return !Number.isNaN(date.getTime()) && date.getTime() < Date.now();
     })();

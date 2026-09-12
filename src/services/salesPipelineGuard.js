@@ -1,21 +1,31 @@
 (function installSalesPipelineGuard(global) {
   'use strict';
 
-  const VERSION = '20260910-salespipeline3';
+  const VERSION = '20260912-salespipeline4';
   const LEAD_STATUSES = [
     'not contacted yet',
     'not available',
+    'engaged',
     'meeting booked',
     'meeting done',
     'negotiation',
     'qualified',
-    'lost'
+    'lost',
+    'disregard'
   ];
-  const DEAL_STAGES = [
+  const DEAL_FORM_STAGES = [
     'In Progress',
     'Negotiation',
     'POC',
-    'Converted to Proposal',
+    'Proposal',
+    'Lost'
+  ];
+  const DEAL_GRID_STAGES = [
+    'In Progress',
+    'Negotiation',
+    'POC',
+    'Proposal',
+    'Won',
     'Lost'
   ];
 
@@ -23,15 +33,17 @@
   const norm = value => text(value).toLowerCase();
 
   function canonicalLeadStatus(value) {
-    const v = norm(value).replace(/_/g, ' ');
+    const v = norm(value).replace(/_/g, ' ').replace(/-/g, ' ');
     if (!v || ['new', 'open', 'not contacted'].includes(v)) return 'not contacted yet';
     if (v === 'not contacted yet') return 'not contacted yet';
     if (['not available', 'unavailable'].includes(v)) return 'not available';
+    if (['engaged', 'contacted', 'connected', 'in contact', 'initial contact'].includes(v)) return 'engaged';
     if (['meeting booked', 'meeting scheduled', 'booked'].includes(v)) return 'meeting booked';
     if (['meeting done', 'meeting completed', 'met'].includes(v)) return 'meeting done';
     if (['negotiation', 'negotiating', 'in negotiation', 'negotiations'].includes(v)) return 'negotiation';
     if (['qualified', 'qualify', 'converted', 'converted to deal', 'coverted to deal'].includes(v)) return 'qualified';
     if (['lost', 'closed lost'].includes(v)) return 'lost';
+    if (['disregard', 'disregarded', 'irrelevant', 'not relevant'].includes(v)) return 'disregard';
     return v;
   }
 
@@ -42,7 +54,8 @@
     if (v === 'qualified') return 'Negotiation';
     if (v.includes('negotiat')) return 'Negotiation';
     if (v === 'poc' || v.includes('proof of concept') || v.includes('proof ofconcept')) return 'POC';
-    if (v === 'converted to proposal' || v === 'proposal' || v === 'proposal sent' || v.includes('converted to proposal')) return 'Converted to Proposal';
+    if (v === 'converted to proposal' || v === 'proposal' || v === 'proposal sent' || v.includes('converted to proposal')) return 'Proposal';
+    if (v === 'won' || v === 'closed won' || v.includes('closed won')) return 'Won';
     if (v === 'lost' || v === 'closed lost' || v.includes('closed lost')) return 'Lost';
     return text(value) || 'In Progress';
   }
@@ -81,30 +94,31 @@
     Leads.formDropdownDefaults.status = LEAD_STATUSES.slice();
     Leads.normalizeLeadStatus = canonicalLeadStatus;
     Leads.allowedLeadStatuses = () => LEAD_STATUSES.slice();
+    Leads.matchesOpenStatus = status => !['lost', 'disregard'].includes(canonicalLeadStatus(status));
 
-    patchMethod(Leads, 'normalizeLead', '__salesPipelineNormalizeLeadWrapped', original => function guardedNormalizeLead(raw = {}) {
+    patchMethod(Leads, 'normalizeLead', '__salesPipelineNormalizeLeadWrapped4', original => function guardedNormalizeLead(raw = {}) {
       const row = original.call(this, raw);
       if (row && typeof row === 'object') row.status = canonicalLeadStatus(raw?.status ?? row.status);
       return row;
     });
 
-    patchMethod(Leads, 'collectFormData', '__salesPipelineLeadCollectWrapped', original => function guardedCollectLead(...args) {
+    patchMethod(Leads, 'collectFormData', '__salesPipelineLeadCollectWrapped4', original => function guardedCollectLead(...args) {
       const row = original.apply(this, args);
       if (row && typeof row === 'object') row.status = canonicalLeadStatus(row.status);
       return row;
     });
 
-    patchMethod(Leads, 'createLead', '__salesPipelineLeadCreateWrapped', original => async function guardedCreateLead(lead = {}) {
+    patchMethod(Leads, 'createLead', '__salesPipelineLeadCreateWrapped4', original => async function guardedCreateLead(lead = {}) {
       return original.call(this, copyWith(lead, 'status', canonicalLeadStatus, 'not contacted yet'));
     });
 
-    patchMethod(Leads, 'updateLead', '__salesPipelineLeadUpdateWrapped', original => async function guardedUpdateLead(id, updates = {}) {
+    patchMethod(Leads, 'updateLead', '__salesPipelineLeadUpdateWrapped4', original => async function guardedUpdateLead(id, updates = {}) {
       const next = { ...(updates || {}) };
       if (Object.prototype.hasOwnProperty.call(next, 'status')) next.status = canonicalLeadStatus(next.status);
       return original.call(this, id, next);
     });
 
-    patchMethod(Leads, 'updateLeadWithVerification', '__salesPipelineLeadVerifyWrapped', original => async function guardedLeadVerification(id, updates = {}) {
+    patchMethod(Leads, 'updateLeadWithVerification', '__salesPipelineLeadVerifyWrapped4', original => async function guardedLeadVerification(id, updates = {}) {
       const result = await original.call(this, id, copyWith(updates, 'status', canonicalLeadStatus, 'not contacted yet'));
       try {
         const fresh = await this.getLead?.(id);
@@ -113,7 +127,7 @@
       return result;
     });
 
-    patchMethod(Leads, 'buildDealFromLead', '__salesPipelineLeadDealBuildWrapped', original => function guardedBuildDeal(...args) {
+    patchMethod(Leads, 'buildDealFromLead', '__salesPipelineLeadDealBuildWrapped4', original => function guardedBuildDeal(...args) {
       const deal = original.apply(this, args) || {};
       deal.stage = 'In Progress';
       return deal;
@@ -124,37 +138,38 @@
       const variants = {
         'not contacted yet': 'neutral',
         'not available': 'warning',
+        engaged: 'info',
         'meeting booked': 'info',
         'meeting done': 'success',
         negotiation: 'info',
         qualified: 'success',
-        lost: 'danger'
+        lost: 'danger',
+        disregard: 'neutral'
       };
       return this.leadChip(s, variants[s] || 'neutral');
     };
 
-    patchMethod(Leads, 'renderFilters', '__salesPipelineLeadFiltersWrapped', original => function guardedLeadFilters(...args) {
+    patchMethod(Leads, 'renderFilters', '__salesPipelineLeadFiltersWrapped4', original => function guardedLeadFilters(...args) {
       const result = original.apply(this, args);
       rewriteSelect('leadsStatusFilter', LEAD_STATUSES, this.state?.status || 'All', { includeAll: true });
       return result;
     });
 
-    patchMethod(Leads, 'syncLeadFormDropdowns', '__salesPipelineLeadDropdownWrapped', original => function guardedLeadDropdown(selected = {}) {
+    patchMethod(Leads, 'syncLeadFormDropdowns', '__salesPipelineLeadDropdownWrapped4', original => function guardedLeadDropdown(selected = {}) {
       const result = original.call(this, { ...selected, status: canonicalLeadStatus(selected?.status) });
       const current = canonicalLeadStatus(document.getElementById('leadFormStatus')?.value || selected?.status || 'not contacted yet');
       rewriteSelect('leadFormStatus', LEAD_STATUSES, current);
       return result;
     });
 
-    patchMethod(Leads, 'render', '__salesPipelineLeadRenderWrapped', original => function guardedLeadRender(...args) {
+    patchMethod(Leads, 'render', '__salesPipelineLeadRenderWrapped4', original => function guardedLeadRender(...args) {
       const result = original.apply(this, args);
-      setTimeout(reconcileLeadGrid, 30);
+      setTimeout(reconcileLeadGrid, 40);
       return result;
     });
 
     Leads.__salesPipelineGuardVersion = VERSION;
     try { Leads.renderFilters?.(); } catch (_) {}
-    try { Leads.syncLeadFormDropdowns?.({ status: 'not contacted yet' }); } catch (_) {}
     try { global.InCheck360CrmGridView?.refresh?.('leads'); } catch (_) {}
     return true;
   }
@@ -165,57 +180,59 @@
     if (Deals.__salesPipelineGuardVersion === VERSION) return true;
 
     Deals.formDropdownDefaults = Deals.formDropdownDefaults || {};
-    Deals.formDropdownDefaults.stage = DEAL_STAGES.slice();
+    Deals.formDropdownDefaults.stage = DEAL_FORM_STAGES.slice();
     Deals.normalizeStage = canonicalDealStage;
-    Deals.matchesOpenStatus = status => !['lost', 'converted to proposal'].includes(norm(canonicalDealStage(status)));
+    Deals.matchesOpenStatus = status => !['won', 'lost'].includes(norm(canonicalDealStage(status)));
 
-    patchMethod(Deals, 'normalizeDeal', '__salesPipelineNormalizeDealWrapped', original => function guardedNormalizeDeal(raw = {}) {
+    patchMethod(Deals, 'normalizeDeal', '__salesPipelineNormalizeDealWrapped4', original => function guardedNormalizeDeal(raw = {}) {
       const row = original.call(this, raw);
       if (row && typeof row === 'object') row.stage = canonicalDealStage(raw?.stage ?? row.stage);
       return row;
     });
 
-    patchMethod(Deals, 'collectFormData', '__salesPipelineDealCollectWrapped', original => function guardedCollectDeal(...args) {
+    patchMethod(Deals, 'collectFormData', '__salesPipelineDealCollectWrapped4', original => function guardedCollectDeal(...args) {
       const row = original.apply(this, args);
       if (row && typeof row === 'object') row.stage = canonicalDealStage(row.stage);
       return row;
     });
 
-    patchMethod(Deals, 'createDeal', '__salesPipelineDealCreateWrapped', original => async function guardedCreateDeal(deal = {}) {
+    patchMethod(Deals, 'createDeal', '__salesPipelineDealCreateWrapped4', original => async function guardedCreateDeal(deal = {}) {
       return original.call(this, copyWith(deal, 'stage', canonicalDealStage, 'In Progress'));
     });
 
-    patchMethod(Deals, 'updateDeal', '__salesPipelineDealUpdateWrapped', original => async function guardedUpdateDeal(id, updates = {}) {
+    patchMethod(Deals, 'updateDeal', '__salesPipelineDealUpdateWrapped4', original => async function guardedUpdateDeal(id, updates = {}) {
       const next = { ...(updates || {}) };
       if (Object.prototype.hasOwnProperty.call(next, 'stage')) next.stage = canonicalDealStage(next.stage);
       return original.call(this, id, next);
     });
 
-    patchMethod(Deals, 'validateDealWorkflow', '__salesPipelineDealValidationWrapped', original => function guardedDealWorkflow(deal = {}) {
+    patchMethod(Deals, 'validateDealWorkflow', '__salesPipelineDealValidationWrapped4', original => function guardedDealWorkflow(deal = {}) {
       deal.stage = canonicalDealStage(deal.stage || 'In Progress');
       return original.call(this, deal);
     });
 
-    patchMethod(Deals, 'syncDealFormDropdowns', '__salesPipelineDealDropdownWrapped', original => function guardedDealDropdown(selected = {}) {
+    patchMethod(Deals, 'syncDealFormDropdowns', '__salesPipelineDealDropdownWrapped4', original => function guardedDealDropdown(selected = {}) {
       const selectedStage = canonicalDealStage(selected?.stage || document.getElementById('dealFormStage')?.value || 'In Progress');
       const result = original.call(this, { ...selected, stage: selectedStage });
-      rewriteSelect('dealFormStage', DEAL_STAGES, selectedStage);
+      if (selectedStage !== 'Won') rewriteSelect('dealFormStage', DEAL_FORM_STAGES, selectedStage);
       return result;
     });
 
-    patchMethod(Deals, 'renderFilters', '__salesPipelineDealFiltersWrapped', original => function guardedDealFilters(...args) {
+    patchMethod(Deals, 'renderFilters', '__salesPipelineDealFiltersWrapped4', original => function guardedDealFilters(...args) {
       const result = original.apply(this, args);
       const stage = this.state?.stage === 'All' ? 'All' : canonicalDealStage(this.state?.stage || 'All');
-      rewriteSelect('dealsStageFilter', DEAL_STAGES, stage, { includeAll: true });
+      rewriteSelect('dealsStageFilter', DEAL_GRID_STAGES, stage, { includeAll: true });
       return result;
     });
 
-    patchMethod(Deals, 'openForm', '__salesPipelineDealOpenFormWrapped', original => async function guardedDealOpenForm(row = null) {
+    patchMethod(Deals, 'openForm', '__salesPipelineDealOpenFormWrapped4', original => async function guardedDealOpenForm(row = null) {
       const result = await original.call(this, row);
       const stage = canonicalDealStage(row?.stage || 'In Progress');
-      rewriteSelect('dealFormStage', DEAL_STAGES, stage);
-      const stageEl = document.getElementById('dealFormStage');
-      if (stageEl) stageEl.value = stage;
+      if (stage !== 'Won') {
+        rewriteSelect('dealFormStage', DEAL_FORM_STAGES, stage);
+        const stageEl = document.getElementById('dealFormStage');
+        if (stageEl) stageEl.value = stage;
+      }
       return result;
     });
 
@@ -225,30 +242,29 @@
 
     Deals.dealStageChip = function guardedDealStageChip(stage = '') {
       const s = canonicalDealStage(stage);
-      const variant = s === 'Lost' ? 'danger' : s === 'Converted to Proposal' ? 'success' : s === 'POC' || s === 'Negotiation' ? 'info' : 'neutral';
+      const variant = s === 'Lost' ? 'danger' : ['Won', 'Proposal'].includes(s) ? 'success' : ['POC', 'Negotiation'].includes(s) ? 'info' : 'neutral';
       return this.dealChip(s, variant);
     };
 
-    patchMethod(Deals, 'renderDealAnalytics', '__salesPipelineDealAnalyticsWrapped', original => function guardedDealAnalytics(analytics) {
+    patchMethod(Deals, 'renderDealAnalytics', '__salesPipelineDealAnalyticsWrapped4', original => function guardedDealAnalytics(analytics) {
       const result = original.call(this, analytics);
       const safe = analytics || this.computeDealAnalytics?.(this.state?.filteredRows || []) || {};
       const host = document.getElementById('dealsStageDistribution');
       if (host && typeof this.renderDistribution === 'function') {
-        const entries = DEAL_STAGES.map(stage => [stage, Number(safe.stageBreakdown?.[stage] || 0)]);
+        const entries = DEAL_GRID_STAGES.map(stage => [stage, Number(safe.stageBreakdown?.[stage] || 0)]);
         this.renderDistribution(host, entries, Number(safe.totalDeals || 0));
       }
       return result;
     });
 
-    patchMethod(Deals, 'render', '__salesPipelineDealRenderWrapped', original => function guardedDealRender(...args) {
+    patchMethod(Deals, 'render', '__salesPipelineDealRenderWrapped4', original => function guardedDealRender(...args) {
       const result = original.apply(this, args);
-      setTimeout(reconcileDealGrid, 30);
+      setTimeout(reconcileDealGrid, 40);
       return result;
     });
 
     Deals.__salesPipelineGuardVersion = VERSION;
     try { Deals.renderFilters?.(); } catch (_) {}
-    try { Deals.syncDealFormDropdowns?.({ stage: 'In Progress' }); } catch (_) {}
     try { global.InCheck360CrmGridView?.refresh?.('deals'); } catch (_) {}
     return true;
   }
@@ -296,6 +312,7 @@
       const lane = lanes.get(stage);
       const cardsHost = lane?.querySelector('.ic-crm-kanban-cards');
       if (cardsHost && card.parentElement !== cardsHost) cardsHost.appendChild(card);
+      if (card.querySelector('.ic-crm-card-status')) card.querySelector('.ic-crm-card-status').textContent = stage;
     });
     removed.forEach(label => {
       const lane = laneByLabel(kanban, label);
@@ -311,27 +328,43 @@
   }
 
   function reconcileLeadGrid() {
-    const labels = ['Not Contacted Yet', 'Not Available', 'Meeting Booked', 'Meeting Done', 'Negotiation', 'Qualified', 'Lost'];
+    const labels = ['Not Contacted Yet', 'Not Available', 'Engaged', 'Meeting Booked', 'Meeting Done', 'Negotiation', 'Qualified', 'Lost', 'Disregard'];
     const normalizeLabel = value => {
       const status = canonicalLeadStatus(value);
       return ({
         'not contacted yet': 'Not Contacted Yet',
         'not available': 'Not Available',
+        engaged: 'Engaged',
         'meeting booked': 'Meeting Booked',
         'meeting done': 'Meeting Done',
-        negotiation: 'Negotiation', qualified: 'Qualified', lost: 'Lost'
+        negotiation: 'Negotiation',
+        qualified: 'Qualified',
+        lost: 'Lost',
+        disregard: 'Disregard'
       })[status] || value;
     };
     reconcileGrid('leadsGridView', labels, normalizeLabel, {
-      'Not Contacted Yet': 'info', 'Not Available': 'neutral', 'Meeting Booked': 'info', 'Meeting Done': 'success',
-      Negotiation: 'warning', Qualified: 'success', Lost: 'danger'
+      'Not Contacted Yet': 'info',
+      'Not Available': 'neutral',
+      Engaged: 'warning',
+      'Meeting Booked': 'info',
+      'Meeting Done': 'success',
+      Negotiation: 'warning',
+      Qualified: 'success',
+      Lost: 'danger',
+      Disregard: 'neutral'
     });
   }
 
   function reconcileDealGrid() {
-    reconcileGrid('dealsGridView', DEAL_STAGES, canonicalDealStage, {
-      'In Progress': 'warning', Negotiation: 'warning', POC: 'info', 'Converted to Proposal': 'success', Lost: 'danger'
-    }, ['New', 'Qualified']);
+    reconcileGrid('dealsGridView', DEAL_GRID_STAGES, canonicalDealStage, {
+      'In Progress': 'warning',
+      Negotiation: 'warning',
+      POC: 'info',
+      Proposal: 'success',
+      Won: 'success',
+      Lost: 'danger'
+    }, ['New', 'Qualified', 'Converted to Proposal']);
   }
 
   function refresh() {
@@ -339,12 +372,10 @@
     patchDeals();
     try { global.InCheck360CrmGridView?.refresh?.('leads'); } catch (_) {}
     try { global.InCheck360CrmGridView?.refresh?.('deals'); } catch (_) {}
-    setTimeout(reconcileLeadGrid, 50);
-    setTimeout(reconcileDealGrid, 50);
+    setTimeout(reconcileLeadGrid, 80);
+    setTimeout(reconcileDealGrid, 80);
   }
 
-  // Deliberately use a tiny identity check instead of MutationObserver. Some CRM controllers
-  // are initialized after this module, and this keeps the canonical save guard attached.
   let lastLeads = null;
   let lastDeals = null;
   const timer = global.setInterval(() => {
@@ -360,15 +391,16 @@
 
   document.addEventListener('click', event => {
     if (event.target?.closest?.('[data-crm-view-key], #leadsTab, #dealsTab, [data-view="leads"], [data-view="deals"]')) {
-      setTimeout(refresh, 40);
+      setTimeout(refresh, 60);
     }
   });
-  global.addEventListener('hashchange', () => setTimeout(refresh, 40));
+  global.addEventListener('hashchange', () => setTimeout(refresh, 60));
 
   global.InCheck360SalesPipelineGuard = Object.freeze({
     version: VERSION,
     leadStatuses: LEAD_STATUSES.slice(),
-    dealStages: DEAL_STAGES.slice(),
+    dealStages: DEAL_GRID_STAGES.slice(),
+    dealFormStages: DEAL_FORM_STAGES.slice(),
     canonicalLeadStatus,
     canonicalDealStage,
     refresh,
