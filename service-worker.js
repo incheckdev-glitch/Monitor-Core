@@ -1,4 +1,4 @@
-const STATIC_CACHE_NAME = 'incheck360-operations-portal-v4-transparent-logo';
+const STATIC_CACHE_NAME = 'incheck360-operations-portal-v5-fresh-js';
 const PUSH_DIAGNOSTICS_CACHE_NAME = 'incheck360-operations-portal-push-diagnostics-v1';
 const PUSH_DIAGNOSTICS_PREFIX = '/__incheck360_push_diagnostics__/';
 const STATIC_ASSETS = [
@@ -55,7 +55,7 @@ self.addEventListener('activate', event => {
       .then(keys =>
         Promise.all(
           keys
-            .filter(key => key !== STATIC_CACHE_NAME)
+            .filter(key => key !== STATIC_CACHE_NAME && key !== PUSH_DIAGNOSTICS_CACHE_NAME)
             .map(key => caches.delete(key))
         )
       )
@@ -135,6 +135,11 @@ function isBlockedRequest(requestUrl, requestMethod) {
   return false;
 }
 
+function shouldBypassHttpCache(requestUrl, request) {
+  if (request?.destination === 'script') return true;
+  return String(requestUrl?.pathname || '').toLowerCase().endsWith('.js');
+}
+
 self.addEventListener('fetch', event => {
   const { request } = event;
   const requestUrl = new URL(request.url);
@@ -149,7 +154,10 @@ self.addEventListener('fetch', event => {
 
   event.respondWith((async () => {
     try {
-      const networkResponse = await fetch(request);
+      const networkRequest = shouldBypassHttpCache(requestUrl, request)
+        ? new Request(request, { cache: 'no-store' })
+        : request;
+      const networkResponse = await fetch(networkRequest);
       if (request.method === 'GET' && networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
         const cache = await caches.open(STATIC_CACHE_NAME);
         await cache.put(request, networkResponse.clone());
@@ -164,7 +172,7 @@ self.addEventListener('fetch', event => {
   })());
 });
 
-self.addEventListener('push', (event) => {
+self.addEventListener('push', event => {
   event.waitUntil((async () => {
     const defaultPayload = {
       title: 'InCheck360 Operations Portal',
@@ -313,19 +321,19 @@ self.addEventListener('message', event => {
   }
 });
 
-self.addEventListener('notificationclick', (event) => {
+self.addEventListener('notificationclick', event => {
   event.notification.close();
 
   const url = event.notification?.data?.url || event.notification?.data?.deep_link || '/';
 
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
       for (const client of clientList) {
         if ('focus' in client) {
           client.focus();
           client.postMessage({
             type: 'OPEN_NOTIFICATION_URL',
-            url,
+            url
           });
           return;
         }

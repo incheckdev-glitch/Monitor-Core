@@ -22,7 +22,7 @@ import './allModuleGridViewStable.js?v=20260906-gridstable1';
 import './statusGridGrouping.js?v=20260904-statusgrid1';
 import './employeeCalendarLauncher.js?v=20260910-outlook3';
 import '../ui/index.js?v=20260910-stability4';
-import './leadStatusPersistenceGuard.js?v=20260912-lead-status-persistence1';
+import './leadStatusPersistenceGuard.js?v=20260912-lead-status-persistence2';
 
 (function installInCheck360DarkModeSafetyPatch() {
   const styles = [

@@ -1,8 +1,8 @@
 (function installLeadStatusPersistenceGuard(global) {
   'use strict';
-  if (global.InCheck360LeadStatusPersistenceGuard) return;
+  if (global.InCheck360LeadStatusPersistenceGuard?.version === '20260912-lead-status-persistence2') return;
 
-  const VERSION = '20260912-lead-status-persistence1';
+  const VERSION = '20260912-lead-status-persistence2';
   const STATUS_ROWS = [
     ['Not Contacted Yet', 'not contacted yet'],
     ['Not Available', 'not available'],
@@ -24,7 +24,7 @@
   function canonical(value) {
     const status = norm(value);
     if (!status || ['new', 'open', 'not contacted'].includes(status)) return 'not contacted yet';
-    if (['not contacted yet'].includes(status)) return 'not contacted yet';
+    if (status === 'not contacted yet') return 'not contacted yet';
     if (['not available', 'unavailable'].includes(status)) return 'not available';
     if (['engaged', 'contacted', 'connected', 'in contact', 'initial contact'].includes(status)) return 'engaged';
     if (['meeting booked', 'meeting scheduled', 'booked'].includes(status)) return 'meeting booked';
@@ -36,9 +36,15 @@
     return status;
   }
 
-  function selectedFormStatus() {
-    const el = document.getElementById('leadFormStatus');
-    return el ? canonical(el.value) : '';
+  function activeFormStatus() {
+    const form = document.getElementById('leadForm');
+    const modal = document.getElementById('leadFormModal');
+    const select = document.getElementById('leadFormStatus');
+    if (!form || !select) return '';
+    const modalOpen = !modal || (modal.getAttribute('aria-hidden') !== 'true' && modal.style.display !== 'none');
+    if (!modalOpen) return '';
+    const value = canonical(select.value);
+    return STATUSES.includes(value) ? value : '';
   }
 
   function rewriteStatusSelect(id, selected, includeAll = false) {
@@ -57,7 +63,7 @@
     object[marker] = true;
   }
 
-  function patch() {
+  function patchLeadController() {
     const Leads = global.Leads;
     if (!Leads) return false;
     if (Leads.__leadStatusPersistenceGuardVersion === VERSION) return true;
@@ -68,49 +74,54 @@
     Leads.normalizeLeadStatus = canonical;
     Leads.matchesOpenStatus = status => !['lost', 'disregard'].includes(canonical(status));
 
-    wrap(Leads, 'collectFormData', '__leadStatusPersistenceCollect1', original => function(...args) {
+    wrap(Leads, 'collectFormData', '__leadStatusPersistenceCollect2', original => function(...args) {
       const row = original.apply(this, args) || {};
-      const selected = selectedFormStatus();
-      row.status = selected || canonical(row.status);
+      row.status = activeFormStatus() || canonical(row.status);
       return row;
     });
 
-    wrap(Leads, 'createLead', '__leadStatusPersistenceCreate1', original => async function(lead = {}) {
+    wrap(Leads, 'backendLead', '__leadStatusPersistenceBackend2', original => function(lead = {}, options = {}) {
+      const selected = activeFormStatus();
+      const source = selected ? { ...(lead || {}), status: selected } : { ...(lead || {}), status: canonical(lead?.status) };
+      const payload = original.call(this, source, options) || {};
+      payload.status = selected || canonical(payload.status || source.status);
+      return payload;
+    });
+
+    wrap(Leads, 'createLead', '__leadStatusPersistenceCreate2', original => async function(lead = {}) {
       const next = { ...(lead || {}) };
-      next.status = selectedFormStatus() || canonical(next.status);
+      next.status = activeFormStatus() || canonical(next.status);
       return original.call(this, next);
     });
 
-    wrap(Leads, 'updateLead', '__leadStatusPersistenceUpdate1', original => async function(id, updates = {}) {
+    wrap(Leads, 'updateLead', '__leadStatusPersistenceUpdate2', original => async function(id, updates = {}) {
       const next = { ...(updates || {}) };
-      if (Object.prototype.hasOwnProperty.call(next, 'status') || selectedFormStatus()) {
-        next.status = selectedFormStatus() || canonical(next.status);
-      }
+      const selected = activeFormStatus();
+      if (Object.prototype.hasOwnProperty.call(next, 'status') || selected) next.status = selected || canonical(next.status);
       return original.call(this, id, next);
     });
 
-    wrap(Leads, 'updateLeadWithVerification', '__leadStatusPersistenceVerify1', original => async function(id, updates = {}) {
+    wrap(Leads, 'updateLeadWithVerification', '__leadStatusPersistenceVerify2', original => async function(id, updates = {}) {
       const next = { ...(updates || {}) };
-      if (Object.prototype.hasOwnProperty.call(next, 'status') || selectedFormStatus()) {
-        next.status = selectedFormStatus() || canonical(next.status);
-      }
+      const selected = activeFormStatus();
+      if (Object.prototype.hasOwnProperty.call(next, 'status') || selected) next.status = selected || canonical(next.status);
       return original.call(this, id, next);
     });
 
-    wrap(Leads, 'normalizeLead', '__leadStatusPersistenceNormalize1', original => function(raw = {}) {
+    wrap(Leads, 'normalizeLead', '__leadStatusPersistenceNormalize2', original => function(raw = {}) {
       const row = original.call(this, raw) || {};
       row.status = canonical(raw?.status ?? row.status);
       return row;
     });
 
-    wrap(Leads, 'syncLeadFormDropdowns', '__leadStatusPersistenceDropdown1', original => function(selected = {}) {
-      const wanted = canonical(selected?.status || selectedFormStatus() || this.state?.currentLead?.status || 'not contacted yet');
+    wrap(Leads, 'syncLeadFormDropdowns', '__leadStatusPersistenceDropdown2', original => function(selected = {}) {
+      const wanted = canonical(selected?.status || activeFormStatus() || this.state?.currentLead?.status || 'not contacted yet');
       const result = original.call(this, { ...selected, status: wanted });
       rewriteStatusSelect('leadFormStatus', wanted, false);
       return result;
     });
 
-    wrap(Leads, 'renderFilters', '__leadStatusPersistenceFilters1', original => function(...args) {
+    wrap(Leads, 'renderFilters', '__leadStatusPersistenceFilters2', original => function(...args) {
       const result = original.apply(this, args);
       const selected = this.state?.status === 'All' ? 'All' : canonical(this.state?.status || 'All');
       rewriteStatusSelect('leadsStatusFilter', selected, true);
@@ -133,12 +144,57 @@
     return true;
   }
 
-  function boot() {
-    if (patch()) return;
-    if (attempts++ < 100) global.setTimeout(boot, 150);
+  function applyStatusToDispatchPayload(payload = {}) {
+    const selected = activeFormStatus();
+    if (!selected) return payload;
+    const resource = norm(payload?.resource);
+    const action = norm(payload?.action);
+    if (resource !== 'leads' || !['create', 'save', 'update'].includes(action)) return payload;
+
+    const next = { ...(payload || {}) };
+    if (action === 'update') {
+      next.updates = { ...(payload?.updates && typeof payload.updates === 'object' ? payload.updates : {}), status: selected };
+    } else {
+      next.status = selected;
+    }
+
+    for (const key of ['lead', 'item', 'activity', 'leads']) {
+      if (payload?.[key] && typeof payload[key] === 'object' && !Array.isArray(payload[key])) {
+        next[key] = { ...payload[key], status: selected };
+      }
+    }
+    return next;
   }
 
-  global.InCheck360LeadStatusPersistenceGuard = Object.freeze({ version: VERSION, canonical, statuses: STATUSES.slice(), refresh: patch });
+  function patchSupabaseDispatch() {
+    const dataLayer = global.SupabaseData;
+    if (!dataLayer || typeof dataLayer.dispatch !== 'function') return false;
+    if (dataLayer.__leadStatusPersistenceDispatchVersion === VERSION) return true;
+    const originalDispatch = dataLayer.dispatch;
+    dataLayer.dispatch = function leadStatusSafeDispatch(payload = {}) {
+      return originalDispatch.call(this, applyStatusToDispatchPayload(payload));
+    };
+    dataLayer.__leadStatusPersistenceDispatchVersion = VERSION;
+    return true;
+  }
+
+  function patchAll() {
+    const leadReady = patchLeadController();
+    const dispatchReady = patchSupabaseDispatch();
+    return leadReady && dispatchReady;
+  }
+
+  function boot() {
+    if (patchAll()) return;
+    if (attempts++ < 120) global.setTimeout(boot, 150);
+  }
+
+  global.InCheck360LeadStatusPersistenceGuard = Object.freeze({
+    version: VERSION,
+    canonical,
+    statuses: STATUSES.slice(),
+    refresh: patchAll
+  });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
   else boot();
 })(window);
