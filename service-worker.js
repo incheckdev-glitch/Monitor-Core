@@ -39,6 +39,36 @@ function normalizeBrandText(value = '') {
     .replace(/MonitorCore/gi, 'Operations Portal');
 }
 
+function normalizeNotificationTarget(value = '/') {
+  const origin = String(self.location.origin || '').replace(/\/$/, '');
+  const raw = String(value || '').trim() || '/';
+
+  try {
+    // A hash-only URL in a service worker resolves against service-worker.js.
+    // Force it to resolve from the application root instead.
+    if (raw.startsWith('#')) {
+      return new URL(`/${raw}`, `${origin}/`).toString();
+    }
+
+    const target = new URL(raw, `${origin}/`);
+
+    // Never allow a push click to leave the ERP origin.
+    if (target.origin !== origin) {
+      return `${origin}/`;
+    }
+
+    // Recover old/bad payloads that already point at the service worker file.
+    if (/\/(?:service-worker|sw)\.js$/i.test(target.pathname)) {
+      target.pathname = '/';
+      target.search = '';
+    }
+
+    return target.toString();
+  } catch (_) {
+    return `${origin}/`;
+  }
+}
+
 self.addEventListener('install', event => {
   event.waitUntil(
     caches
@@ -224,7 +254,7 @@ self.addEventListener('push', event => {
 
     let url = payload?.deep_link || dataPayload?.deep_link || payload?.url || dataPayload?.url || defaultPayload.url;
     if (!url && conversationId) {
-      url = `#communication-centre?conversation_id=${encodeURIComponent(String(conversationId))}`;
+      url = `/#communication-centre?conversation_id=${encodeURIComponent(String(conversationId))}`;
     } else if (
       conversationId &&
       (String(url).includes('communication_centre') ||
@@ -232,8 +262,9 @@ self.addEventListener('push', event => {
         String(payload?.resource || '').toLowerCase() === 'communication_centre' ||
         String(dataPayload?.resource || '').toLowerCase() === 'communication_centre')
     ) {
-      url = `#communication-centre?conversation_id=${encodeURIComponent(String(conversationId))}`;
+      url = `/#communication-centre?conversation_id=${encodeURIComponent(String(conversationId))}`;
     }
+    url = normalizeNotificationTarget(url);
 
     const derivedTag = [payload?.resource, payload?.action, payload?.record_id, conversationId]
       .filter(Boolean)
@@ -255,7 +286,7 @@ self.addEventListener('push', event => {
       data: {
         ...payload,
         ...(payload.data || {}),
-        deep_link: payload?.deep_link || dataPayload?.deep_link || url,
+        deep_link: url,
         url
       }
     };
@@ -324,24 +355,35 @@ self.addEventListener('message', event => {
 self.addEventListener('notificationclick', event => {
   event.notification.close();
 
-  const url = event.notification?.data?.url || event.notification?.data?.deep_link || '/';
-
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
-      for (const client of clientList) {
-        if ('focus' in client) {
-          client.focus();
-          client.postMessage({
-            type: 'OPEN_NOTIFICATION_URL',
-            url
-          });
-          return;
-        }
-      }
-
-      if (clients.openWindow) {
-        return clients.openWindow(url);
-      }
-    })
+  const url = normalizeNotificationTarget(
+    event.notification?.data?.url || event.notification?.data?.deep_link || '/'
   );
+
+  event.waitUntil((async () => {
+    const clientList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+
+    for (const client of clientList) {
+      if (!String(client.url || '').startsWith(self.location.origin)) continue;
+
+      try {
+        if ('navigate' in client) await client.navigate(url);
+      } catch (_) {}
+
+      try {
+        if ('focus' in client) await client.focus();
+      } catch (_) {}
+
+      try {
+        client.postMessage({
+          type: 'OPEN_NOTIFICATION_URL',
+          url
+        });
+      } catch (_) {}
+      return;
+    }
+
+    if (self.clients.openWindow) {
+      return self.clients.openWindow(url);
+    }
+  })());
 });
