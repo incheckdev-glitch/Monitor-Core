@@ -121,6 +121,25 @@
     }
   }
 
+  async function getSavedEndpointState(endpoint = '') {
+    const value = String(endpoint || '').trim();
+    const client = global.SupabaseClient?.getClient?.();
+    if (!client || !value) return { found: false, row: null };
+    try {
+      const { data, error } = await client
+        .from('user_push_subscriptions')
+        .select('id,endpoint,is_active,active,enabled,permission_status,last_seen_at,updated_at')
+        .eq('endpoint', value)
+        .order('updated_at', { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) return { found: false, row: null };
+      return { found: Boolean(data?.id), row: data || null };
+    } catch (_) {
+      return { found: false, row: null };
+    }
+  }
+
   async function queryTableByColumn(client, table, column, value) {
     try {
       const { data, error } = await client
@@ -208,6 +227,9 @@
     const originalRefreshPushSubscription = typeof push.refreshPushSubscription === 'function'
       ? push.refreshPushSubscription.bind(push)
       : null;
+    const originalSyncExistingSubscription = typeof push.syncExistingSubscription === 'function'
+      ? push.syncExistingSubscription.bind(push)
+      : null;
     const originalListActiveDeviceSubscriptions = typeof push.listActiveDeviceSubscriptions === 'function'
       ? push.listActiveDeviceSubscriptions.bind(push)
       : null;
@@ -215,6 +237,32 @@
     push.getVapidPublicKey = function patchedGetVapidPublicKey() {
       return cachedVapidPublicKey || originalGetVapidPublicKey?.() || '';
     };
+
+    if (originalSyncExistingSubscription) {
+      push.syncExistingSubscription = async function patchedSyncExistingSubscription(...args) {
+        if (global.Session?.isAuthenticated?.()) {
+          const endpoint = await getCurrentBrowserEndpoint(this);
+          if (endpoint) {
+            const saved = await getSavedEndpointState(endpoint);
+            const row = saved.row;
+            const serverMarkedInactive = saved.found && row && (
+              row.is_active === false || row.active === false || row.enabled === false
+            );
+            if (serverMarkedInactive && typeof this.refreshPushSubscription === 'function') {
+              this.debugLog?.('server-marked stale push endpoint detected; creating a fresh subscription', {
+                subscriptionId: row.id || null,
+                endpoint: getEndpointPreview(endpoint)
+              });
+              return this.refreshPushSubscription({
+                skipBusyState: true,
+                reason: 'server_marked_subscription_stale'
+              });
+            }
+          }
+        }
+        return originalSyncExistingSubscription(...args);
+      };
+    }
 
     if (originalEnablePush) {
       push.enablePush = async function patchedEnablePush(...args) {
