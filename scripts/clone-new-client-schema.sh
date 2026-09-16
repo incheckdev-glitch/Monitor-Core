@@ -23,24 +23,27 @@ if [[ "$target_table_count" != "0" && "${ALLOW_NONEMPTY_TARGET:-0}" != "1" ]]; t
   exit 1
 fi
 
-echo "1/5 Exporting PUBLIC schema only (no business data)..."
+echo "1/6 Exporting PUBLIC schema only (no business data)..."
 pg_dump "$SOURCE_DATABASE_URL" \
   --schema=public \
   --schema-only \
   --no-owner \
   --file="$TMP_SCHEMA"
 
-echo "2/5 Restoring schema into target Supabase database..."
+echo "2/6 Restoring schema into target Supabase database..."
 psql "$TARGET_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$TMP_SCHEMA"
 
-echo "3/5 Removing retired AI/e-sign schema objects from target..."
+echo "3/6 Removing retired AI/e-sign schema objects from target..."
 psql "$TARGET_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$ROOT/database/bootstrap/00_remove_retired_features.sql"
 
-echo "4/5 Creating required private storage buckets/policies..."
+echo "4/6 Creating required private storage buckets/policies..."
 psql "$TARGET_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$ROOT/database/bootstrap/01_storage_buckets.sql"
 
-echo "5/5 Seeding baseline roles and permissions..."
+echo "5/6 Seeding baseline roles and permissions..."
 psql "$TARGET_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$ROOT/database/seeds/01_roles_and_permissions.sql"
+
+echo "6/6 Applying role-scope overrides..."
+psql "$TARGET_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$ROOT/database/seeds/03_head_of_sales_commission_scope.sql"
 
 echo "Schema clone complete. No source business rows or Auth users were copied. Public-schema grants were preserved for Supabase/PostgREST access."
 echo "Next: create the target Auth users, configure role/profile rows, deploy Edge Functions, then configure runtime-config.js and Vercel server variables."
