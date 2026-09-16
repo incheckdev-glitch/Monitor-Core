@@ -2,6 +2,8 @@ const assert = require('assert');
 const fs = require('fs');
 
 const migration = fs.readFileSync('database/migrations/20260903_restore_old_erp_sales_role_access.sql', 'utf8');
+const commissionScopeMigration = fs.readFileSync('database/migrations/20260916_head_of_sales_commission_view_related.sql', 'utf8');
+const commissionScopeSeed = fs.readFileSync('database/seeds/03_head_of_sales_commission_scope.sql', 'utf8');
 
 const requiredHeadOfSales = [
   "('head_of_sales','leads','list')",
@@ -14,18 +16,17 @@ const requiredHeadOfSales = [
   "('head_of_sales','invoices','list')",
   "('head_of_sales','receipts','list')",
   "('head_of_sales','credit_notes','print')",
-  "('head_of_sales','workflow','approve')",
-  "('head_of_sales','sales_commissions','manage_all')"
+  "('head_of_sales','workflow','approve')"
 ];
 
 for (const permission of requiredHeadOfSales) {
-  // sales_commissions is provided by the baseline seed and must not be lost there.
-  if (permission.includes("sales_commissions")) {
-    const seed = fs.readFileSync('database/seeds/01_roles_and_permissions.sql', 'utf8');
-    assert.ok(seed.includes(permission), `Missing Head of Sales permission: ${permission}`);
-  } else {
-    assert.ok(migration.includes(permission), `Missing Head of Sales permission: ${permission}`);
-  }
+  assert.ok(migration.includes(permission), `Missing Head of Sales permission: ${permission}`);
+}
+
+for (const sql of [commissionScopeMigration, commissionScopeSeed]) {
+  assert.ok(sql.includes("'head_of_sales', 'sales_commissions', 'view_related'"), 'Head of Sales must have related-only commission access');
+  assert.ok(sql.includes("'head_of_sales', 'sales_commission_installments', 'view_related'"), 'Head of Sales must have related-only commission installment access');
+  assert.ok(sql.includes("lower(action) = 'manage_all'"), 'Head of Sales manage_all commission access must be removed');
 }
 
 assert.ok(migration.includes("('sales_executive','leads','create')"), 'Sales Executive must retain lead creation');
