@@ -4,12 +4,15 @@ export const config = { maxDuration: 60 };
 
 const SB_URL = 'https://rewgbmfcrbgkzxcbrxjy.supabase.co';
 const MODEL = 'gpt-5.6-luna';
-const PROFILE = 'balanced-v2';
+const PROFILE = 'strict-v3';
 const MAX = 5;
 const DEFAULT_COUNT = 3;
 const MAX_WEB_CALLS = 5;
 const MAX_OUTPUT_TOKENS = 3000;
 const CACHE_HOURS = 24;
+const MIN_FIT_SCORE = 88;
+const RECENT_PROSPECT_DAYS = 120;
+const RECENT_PROSPECT_LIMIT = 60;
 
 const txt = v => String(v ?? '').replace(/\s+/g, ' ').trim();
 const arr = (v, n = 12) => [...new Set((Array.isArray(v) ? v : txt(v).split(',')).map(txt).filter(Boolean))].slice(0, n);
@@ -17,6 +20,12 @@ const int = (v, lo, hi, d) => {
   const n = Number.parseInt(v, 10);
   return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : d;
 };
+const key = v => txt(v)
+  .toLowerCase()
+  .normalize('NFKD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z0-9]+/g, ' ')
+  .trim();
 
 function criteria(b = {}) {
   return {
@@ -119,8 +128,68 @@ const FORMAT = {
   },
 };
 
-function prompt(c) {
-  return `Find up to ${c.count} real, current B2B prospects for the customer-facing InCheck 360 operations platform.
+function industryAligned(candidateIndustry, requested = []) {
+  if (!requested.length) return true;
+  const candidate = key(candidateIndustry);
+  if (!candidate) return false;
+
+  return requested.some(value => {
+    const wanted = key(value);
+    if (!wanted) return false;
+    if (/food|beverage|restaurant|f b|qsr|catering/.test(wanted)) {
+      return /food|beverage|restaurant|qsr|catering|hospitality/.test(candidate);
+    }
+    if (/hospitality|hotel|resort/.test(wanted)) {
+      return /hospitality|hotel|resort|restaurant|food|beverage|catering/.test(candidate);
+    }
+    if (/retail|store/.test(wanted)) return /retail|store/.test(candidate);
+    if (/manufactur|production|factory|processing/.test(wanted)) return /manufactur|production|factory|processing/.test(candidate);
+    if (/facilit/.test(wanted)) return /facilit/.test(candidate);
+    const words = wanted.split(' ').filter(word => word.length >= 4);
+    return words.some(word => candidate.includes(word));
+  });
+}
+
+function complexSingleSiteException(x = {}, c = {}) {
+  const context = `${key(x.industry)} ${key(c.industries.join(' '))} ${key(c.company_profile)}`;
+  const title = key(x.job_title);
+  return /manufactur|production|factory|processing|industrial|warehouse/.test(context)
+    && /quality|qhse|hseq|operation|compliance|safety/.test(title);
+}
+
+function meetsQualityFloor(x = {}, c = {}) {
+  if (x.fit_score < MIN_FIT_SCORE) return false;
+  if (x.confidence === 'low') return false;
+  if (!industryAligned(x.industry, c.industries)) return false;
+  if (Number.isInteger(x.estimated_locations) && x.estimated_locations < c.min_locations && !complexSingleSiteException(x, c)) return false;
+  return true;
+}
+
+async function recentProspects(a) {
+  const cutoff = new Date(Date.now() - RECENT_PROSPECT_DAYS * 86400000).toISOString();
+  const q = await a.db
+    .from('lead_intelligence_suggestions')
+    .select('person_name,company_name,linkedin_url,created_at')
+    .eq('created_by', a.user.id)
+    .gte('created_at', cutoff)
+    .order('created_at', { ascending: false })
+    .limit(RECENT_PROSPECT_LIMIT);
+  if (q.error) return [];
+  const seen = new Set();
+  return (q.data || []).filter(row => {
+    const person = key(row.person_name);
+    if (!person || seen.has(person)) return false;
+    seen.add(person);
+    return true;
+  });
+}
+
+function prompt(c, previous = []) {
+  const alreadySeen = previous.length
+    ? previous.map(row => `${txt(row.person_name)} — ${txt(row.company_name)}`).join(' | ')
+    : 'none';
+
+  return `Find up to ${c.count} real, current, high-value B2B prospects for the customer-facing InCheck 360 operations platform.
 InCheck 360 supports digital inspections/checks, issue reporting, corrective actions, evidence, follow-up to closure and multi-location management visibility. Do not confuse it with Monitor Core, the internal ERP.
 
 Countries: ${c.countries.join(', ') || 'Any relevant market'}
@@ -130,26 +199,34 @@ Company profile: ${c.company_profile || 'Multi-location operator with recurring 
 Minimum sites when public evidence exists: ${c.min_locations}
 Keywords: ${c.keywords.join(', ') || 'none'}
 Exclude: ${c.exclusions.join(', ') || 'none'}
+Already surfaced recently — do NOT return these people again: ${alreadySeen}
 
-Balanced-quality rules:
-- Use the web-search budget mainly to verify the person's CURRENT role/employer and the company's operational or multi-site fit.
+Strict-quality rules:
+- Quality is more important than quantity. Return fewer than requested if necessary. Never add medium-fit filler just to reach the requested count.
+- Only return prospects you would score at least ${MIN_FIT_SCORE}/100 after verification.
+- Prioritize exact requested decision-maker roles. For operations searches, strongly prefer Head, Director, Regional/Group Operations, COO or equivalent senior ownership. Do not substitute shop managers, restaurant managers or junior operations roles unless the user explicitly requested them.
+- For Quality/QHSE searches, prefer enterprise, group or multi-site managers with direct responsibility for audits, inspections, compliance, food safety, corrective actions or standards. Do not substitute generic EHS roles unless the role clearly owns these workflows across the target business.
+- If industries were specified, the prospect's current company must clearly operate in one of those industries. Do not substitute facility-management firms, consultants, suppliers, recruiters or software vendors unless explicitly requested.
+- For F&B/hospitality/retail when minimum sites is ${c.min_locations}, verify the site count when practical. If an exact count cannot be verified, only return the prospect when credible evidence clearly shows multi-site, multi-property, regional, group or franchise responsibility meeting the requested scale. Unknown site count alone is not enough.
+- Single-site prospects below the requested site minimum are not acceptable for F&B/hospitality/retail. A complex manufacturing/production operation may be an exception only when the role directly owns recurring quality/compliance workflows.
+- Use the web-search budget mainly to verify the person's CURRENT role/employer, decision authority, target-industry fit and multi-site/operational complexity.
 - A prospect should only be returned when the person, current role/employer, and company are supported by credible public evidence. Prefer current official/company pages, reputable business pages, event/speaker pages and exact public professional profiles.
 - If evidence suggests the role is stale, former, ambiguous, or belongs to another person with a similar name, omit the candidate.
-- When possible, verify multi-location/site evidence or operational scope rather than assuming it from company size.
+- Do not return anyone listed in the already-surfaced list, even if the company name or title is written differently.
 - Prefer one strong source per fact and no more than three useful sources per prospect.
 - Never invent people, roles, employers, emails, LinkedIn URLs, websites, site counts or source URLs.
 - Email only if explicitly public. LinkedIn only if the exact public profile is found; otherwise use an empty string.
 - Do not spend extra searches trying to discover email addresses or phone numbers; contact enrichment is handled separately after the user chooses a prospect.
-- Omit weak candidates instead of spending more searches just to fill the requested count.
-- Keep evidence, rationale, pain points and follow-up concise and specific to the verified role/company.
-- Fit score = role 40%, operational/multi-site fit 25%, industry 20%, evidence confidence 15%.
-- Connection note <=200 characters. Follow-up is concise and low-pressure with one pain-discovery question.`;
+- Keep evidence, rationale and pain points concise and specific to the verified role/company.
+- Score conservatively: role/seniority 30%, decision authority 20%, operational or multi-site complexity 25%, target-industry fit 10%, evidence confidence 15%.
+- Connection note <=200 characters, natural and personalized. It should create relevance rather than pitch hard.
+- Follow-up is concise, low-pressure and asks one useful pain-discovery question grounded in the verified role/company.`;
 }
 
 function openaiHeaders() {
-  const key = txt(process.env.OPENAI_API_KEY);
-  if (!key) throw Object.assign(new Error('OpenAI is not configured yet.'), { status: 503 });
-  return { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
+  const keyValue = txt(process.env.OPENAI_API_KEY);
+  if (!keyValue) throw Object.assign(new Error('OpenAI is not configured yet.'), { status: 503 });
+  return { Authorization: `Bearer ${keyValue}`, 'Content-Type': 'application/json' };
 }
 
 async function oa(url, init = {}) {
@@ -262,6 +339,7 @@ async function start(a, c) {
     };
   }
 
+  const previous = await recentProspects(a);
   const run = await a.db
     .from('lead_intelligence_runs')
     .insert({
@@ -288,12 +366,12 @@ async function start(a, c) {
         tools: [{ type: 'web_search', search_context_size: 'low' }],
         tool_choice: 'auto',
         max_tool_calls: MAX_WEB_CALLS,
-        instructions: 'You are the cost-conscious Lead Intelligence research engine for InCheck 360. Verify current role, employer and operational fit carefully. Prefer fewer strong prospects over weak filler. Follow the JSON schema exactly.',
-        input: prompt(c),
+        instructions: 'You are the strict-quality Lead Intelligence research engine for InCheck 360. Spend the fixed search budget on senior, verified, target-industry prospects. Never use weaker filler to hit the requested count. Do not repeat recently surfaced people. Follow the JSON schema exactly.',
+        input: prompt(c, previous),
         text: { format: FORMAT, verbosity: 'low' },
         max_output_tokens: MAX_OUTPUT_TOKENS,
-        prompt_cache_key: 'monitor-core-lead-intelligence-balanced-v2',
-        metadata: { monitor_core_run_id: run.data.id, purpose: 'lead_intelligence_balanced_v2' },
+        prompt_cache_key: 'monitor-core-lead-intelligence-strict-v3',
+        metadata: { monitor_core_run_id: run.data.id, purpose: 'lead_intelligence_strict_v3' },
       }),
     });
     if (!p.id) throw new Error('OpenAI did not return a research job ID.');
@@ -366,13 +444,17 @@ async function status(a, id) {
   }
 
   const c = criteria(run.criteria || {});
-  const seen = new Set();
+  const previous = await recentProspects(a);
+  const previousPeople = new Set(previous.map(row => key(row.person_name)).filter(Boolean));
+  const seenPeople = new Set();
   const suggestions = (Array.isArray(parsed?.suggestions) ? parsed.suggestions : [])
     .map(normalize)
     .filter(Boolean)
+    .filter(x => meetsQualityFloor(x, c))
     .filter(x => {
-      if (seen.has(x.fingerprint)) return false;
-      seen.add(x.fingerprint);
+      const person = key(x.person_name);
+      if (!person || previousPeople.has(person) || seenPeople.has(person)) return false;
+      seenPeople.add(person);
       return true;
     })
     .sort((x, y) => y.fit_score - x.fit_score)
@@ -422,13 +504,15 @@ export default async function handler(req, res) {
         configured: Boolean(txt(process.env.OPENAI_API_KEY)),
         model: MODEL,
         profile: PROFILE,
-        mode: 'background-balanced',
+        mode: 'background-strict',
         max_suggestions: MAX,
         default_suggestions: DEFAULT_COUNT,
         max_web_calls: MAX_WEB_CALLS,
         max_output_tokens: MAX_OUTPUT_TOKENS,
         reasoning_effort: 'low',
         cache_hours: CACHE_HOURS,
+        min_fit_score: MIN_FIT_SCORE,
+        recent_prospect_days: RECENT_PROSPECT_DAYS,
       });
     }
 
