@@ -1,6 +1,6 @@
 (function loadAdminOverrideAndBirthdaySong(){
-  const coreSrc = '/admin-override-core.js?v=20260917-song2';
-  const songSrc = '/birthday-song.js?v=20260917-song2';
+  const coreSrc = '/admin-override-core.js?v=20260917-song3';
+  const songSrc = '/birthday-song.js?v=20260917-song3';
 
   const loadAsync = () => {
     const core = document.createElement('script');
@@ -14,8 +14,8 @@
   };
 
   if (document.readyState === 'loading') {
-    document.write('<script src="' + coreSrc + '"><\\/script>');
-    document.write('<script src="' + songSrc + '"><\\/script>');
+    document.write('<script src="' + coreSrc + '"><\/script>');
+    document.write('<script src="' + songSrc + '"><\/script>');
   } else {
     loadAsync();
   }
