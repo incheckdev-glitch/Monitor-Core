@@ -184,13 +184,19 @@ Qualification rules:
 - sales_action: pursue_now only for genuinely strong prospects worth near-term sales effort; nurture for relevant but uncertain/lower-authority prospects; low_priority for weak or single-site/low-authority prospects.
 
 LinkedIn message rules:
-- Natural, professional, concise and human. Avoid generic AI phrases and hard selling.
-- Connection note must be <=200 characters and should mainly create relevance, not pitch the product.
-- Never mention a promotion or exact site count unless verified.
-- After-acceptance message should thank them, connect their role to InCheck 360 in one compact paragraph, then ask one useful discovery question. Keep it low pressure.
-- No-reply follow-up should be short, not repeat the whole pitch, and give them space.
-- Meeting request should propose a short 15-minute walkthrough with the team and ask for a suitable day/time, without pressure.
-- Do not mention internal ERP or Monitor Core.`;
+- Write like a real R&D professional, not a marketing bot: concise, specific, calm and low pressure.
+- Use only facts supported by the supplied evidence or verified sources. Do not turn likely pain points into claims about the prospect's actual problems.
+- Never mention a promotion, expansion, opening, exact site count, employer scope or multi-site responsibility unless it is verified. If location scope is estimated or unknown, use neutral wording such as "operations" rather than a specific number or "across your locations".
+- Never imply that a restaurant/site manager controls group purchasing or strategy. Match the message to decision_authority and the verified scope of the role.
+- Avoid generic phrases such as "impressive background", "your work caught my attention", "I came across your profile", "synergy", "explore collaboration", "revolutionize", "game-changing", or exaggerated praise.
+- Avoid feature dumping. Mention only the part of InCheck 360 that naturally fits the prospect's verified role: daily operational checks, audits, issue/corrective-action follow-up, evidence, sensors, or cross-location visibility as appropriate.
+- Do not mention internal ERP, Monitor Core, lead scores, AI research, confidence levels or research sources in outreach.
+- Connection note must be <=200 characters. Use one concrete, verified relevance point where possible. Keep it primarily about connecting; do not hard-pitch or ask for a meeting.
+- After-acceptance message should be no more than two short paragraphs. Thank them once, make one role-relevant connection to InCheck 360, then ask exactly one useful discovery question. Do not ask for a meeting in the same message unless the prospect has already shown interest.
+- If authority is low/unknown or the business appears single-site, make the after-acceptance message exploratory and operational; do not write as if they are the buyer. If authority is medium/high and multi-location scope is verified, it may reference standardization, visibility and corrective-action follow-up across locations.
+- No-reply follow-up should be short and materially different from the first message. Do not repeat the full pitch, use guilt language, or imply urgency. Give the prospect an easy way to respond later.
+- Meeting request is for a prospect who has shown interest or engaged positively. Propose a short 15-minute walkthrough with the team, state what they would see in one sentence, and ask for a suitable day/time. Do not invent calendar availability or fixed slots.
+- Prefer plain English and short sentences. No hashtags, emojis, exclamation-heavy copy, or sales buzzwords.`;
 }
 
 function normalize(raw = {}) {
@@ -372,15 +378,15 @@ async function start(a, suggestionId) {
       background: true,
       store: true,
       reasoning: { effort: 'low' },
-      instructions: 'You are the cost-conscious second-stage sales qualification and LinkedIn messaging engine for InCheck 360. Verify only when useful, never invent facts, and follow the JSON schema exactly.',
+      instructions: 'You are the cost-conscious second-stage sales qualification and LinkedIn messaging engine for InCheck 360. Verify only when useful, never invent facts, write natural low-pressure outreach, and follow the JSON schema exactly.',
       input: prompt(suggestion, webSearchCap),
       text: { format: FORMAT, verbosity: 'low' },
       max_output_tokens: MAX_OUTPUT_TOKENS,
-      prompt_cache_key: 'monitor-core-lead-sales-qualification-v1',
+      prompt_cache_key: 'monitor-core-lead-sales-qualification-v2',
       metadata: {
         monitor_core_qualification_id: job.id,
         monitor_core_suggestion_id: suggestionId,
-        purpose: 'lead_sales_qualification_v1',
+        purpose: 'lead_sales_qualification_v2',
       },
     };
     if (webSearchCap > 0) {
