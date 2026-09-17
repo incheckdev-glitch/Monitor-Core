@@ -7,6 +7,7 @@ import './salesPipelineGuard.js?v=20260912-salespipeline4';
 import './dealProposalTriggerGuard.js?v=20260911-dealproposal1';
 import './crmPipelineProductInterest.js?v=20260912-crm-pipeline-products5';
 import './crmPipelineIntelligenceFields.js?v=20260912-crm-intelligence-fields2';
+import './crmEditTransitionFields.js?v=20260917-crm-edit-transition1';
 import './crmPipelineIntelligenceAnalytics.js?v=20260911-crm-intelligence-analytics2';
 import './crmDealWonAutomation.js?v=20260911-crm-deal-won1';
 import './crmPipelineDragDrop.js?v=20260911-crm-pipeline-dnd1';
