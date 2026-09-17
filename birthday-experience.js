@@ -15,7 +15,7 @@
       @keyframes birthdaySmoke { 0%{transform:translateY(0) scale(.5);opacity:.65} 100%{transform:translateY(-22px) scale(1.5);opacity:0} }
       @keyframes birthdayFinalePiece { 0%{transform:translate(-50%,-50%) translate(0,0) scale(.4);opacity:1} 100%{transform:translate(-50%,-50%) translate(var(--fx),var(--fy)) scale(1);opacity:0} }
       @keyframes birthdayFinaleConfetti { 0%{transform:translate3d(0,-12vh,0) rotate(0);opacity:1} 100%{transform:translate3d(var(--fd),112vh,0) rotate(var(--fr));opacity:.1} }
-      @keyframes birthdayBannerIn { from{transform:translateY(-120%);opacity:0} to{transform:translateY(0);opacity:1} }
+      @keyframes birthdayBannerIn { from{transform:translateX(-50%) translateY(-120%);opacity:0} to{transform:translateX(-50%) translateY(0);opacity:1} }
       @keyframes birthdayPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.035)} }
 
       #khaledBirthdayCelebrationBanner {
@@ -25,6 +25,7 @@
         box-shadow:0 12px 35px rgba(37,99,235,.32);font:800 13px/1.1 Inter,system-ui,sans-serif;
         letter-spacing:.02em;text-align:center;animation:birthdayBannerIn .38s ease-out both;pointer-events:none;
       }
+      #${OVERLAY_ID} .khaled-birthday-card{max-height:92vh;overflow:auto!important}
       #${OVERLAY_ID} .birthday-title-wrap{position:relative;display:inline-block;padding:0 20px}
       #${OVERLAY_ID} .birthday-sparkle{position:absolute;font-size:17px;line-height:1;animation:birthdaySparkle 1.25s ease-in-out infinite;pointer-events:none}
       #${OVERLAY_ID} .birthday-sparkle.s1{left:0;top:-8px}.birthday-sparkle.s2{right:0;top:8px;animation-delay:.25s}
