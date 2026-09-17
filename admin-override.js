@@ -1,21 +1,26 @@
-(function loadAdminOverrideAndBirthdaySong(){
-  const coreSrc = '/admin-override-core.js?v=20260917-song3';
-  const songSrc = '/birthday-song.js?v=20260917-song3';
+(function loadAdminOverrideAndBirthdayCelebration(){
+  const version = '20260917-full1';
+  const coreSrc = '/admin-override-core.js?v=' + version;
+  const songSrc = '/birthday-song.js?v=' + version;
+  const experienceSrc = '/birthday-experience.js?v=' + version;
+
+  const appendScript = (src, onload) => {
+    const script = document.createElement('script');
+    script.src = src;
+    if (onload) script.onload = onload;
+    document.head.appendChild(script);
+  };
 
   const loadAsync = () => {
-    const core = document.createElement('script');
-    core.src = coreSrc;
-    core.onload = () => {
-      const song = document.createElement('script');
-      song.src = songSrc;
-      document.head.appendChild(song);
-    };
-    document.head.appendChild(core);
+    appendScript(coreSrc, () => {
+      appendScript(songSrc, () => appendScript(experienceSrc));
+    });
   };
 
   if (document.readyState === 'loading') {
     document.write('<script src="' + coreSrc + '"><\/script>');
     document.write('<script src="' + songSrc + '"><\/script>');
+    document.write('<script src="' + experienceSrc + '"><\/script>');
   } else {
     loadAsync();
   }
