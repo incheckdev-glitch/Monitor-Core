@@ -80,6 +80,7 @@
     { "path": "/api/outlook/maintenance", "schedule": "15 2 * * *" }
   ],
   "rewrites": [
+    { "source": "/api/lead-intelligence-qualify", "destination": "/api/lead-intelligence?mode=qualify" },
     { "source": "/api/outlook/:action", "destination": "/api/outlook?action=:action" },
     { "source": "/api/crm-daily-brief", "destination": "/api/lead-intelligence?mode=crm_daily_brief" },
     {

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import crmDailyBriefHandler from '../src/server/crm-daily-brief-handler.js';
+import leadIntelligenceQualifyHandler from '../src/server/lead-intelligence-qualify-handler.js';
 
 export const config = { maxDuration: 60 };
 
@@ -40,6 +41,9 @@ export default async function handler(req, res) {
   const mode = clean(req.query?.mode).toLowerCase();
   if (mode === 'crm_daily_brief') {
     return crmDailyBriefHandler(req, res);
+  }
+  if (mode === 'qualify') {
+    return leadIntelligenceQualifyHandler(req, res);
   }
 
   try {
