@@ -7,6 +7,7 @@
   let activeNodes = [];
   let isPlaying = false;
   let playbackToken = 0;
+  let autoplayTimers = [];
 
   const NOTE_FREQUENCIES = {
     G4: 392.00,
@@ -31,21 +32,27 @@
     if (audioContext && audioContext.state !== 'closed') return audioContext;
     const AudioCtor = global.AudioContext || global.webkitAudioContext;
     if (!AudioCtor) return null;
-    audioContext = new AudioCtor();
+    audioContext = new AudioCtor({ latencyHint: 'interactive' });
     return audioContext;
+  }
+
+  function clearAutoplayTimers() {
+    autoplayTimers.forEach(timer => global.clearTimeout(timer));
+    autoplayTimers = [];
   }
 
   function stopSong() {
     playbackToken += 1;
+    clearAutoplayTimers();
     activeNodes.forEach(node => {
-      try { node.stop(); } catch (_) {}
-      try { node.disconnect(); } catch (_) {}
+      try { node.stop?.(); } catch (_) {}
+      try { node.disconnect?.(); } catch (_) {}
     });
     activeNodes = [];
     isPlaying = false;
     const button = document.getElementById('khaledBirthdaySongToggle');
     if (button) {
-      button.textContent = '🔊 Play Birthday Song';
+      button.textContent = '🔊 Replay Birthday Song';
       button.setAttribute('aria-pressed', 'false');
     }
   }
@@ -60,17 +67,18 @@
     } catch (_) {}
     if (ctx.state !== 'running') return false;
 
-    stopSong();
-    const token = ++playbackToken;
+    clearAutoplayTimers();
+    playbackToken += 1;
+    const token = playbackToken;
     isPlaying = true;
 
     const master = ctx.createGain();
     master.gain.setValueAtTime(0.0001, ctx.currentTime);
-    master.gain.exponentialRampToValueAtTime(0.22, ctx.currentTime + 0.08);
+    master.gain.exponentialRampToValueAtTime(0.24, ctx.currentTime + 0.06);
     master.connect(ctx.destination);
     activeNodes.push(master);
 
-    let cursor = ctx.currentTime + 0.08;
+    let cursor = ctx.currentTime + 0.06;
     const gap = 0.045;
 
     MELODY.forEach(([note, duration], index) => {
@@ -106,7 +114,7 @@
     global.setTimeout(() => {
       if (token !== playbackToken) return;
       activeNodes.forEach(node => {
-        try { node.disconnect(); } catch (_) {}
+        try { node.disconnect?.(); } catch (_) {}
       });
       activeNodes = [];
       isPlaying = false;
@@ -120,6 +128,21 @@
     return true;
   }
 
+  function aggressivelyTryAutoplay() {
+    clearAutoplayTimers();
+
+    const attempt = () => {
+      if (isPlaying || !document.getElementById(OVERLAY_ID)) return;
+      playSong().catch(() => {});
+    };
+
+    // Immediate attempt as soon as the celebration appears, followed by short retries.
+    attempt();
+    [80, 250, 600, 1200].forEach(delay => {
+      autoplayTimers.push(global.setTimeout(attempt, delay));
+    });
+  }
+
   function attachToOverlay(overlay) {
     if (!overlay || overlay.getAttribute(ATTACHED_ATTR) === 'true') return;
     overlay.setAttribute(ATTACHED_ATTR, 'true');
@@ -131,7 +154,7 @@
     const soundButton = document.createElement('button');
     soundButton.id = 'khaledBirthdaySongToggle';
     soundButton.type = 'button';
-    soundButton.textContent = '🔊 Play Birthday Song';
+    soundButton.textContent = '🔊 Birthday Song';
     soundButton.setAttribute('aria-pressed', 'false');
     soundButton.style.cssText = 'margin:10px 6px 0;border:1px solid rgba(37,99,235,.24);border-radius:12px;padding:10px 14px;background:#eff6ff;color:#1d4ed8;font:700 13px/1 Inter,system-ui,sans-serif;cursor:pointer;box-shadow:0 6px 16px rgba(37,99,235,.10);';
     closeButton.insertAdjacentElement('beforebegin', soundButton);
@@ -146,9 +169,20 @@
       await playSong();
     });
 
-    // Try immediately. Browsers that block autoplay will start it on the first user gesture instead.
-    playSong().catch(() => {});
+    // Start immediately without waiting for a click whenever the browser allows autoplay.
+    aggressivelyTryAutoplay();
 
+    // Retry on common lifecycle events that can transition Web Audio into a playable state.
+    const retryOnFocus = () => {
+      if (!isPlaying && document.getElementById(OVERLAY_ID)) aggressivelyTryAutoplay();
+    };
+    const retryOnVisibility = () => {
+      if (document.visibilityState === 'visible') retryOnFocus();
+    };
+    global.addEventListener('focus', retryOnFocus);
+    document.addEventListener('visibilitychange', retryOnVisibility);
+
+    // Browser policy fallback: if autoplay is blocked, the first user gesture starts it immediately.
     const startOnFirstGesture = async event => {
       if (event.target?.closest?.('#khaledBirthdaySongToggle')) return;
       if (isPlaying) {
@@ -163,6 +197,8 @@
     const removalObserver = new MutationObserver(() => {
       if (document.getElementById(OVERLAY_ID)) return;
       stopSong();
+      global.removeEventListener('focus', retryOnFocus);
+      document.removeEventListener('visibilitychange', retryOnVisibility);
       removalObserver.disconnect();
     });
     removalObserver.observe(document.body, { childList: true, subtree: true });
