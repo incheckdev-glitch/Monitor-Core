@@ -157,7 +157,7 @@
 
   function setupKhaledBirthdayPopup() {
     const targetDate = '2026-09-17';
-    const storageKey = `incheck360:birthday-khaled:${targetDate}`;
+    let shownThisPageLoad = false;
 
     const getBeirutDate = () => {
       try {
@@ -178,26 +178,12 @@
       }
     };
 
-    const alreadyShown = () => {
-      try {
-        return sessionStorage.getItem(storageKey) === '1';
-      } catch (_) {
-        return false;
-      }
-    };
-
-    const markShown = () => {
-      try {
-        sessionStorage.setItem(storageKey, '1');
-      } catch (_) {}
-    };
-
     const showPopup = () => {
-      if (getBeirutDate() !== targetDate || alreadyShown()) return;
+      if (getBeirutDate() !== targetDate || shownThisPageLoad) return;
       if (document.body.classList.contains('auth-locked')) return;
       if (document.getElementById('khaledBirthdayOverlay')) return;
 
-      markShown();
+      shownThisPageLoad = true;
 
       const overlay = document.createElement('div');
       overlay.id = 'khaledBirthdayOverlay';
