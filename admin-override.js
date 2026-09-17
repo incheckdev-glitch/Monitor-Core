@@ -1,5 +1,5 @@
 (function loadAdminOverrideAndBirthdayCelebration(){
-  const version = '20260917-full1';
+  const version = '20260917-full2';
   const coreSrc = '/admin-override-core.js?v=' + version;
   const songSrc = '/birthday-song.js?v=' + version;
   const experienceSrc = '/birthday-experience.js?v=' + version;
