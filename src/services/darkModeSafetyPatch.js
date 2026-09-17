@@ -14,6 +14,7 @@ import './crmPipelineDragDrop.js?v=20260911-crm-pipeline-dnd1';
 import './leadIntelligence.js?v=20260910-leadintel1';
 import './leadIntelligenceBackground.js?v=20260911-li-bg3';
 import './leadIntelligenceContactEnrichment.js?v=20260911-li-contact2';
+import './leadIntelligenceQualification.js?v=20260917-li-qualification1';
 import './leadIntelligenceAdmin.js?v=20260911-li-admin-subtab2';
 import './crmDailyBrief.js?v=20260911-crm-daily-brief3';
 import './crmDailyBriefExecutiveLayout.js?v=20260911-crm-daily-brief-exec2';
