@@ -1,1 +1,0 @@
-Temporary celebration audio helper for 17 Sep 2026. Safe to remove together with birthday-song.js and admin-override-loader.js after the celebration.
