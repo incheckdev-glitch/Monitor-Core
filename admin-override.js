@@ -1,14 +1,7 @@
 (function attachAdminOverride(global) {
   'use strict';
 
-  // GM is intentionally authorization-equivalent to Admin while retaining the
-  // GM role key for display, audit, and reporting purposes.
-  const ADMIN_OVERRIDE_ROLES = new Set([
-    'admin',
-    'gm',
-    'general_manager',
-    'generalmanager'
-  ]);
+  const ADMIN_OVERRIDE_ROLES = new Set(['admin', 'gm', 'general_manager', 'generalmanager']);
 
   function normalizeRole(value) {
     return String(value || '')
@@ -83,9 +76,6 @@
   }
 
   function patchAdminEquivalentHelpers() {
-    // Some legacy modules call Session.isAdmin() or Permissions.isAdmin()
-    // directly instead of the central permission matrix. Keep those paths in
-    // sync with the Admin-equivalent authorization contract as well.
     if (global.Session) {
       global.Session.isAdmin = function isAdmin() {
         return isAdminEquivalentRole(
@@ -215,8 +205,14 @@
           background: var(--balloon-color);
           box-shadow: inset -10px -12px 18px rgba(0,0,0,.12), inset 8px 8px 16px rgba(255,255,255,.28), 0 8px 18px rgba(2,6,23,.12);
           animation: khaledBalloonFloat var(--balloon-duration, 8s) ease-in-out var(--balloon-delay, 0s) forwards;
-          pointer-events: none;
+          pointer-events: auto;
+          cursor: crosshair;
+          touch-action: manipulation;
+          -webkit-tap-highlight-color: transparent;
           z-index: 1;
+        }
+        #khaledBirthdayOverlay .khaled-balloon:hover {
+          filter: brightness(1.12) saturate(1.08);
         }
         #khaledBirthdayOverlay .khaled-balloon::before {
           content: '';
@@ -307,7 +303,8 @@
         <div style="font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#2563eb;margin-bottom:10px;">A special day at InCheck 360</div>
         <h2 id="khaledBirthdayTitle" style="margin:0;font-size:clamp(30px,7vw,46px);line-height:1.05;font-weight:800;letter-spacing:-.035em;">Happy Birthday Khaled!</h2>
         <p style="margin:16px auto 0;max-width:420px;font-size:16px;line-height:1.65;color:#475569;">Wishing you a fantastic birthday and a great year ahead. 🎉</p>
-        <button id="khaledBirthdayClose" type="button" style="margin-top:26px;border:0;border-radius:14px;padding:12px 22px;background:#2563eb;color:#fff;font:700 14px/1 Inter,system-ui,sans-serif;cursor:pointer;box-shadow:0 10px 24px rgba(37,99,235,.26);">Celebrate 🎉</button>
+        <p style="margin:9px auto 0;font-size:13px;font-weight:700;color:#2563eb;">Tap the balloons to pop them 🎈✨</p>
+        <button id="khaledBirthdayClose" type="button" style="margin-top:22px;border:0;border-radius:14px;padding:12px 22px;background:#2563eb;color:#fff;font:700 14px/1 Inter,system-ui,sans-serif;cursor:pointer;box-shadow:0 10px 24px rgba(37,99,235,.26);">Celebrate 🎉</button>
         <div aria-hidden="true" style="position:absolute;left:-24px;top:-22px;font-size:54px;transform:rotate(-18deg);opacity:.72;">🎊</div>
         <div aria-hidden="true" style="position:absolute;right:-18px;bottom:-20px;font-size:58px;transform:rotate(15deg);opacity:.68;">🎈</div>
       `;
@@ -323,16 +320,55 @@
         return timer;
       };
 
+      const spawnFirework = (xPercent, yPercent, pieces = 20, preferredColor = '') => {
+        for (let i = 0; i < pieces; i += 1) {
+          const piece = document.createElement('span');
+          piece.className = 'khaled-firework-piece';
+          const angle = (Math.PI * 2 * i) / pieces + Math.random() * 0.14;
+          const distance = 45 + Math.random() * 72;
+          piece.style.setProperty('--firework-x', `${xPercent}%`);
+          piece.style.setProperty('--firework-y', `${yPercent}%`);
+          piece.style.setProperty('--tx', `${Math.cos(angle) * distance}px`);
+          piece.style.setProperty('--ty', `${Math.sin(angle) * distance}px`);
+          piece.style.setProperty('--firework-color', preferredColor || colors[(i + Math.floor(Math.random() * colors.length)) % colors.length]);
+          piece.style.setProperty('--firework-size', `${5 + Math.random() * 4}px`);
+          piece.style.setProperty('--firework-duration', `${780 + Math.random() * 340}ms`);
+          effectsLayer.appendChild(piece);
+          schedule(() => piece.remove(), 1400);
+        }
+      };
+
+      const popBalloon = (balloon, event) => {
+        if (!balloon?.isConnected || balloon.dataset.popped === '1') return;
+        balloon.dataset.popped = '1';
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+
+        const balloonRect = balloon.getBoundingClientRect();
+        const overlayRect = overlay.getBoundingClientRect();
+        const centerX = balloonRect.left + balloonRect.width / 2 - overlayRect.left;
+        const centerY = balloonRect.top + balloonRect.height / 2 - overlayRect.top;
+        const xPercent = Math.max(1, Math.min(99, (centerX / Math.max(1, overlayRect.width)) * 100));
+        const yPercent = Math.max(1, Math.min(99, (centerY / Math.max(1, overlayRect.height)) * 100));
+        const balloonColor = getComputedStyle(balloon).getPropertyValue('--balloon-color').trim();
+
+        balloon.style.animationPlayState = 'paused';
+        balloon.remove();
+        spawnFirework(xPercent, yPercent, 14, balloonColor || '#60a5fa');
+      };
+
       const spawnBalloons = (count = 16) => {
         for (let i = 0; i < count; i += 1) {
           const balloon = document.createElement('div');
           balloon.className = 'khaled-balloon';
+          balloon.title = 'Pop balloon';
           balloon.style.left = `${Math.max(1, Math.min(96, (i / Math.max(1, count - 1)) * 94 + (Math.random() * 7 - 3.5)))}%`;
           balloon.style.setProperty('--balloon-color', colors[i % colors.length]);
           balloon.style.setProperty('--balloon-size', `${38 + Math.round(Math.random() * 24)}px`);
           balloon.style.setProperty('--balloon-duration', `${7 + Math.random() * 4.5}s`);
           balloon.style.setProperty('--balloon-delay', `${Math.random() * 1.5}s`);
           balloon.style.setProperty('--drift', `${Math.round(Math.random() * 60 - 30)}px`);
+          balloon.addEventListener('pointerdown', event => popBalloon(balloon, event), { once: true });
           effectsLayer.appendChild(balloon);
           schedule(() => balloon.remove(), 13500);
         }
@@ -350,24 +386,6 @@
           confetti.style.setProperty('--confetti-spin', `${Math.round(Math.random() * 900 - 450)}deg`);
           effectsLayer.appendChild(confetti);
           schedule(() => confetti.remove(), 8000);
-        }
-      };
-
-      const spawnFirework = (xPercent, yPercent, pieces = 20) => {
-        for (let i = 0; i < pieces; i += 1) {
-          const piece = document.createElement('span');
-          piece.className = 'khaled-firework-piece';
-          const angle = (Math.PI * 2 * i) / pieces + Math.random() * 0.14;
-          const distance = 45 + Math.random() * 72;
-          piece.style.setProperty('--firework-x', `${xPercent}%`);
-          piece.style.setProperty('--firework-y', `${yPercent}%`);
-          piece.style.setProperty('--tx', `${Math.cos(angle) * distance}px`);
-          piece.style.setProperty('--ty', `${Math.sin(angle) * distance}px`);
-          piece.style.setProperty('--firework-color', colors[(i + Math.floor(Math.random() * colors.length)) % colors.length]);
-          piece.style.setProperty('--firework-size', `${5 + Math.random() * 4}px`);
-          piece.style.setProperty('--firework-duration', `${780 + Math.random() * 340}ms`);
-          effectsLayer.appendChild(piece);
-          schedule(() => piece.remove(), 1400);
         }
       };
 
