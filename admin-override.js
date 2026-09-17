@@ -155,6 +155,97 @@
     }
   }
 
+  function setupKhaledBirthdayPopup() {
+    const targetDate = '2026-09-17';
+    const storageKey = `incheck360:birthday-khaled:${targetDate}`;
+
+    const getBeirutDate = () => {
+      try {
+        const parts = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'Asia/Beirut',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        }).formatToParts(new Date());
+        const map = Object.fromEntries(parts.map(part => [part.type, part.value]));
+        return `${map.year}-${map.month}-${map.day}`;
+      } catch (_) {
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+      }
+    };
+
+    const alreadyShown = () => {
+      try {
+        return sessionStorage.getItem(storageKey) === '1';
+      } catch (_) {
+        return false;
+      }
+    };
+
+    const markShown = () => {
+      try {
+        sessionStorage.setItem(storageKey, '1');
+      } catch (_) {}
+    };
+
+    const showPopup = () => {
+      if (getBeirutDate() !== targetDate || alreadyShown()) return;
+      if (document.body.classList.contains('auth-locked')) return;
+      if (document.getElementById('khaledBirthdayOverlay')) return;
+
+      markShown();
+
+      const overlay = document.createElement('div');
+      overlay.id = 'khaledBirthdayOverlay';
+      overlay.setAttribute('role', 'dialog');
+      overlay.setAttribute('aria-modal', 'true');
+      overlay.setAttribute('aria-labelledby', 'khaledBirthdayTitle');
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483646;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(2,6,23,.62);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);';
+
+      const card = document.createElement('div');
+      card.style.cssText = 'position:relative;width:min(520px,100%);overflow:hidden;border-radius:28px;padding:38px 30px 30px;text-align:center;background:linear-gradient(145deg,#ffffff 0%,#f7fbff 60%,#edf6ff 100%);border:1px solid rgba(59,130,246,.18);box-shadow:0 28px 80px rgba(2,6,23,.34);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#0f172a;';
+
+      card.innerHTML = `
+        <div aria-hidden="true" style="font-size:54px;line-height:1;margin-bottom:14px;">🎉🎂🎈</div>
+        <div style="font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#2563eb;margin-bottom:10px;">A special day at InCheck 360</div>
+        <h2 id="khaledBirthdayTitle" style="margin:0;font-size:clamp(30px,7vw,46px);line-height:1.05;font-weight:800;letter-spacing:-.035em;">Happy Birthday Khaled!</h2>
+        <p style="margin:16px auto 0;max-width:410px;font-size:16px;line-height:1.65;color:#475569;">Wishing you a fantastic birthday and a great year ahead. 🎉</p>
+        <button id="khaledBirthdayClose" type="button" style="margin-top:26px;border:0;border-radius:14px;padding:12px 22px;background:#2563eb;color:#fff;font:700 14px/1 Inter,system-ui,sans-serif;cursor:pointer;box-shadow:0 10px 24px rgba(37,99,235,.26);">Celebrate 🎉</button>
+        <div aria-hidden="true" style="position:absolute;left:-24px;top:-22px;font-size:54px;transform:rotate(-18deg);opacity:.72;">🎊</div>
+        <div aria-hidden="true" style="position:absolute;right:-18px;bottom:-20px;font-size:58px;transform:rotate(15deg);opacity:.68;">🎈</div>
+      `;
+
+      overlay.appendChild(card);
+      document.body.appendChild(overlay);
+
+      const close = () => overlay.remove();
+      card.querySelector('#khaledBirthdayClose')?.addEventListener('click', close);
+      overlay.addEventListener('click', event => {
+        if (event.target === overlay) close();
+      });
+      document.addEventListener('keydown', function onBirthdayEscape(event) {
+        if (event.key !== 'Escape') return;
+        document.removeEventListener('keydown', onBirthdayEscape);
+        close();
+      });
+    };
+
+    const observer = new MutationObserver(() => {
+      if (!document.body.classList.contains('auth-locked')) showPopup();
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', showPopup, { once: true });
+    } else {
+      showPopup();
+    }
+  }
+
   global.AdminOverride = {
     normalizeRole,
     isAdminEquivalentRole,
@@ -172,4 +263,5 @@
   };
 
   patchAdminEquivalentHelpers();
+  setupKhaledBirthdayPopup();
 })(window);
