@@ -1,4 +1,4 @@
-const STATIC_CACHE_NAME = 'incheck360-operations-portal-v5-fresh-js';
+const STATIC_CACHE_NAME = 'incheck360-operations-portal-v6-push-resilient';
 const PUSH_DIAGNOSTICS_CACHE_NAME = 'incheck360-operations-portal-push-diagnostics-v1';
 const PUSH_DIAGNOSTICS_PREFIX = '/__incheck360_push_diagnostics__/';
 const STATIC_ASSETS = [
@@ -70,12 +70,27 @@ function normalizeNotificationTarget(value = '/') {
 }
 
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches
-      .open(STATIC_CACHE_NAME)
-      .then(cache => cache.addAll(STATIC_ASSETS))
-      .then(() => self.skipWaiting())
-  );
+  event.waitUntil((async () => {
+    const cache = await caches.open(STATIC_CACHE_NAME);
+
+    // Do not let one optional/missing static asset prevent a new service worker
+    // from installing. A failed SW update can leave users subscribed to an old
+    // worker that receives push messages but no longer follows current display logic.
+    await Promise.all(
+      STATIC_ASSETS.map(async asset => {
+        try {
+          await cache.add(asset);
+        } catch (error) {
+          pushDebugLog('static asset cache skipped during install', {
+            asset,
+            error: error?.message || String(error)
+          });
+        }
+      })
+    );
+
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', event => {
@@ -133,6 +148,7 @@ async function readAllPushDiagnostics() {
     lastPushReceivedAt: await readPushDiagnostic('lastPushReceivedAt'),
     lastPushPayload: await readPushDiagnostic('lastPushPayload'),
     lastShowNotificationAt: await readPushDiagnostic('lastShowNotificationAt'),
+    lastShowNotificationMode: await readPushDiagnostic('lastShowNotificationMode'),
     lastShowNotificationError: await readPushDiagnostic('lastShowNotificationError')
   };
 }
@@ -201,6 +217,37 @@ self.addEventListener('fetch', event => {
     }
   })());
 });
+
+async function showNotificationResilient(title, options = {}) {
+  try {
+    await self.registration.showNotification(title, options);
+    return { mode: 'full', primaryError: null };
+  } catch (primaryError) {
+    // Retry with only the universally required notification fields. Some browser/
+    // OS combinations can reject one advanced option while the push itself was
+    // delivered successfully, which otherwise looks like a silent push failure.
+    const fallbackOptions = {
+      body: options.body || 'You have a new notification.',
+      data: options.data || {}
+    };
+
+    try {
+      await self.registration.showNotification(title, fallbackOptions);
+      return {
+        mode: 'fallback',
+        primaryError: primaryError?.message || String(primaryError)
+      };
+    } catch (fallbackError) {
+      const message = [
+        'Full notification display failed',
+        primaryError?.message || String(primaryError),
+        'Fallback notification display failed',
+        fallbackError?.message || String(fallbackError)
+      ].join(': ');
+      throw new Error(message);
+    }
+  }
+}
 
 self.addEventListener('push', event => {
   event.waitUntil((async () => {
@@ -297,14 +344,22 @@ self.addEventListener('push', event => {
     await savePushDiagnostic('lastPushPayload', payload);
 
     try {
-      await self.registration.showNotification(title, options);
+      const displayResult = await showNotificationResilient(title, options);
       await savePushDiagnostic('lastShowNotificationAt', new Date().toISOString());
+      await savePushDiagnostic('lastShowNotificationMode', displayResult.mode);
       await savePushDiagnostic('lastShowNotificationError', null);
+      if (displayResult.primaryError) {
+        pushDebugLog('notification displayed with fallback options', {
+          primaryError: displayResult.primaryError
+        });
+      }
     } catch (error) {
+      await savePushDiagnostic('lastShowNotificationMode', 'failed');
       await savePushDiagnostic(
         'lastShowNotificationError',
         error && error.message ? error.message : String(error)
       );
+      throw error;
     }
 
     pushDebugLog('push received', {

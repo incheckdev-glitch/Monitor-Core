@@ -370,6 +370,13 @@ function registerServiceWorkerSafely() {
     navigator.serviceWorker
       .register('/service-worker.js', { scope: '/', updateViaCache: 'none' })
       .then(registration => {
+        // Force an immediate update check on every fresh app load. This keeps the
+        // installed PWA from remaining attached to an older push handler after a
+        // production deployment.
+        registration.update().catch(error => {
+          console.warn('[pwa] Service worker update check failed', error);
+        });
+
         const announceUpdate = () => {
           const waitingWorker = registration.waiting;
           if (!waitingWorker) return;
