@@ -688,7 +688,12 @@
       const client = global.SupabaseClient.getClient();
       const { error } = await client
         .from('user_push_subscriptions')
-        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .update({
+          is_active: false,
+          active: false,
+          enabled: false,
+          updated_at: new Date().toISOString()
+        })
         .eq('endpoint', value);
       if (error) throw new Error(error.message || 'Unable to disable push subscription.');
     },
@@ -699,7 +704,12 @@
       if (!client || !userId) return;
       await client
         .from('user_push_subscriptions')
-        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .update({
+          is_active: false,
+          active: false,
+          enabled: false,
+          updated_at: new Date().toISOString()
+        })
         .eq('user_id', userId)
         .eq('is_active', true);
     },
